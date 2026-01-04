@@ -153,4 +153,4 @@ rubowar/
 
 ## License
 
-TBD
+MIT License - see [LICENSE](LICENSE)
