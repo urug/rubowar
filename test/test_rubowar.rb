@@ -2,8 +2,8 @@
 
 require "test_helper"
 
-class TestRubowar < Minitest::Test
-  def test_that_it_has_a_version_number
-    refute_nil ::Rubowar::VERSION
+describe Rubowar do
+  it "has a version number" do
+    _(Rubowar::VERSION).wont_be_nil
   end
 end

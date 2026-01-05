@@ -9,7 +9,7 @@ class Spinner
   def tick
     turret(10)
 
-    target = look(1)
+    target = look
     fire(10) if target && energy > 20
   end
 end

@@ -25,7 +25,7 @@ def build_bot(energy: 50, health: 100)
     x: 100.0, y: 200.0,
     velocity_x: 1.0, velocity_y: 2.0,
     speed: Math.sqrt(5),
-    body_angle: 45.0, turret_angle: 90.0,
+    turret_angle: 90.0,
     health: health, energy: energy, shield_level: 10,
     damage_dealt: 25, damage_taken: 20,
     size: :medium
@@ -97,60 +97,34 @@ describe Rubowar::Rubot do
   end
 
   describe "#thrust" do
-    it "queues a thrust action with energy" do
+    it "queues a thrust action with speed and angle" do
       bot = build_bot
 
-      bot.thrust(10)
+      bot.thrust(speed: 5, angle: 45)
 
-      _(bot.actions).must_equal [{ type: :thrust, energy: 10 }]
+      _(bot.actions).must_equal [{ type: :thrust, speed: 5, angle: 45 }]
     end
 
-    it "ignores zero energy" do
+    it "normalizes angle to 0-360" do
       bot = build_bot
 
-      bot.thrust(0)
+      bot.thrust(speed: 5, angle: 400)
+
+      _(bot.actions.first[:angle]).must_equal 40
+    end
+
+    it "ignores zero speed" do
+      bot = build_bot
+
+      bot.thrust(speed: 0, angle: 45)
 
       _(bot.actions).must_be_empty
     end
 
-    it "ignores negative energy" do
+    it "ignores negative speed" do
       bot = build_bot
 
-      bot.thrust(-5)
-
-      _(bot.actions).must_be_empty
-    end
-  end
-
-  describe "#turn" do
-    it "queues a turn action with degrees" do
-      bot = build_bot
-
-      bot.turn(45)
-
-      _(bot.actions).must_equal [{ type: :turn, degrees: 45 }]
-    end
-
-    it "normalizes 370 degrees to 10" do
-      bot = build_bot
-
-      bot.turn(370)
-
-      _(bot.actions.first[:degrees]).must_equal 10
-    end
-
-    it "normalizes -270 degrees to 90" do
-      bot = build_bot
-
-      bot.turn(-270)
-
-      _(bot.actions.first[:degrees]).must_equal 90
-    end
-
-    it "ignores zero degrees" do
-      bot = build_bot
-
-      bot.turn(0)
+      bot.thrust(speed: -5, angle: 45)
 
       _(bot.actions).must_be_empty
     end
@@ -203,28 +177,42 @@ describe Rubowar::Rubot do
   end
 
   describe "#look" do
-    it "queues a look action with energy level" do
+    it "queues a look action with no attributes" do
       bot = build_bot
 
-      bot.look(3)
+      bot.look
 
-      _(bot.actions).must_equal [{ type: :look, energy: 3 }]
+      _(bot.actions).must_equal [{ type: :look, attributes: [] }]
     end
 
-    it "clamps energy to max of 5" do
+    it "queues a look action with single attribute" do
       bot = build_bot
 
-      bot.look(10)
+      bot.look(:size)
 
-      _(bot.actions.first[:energy]).must_equal 5
+      _(bot.actions).must_equal [{ type: :look, attributes: [:size] }]
     end
 
-    it "clamps energy to min of 1" do
+    it "queues a look action with multiple attributes" do
       bot = build_bot
 
-      bot.look(-5)
+      bot.look(:size, :velocity, :health)
 
-      _(bot.actions.first[:energy]).must_equal 1
+      _(bot.actions).must_equal [{ type: :look, attributes: [:size, :velocity, :health] }]
+    end
+
+    it "raises ArgumentError for invalid attributes" do
+      bot = build_bot
+
+      _ { bot.look(:invalid) }.must_raise ArgumentError
+    end
+
+    it "accepts all valid attributes" do
+      bot = build_bot
+
+      bot.look(:size, :velocity, :shield, :health, :energy)
+
+      _(bot.actions.first[:attributes]).must_equal [:size, :velocity, :shield, :health, :energy]
     end
   end
 end

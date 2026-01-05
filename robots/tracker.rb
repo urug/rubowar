@@ -9,7 +9,8 @@ class Tracker
   WALL_BUFFER = 80
 
   def on_spawn
-    @direction = 1
+    @heading = rand(360)
+    @turn_direction = 1
   end
 
   def tick
@@ -19,13 +20,13 @@ class Tracker
   end
 
   def on_hit(_damage, direction)
-    # Turn perpendicular to incoming fire and boost away
-    turn(direction + 90)
-    thrust(10)
+    # Boost perpendicular to incoming fire
+    thrust(speed: 5, angle: direction + 90)
   end
 
   def on_wall
-    @direction *= -1
+    @turn_direction *= -1
+    @heading = (@heading + 180) % 360
   end
 
   private
@@ -34,16 +35,16 @@ class Tracker
     near_wall = x < WALL_BUFFER || x > arena_width - WALL_BUFFER ||
                 y < WALL_BUFFER || y > arena_height - WALL_BUFFER
 
-    turn(45 * @direction) if near_wall
+    @heading = (@heading + 45 * @turn_direction) % 360 if near_wall
   end
 
   def patrol
-    turn(5 * @direction) if rand < 0.05
-    thrust(2) if speed < 4
+    @heading = (@heading + 5 * @turn_direction) % 360 if rand < 0.05
+    thrust(speed: 3, angle: @heading) if speed < 4
   end
 
   def look_and_fire
-    target = look(2)
+    target = look(:velocity)
 
     if target
       # Lock on - don't rotate, just fire

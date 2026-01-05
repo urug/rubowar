@@ -22,10 +22,10 @@ end
 
 describe Rubowar::RubotRunner do
   describe "initialization" do
-    it "starts with full health" do
+    it "starts with full health for its size" do
       runner = Rubowar::RubotRunner.new(DummyBot)
 
-      _(runner.health).must_equal Rubowar::RubotRunner::MAX_HEALTH
+      _(runner.health).must_equal runner.max_health
     end
 
     it "starts with full energy" do
@@ -104,6 +104,26 @@ describe Rubowar::RubotRunner do
       runner = Rubowar::RubotRunner.new(LargeDummyBot)
 
       _(runner.energy_regen).must_equal 12
+    end
+  end
+
+  describe "#max_health" do
+    it "returns 80 for small rubots" do
+      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+
+      _(runner.max_health).must_equal 80
+    end
+
+    it "returns 100 for medium rubots" do
+      runner = Rubowar::RubotRunner.new(DummyBot)
+
+      _(runner.max_health).must_equal 100
+    end
+
+    it "returns 120 for large rubots" do
+      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+
+      _(runner.max_health).must_equal 120
     end
   end
 

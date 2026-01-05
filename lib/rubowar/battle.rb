@@ -95,6 +95,7 @@ module Rubowar
       runner.instance.rubot_state = runner.to_state
       runner.instance.arena_state = @arena.to_state(@tick_number)
       runner.instance.actions ||= []
+      runner.instance._look_result = nil
     end
 
     def battle_over?

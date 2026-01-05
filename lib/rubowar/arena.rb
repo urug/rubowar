@@ -5,15 +5,22 @@ module Rubowar
     DEFAULT_WIDTH = 800
     DEFAULT_HEIGHT = 600
     DEFAULT_FRICTION = 0.95
-    WALL_DAMAGE = 10
-    COLLISION_DAMAGE = 5
-    SIZE_COLLISION_BONUS = 3
+    COLLISION_BASE_DAMAGE = 2
+    COLLISION_VELOCITY_MULTIPLIER = 0.5
+    WALL_VELOCITY_MULTIPLIER = 0.75
     MIN_SPAWN_WALL_DISTANCE = 50
     MIN_SPAWN_RUBOT_DISTANCE = 100
     THRUST_MULTIPLIER = 1.5
     FIRE_DAMAGE_MULTIPLIER = 1.5
-    BODY_TURN_DIVISOR = 10.0
     TURRET_TURN_DIVISOR = 30.0
+    LOOK_BASE_COST = 1
+    LOOK_COSTS = {
+      size: 1,
+      velocity: 2,
+      shield: 2,
+      health: 3,
+      energy: 3
+    }.freeze
 
     attr_reader :width, :height, :friction, :bullets, :runners
 
@@ -33,8 +40,7 @@ module Rubowar
         position = find_spawn_position(runner.radius)
         runner.x = position[:x]
         runner.y = position[:y]
-        runner.body_angle = rand(360)
-        runner.turret_angle = runner.body_angle
+        runner.turret_angle = rand(360)
       end
     end
 
@@ -66,9 +72,7 @@ module Rubowar
     def process_action(runner, action)
       case action[:type]
       when :thrust
-        process_thrust(runner, action[:energy])
-      when :turn
-        process_turn(runner, action[:degrees])
+        process_thrust(runner, action[:speed], action[:angle])
       when :turret
         process_turret(runner, action[:degrees])
       when :fire
@@ -76,7 +80,7 @@ module Rubowar
       when :shield
         process_shield(runner, action[:energy])
       when :look
-        process_look(runner, action[:energy])
+        process_look(runner, action[:attributes])
       else
         false
       end
@@ -149,7 +153,7 @@ module Rubowar
       end
 
       if hit_wall
-        runner.apply_damage(WALL_DAMAGE)
+        runner.apply_damage(calculate_wall_damage(runner))
         runner.instance.on_wall
       end
     end
@@ -174,9 +178,9 @@ module Rubowar
           runner_b.y -= dy * overlap / 2
         end
 
-        # Apply damage with size modifiers
-        damage_to_a = calculate_collision_damage(runner_b.size, runner_a.size)
-        damage_to_b = calculate_collision_damage(runner_a.size, runner_b.size)
+        # Apply momentum-based damage
+        damage_to_a = calculate_collision_damage(runner_b)
+        damage_to_b = calculate_collision_damage(runner_a)
 
         runner_a.apply_damage(damage_to_a)
         runner_b.apply_damage(damage_to_b)
@@ -186,20 +190,19 @@ module Rubowar
       end
     end
 
-    def calculate_collision_damage(attacker_size, defender_size)
-      damage = COLLISION_DAMAGE
+    def calculate_wall_damage(runner)
+      (COLLISION_BASE_DAMAGE + runner.speed * WALL_VELOCITY_MULTIPLIER).round
+    end
 
-      size_order = { small: 0, medium: 1, large: 2 }
-      attacker_rank = size_order[attacker_size]
-      defender_rank = size_order[defender_size]
+    def calculate_collision_damage(attacker)
+      mass = mass_factor(attacker)
+      momentum_damage = mass * attacker.speed * COLLISION_VELOCITY_MULTIPLIER
+      (COLLISION_BASE_DAMAGE + momentum_damage).round
+    end
 
-      if attacker_rank > defender_rank
-        damage += SIZE_COLLISION_BONUS
-      elsif attacker_rank < defender_rank
-        damage -= SIZE_COLLISION_BONUS
-      end
-
-      [damage, 0].max
+    def mass_factor(runner)
+      medium_radius = RubotRunner::SIZES[:medium][:radius].to_f
+      (runner.radius / medium_radius)**2
     end
 
     def update_bullets
@@ -229,22 +232,42 @@ module Rubowar
       false
     end
 
-    def process_thrust(runner, energy)
-      return false unless runner.spend_energy(energy)
+    def process_thrust(runner, desired_speed, angle)
+      return false if runner.energy <= 0
 
-      velocity_gain = Math.sqrt(energy) * THRUST_MULTIPLIER
-      radians = runner.body_angle * Math::PI / 180
-      runner.velocity_x += Math.cos(radians) * velocity_gain
-      runner.velocity_y += Math.sin(radians) * velocity_gain
+      mass = mass_factor(runner)
+      direction_multiplier = thrust_momentum_multiplier(runner, angle)
+      base_cost = (desired_speed / THRUST_MULTIPLIER)**2
+      required_energy = base_cost * mass * direction_multiplier
+
+      if runner.energy >= required_energy
+        # Full thrust
+        runner.energy -= required_energy
+        actual_speed = desired_speed
+      else
+        # Partial thrust - use all remaining energy
+        available_energy = runner.energy
+        runner.energy = 0
+        # Reverse the formula: speed = sqrt(energy / (mass * direction_multiplier)) * THRUST_MULTIPLIER
+        effective_energy = available_energy / (mass * direction_multiplier)
+        actual_speed = Math.sqrt(effective_energy) * THRUST_MULTIPLIER
+      end
+
+      radians = angle * Math::PI / 180
+      runner.velocity_x += Math.cos(radians) * actual_speed
+      runner.velocity_y += Math.sin(radians) * actual_speed
       true
     end
 
-    def process_turn(runner, degrees)
-      cost = degrees.abs / BODY_TURN_DIVISOR
-      return false unless runner.spend_energy(cost)
+    def thrust_momentum_multiplier(runner, thrust_angle)
+      return 1.0 if runner.speed < 0.1 # Not moving, no penalty
 
-      runner.body_angle = (runner.body_angle + degrees) % 360
-      true
+      current_angle = Math.atan2(runner.velocity_y, runner.velocity_x) * 180 / Math::PI
+      angle_diff = (thrust_angle - current_angle).abs % 360
+      angle_diff = 360 - angle_diff if angle_diff > 180
+
+      # 0° diff = 1.0x, 90° diff = 1.5x, 180° diff = 2.0x
+      1.0 + (angle_diff / 180.0)
     end
 
     def process_turret(runner, degrees)
@@ -259,9 +282,11 @@ module Rubowar
       return false unless runner.spend_energy(energy)
 
       damage = energy * FIRE_DAMAGE_MULTIPLIER
+      radians = runner.turret_angle * Math::PI / 180
+      spawn_distance = runner.radius + Bullet::RADIUS
       bullet = Bullet.new(
-        x: runner.x,
-        y: runner.y,
+        x: runner.x + Math.cos(radians) * spawn_distance,
+        y: runner.y + Math.sin(radians) * spawn_distance,
         angle: runner.turret_angle,
         damage: damage,
         owner: runner
@@ -277,13 +302,14 @@ module Rubowar
       true
     end
 
-    def process_look(runner, energy)
-      return false unless runner.spend_energy(energy)
+    def process_look(runner, attributes)
+      cost = LOOK_BASE_COST + attributes.sum { |attr| LOOK_COSTS[attr] }
+      return false unless runner.spend_energy(cost)
 
       target = find_rubot_in_line_of_sight(runner)
-      result = build_look_result(target, energy) if target
+      result = build_look_result(target, attributes) if target
 
-      runner.instance.instance_variable_set(:@_look_result, result)
+      runner.instance._look_result = result
       true
     end
 
@@ -326,21 +352,22 @@ module Rubowar
       closest_target
     end
 
-    def build_look_result(target, energy_level)
+    def build_look_result(target, attributes)
       result = {
         x: target.x,
-        y: target.y,
-        size: target.size
+        y: target.y
       }
 
-      if energy_level >= 2
+      result[:size] = target.size if attributes.include?(:size)
+
+      if attributes.include?(:velocity)
         result[:velocity_x] = target.velocity_x
         result[:velocity_y] = target.velocity_y
       end
 
-      result[:shield_level] = target.shield_level if energy_level >= 3
-      result[:health] = target.health if energy_level >= 4
-      result[:energy] = target.energy if energy_level >= 5
+      result[:shield_level] = target.shield_level if attributes.include?(:shield)
+      result[:health] = target.health if attributes.include?(:health)
+      result[:energy] = target.energy if attributes.include?(:energy)
 
       result
     end

@@ -3,19 +3,17 @@
 module Rubowar
   class RubotRunner
     SIZES = {
-      small: { radius: 15, energy_regen: 8 },
-      medium: { radius: 20, energy_regen: 10 },
-      large: { radius: 25, energy_regen: 12 }
+      small: { radius: 15, energy_regen: 8, max_health: 80 },
+      medium: { radius: 20, energy_regen: 10, max_health: 100 },
+      large: { radius: 25, energy_regen: 12, max_health: 120 }
     }.freeze
-
-    MAX_HEALTH = 100
     MAX_ENERGY = 100
     MAX_SHIELD = 50
     MAX_SPEED = 20
     SHIELD_DEGRADATION = 2
 
     attr_accessor :x, :y, :velocity_x, :velocity_y
-    attr_accessor :body_angle, :turret_angle
+    attr_accessor :turret_angle
     attr_accessor :health, :energy, :shield_level
     attr_accessor :damage_dealt, :damage_taken
     attr_reader :size, :rubot_class, :instance
@@ -27,9 +25,8 @@ module Rubowar
       @y = 0.0
       @velocity_x = 0.0
       @velocity_y = 0.0
-      @body_angle = 0.0
       @turret_angle = 0.0
-      @health = MAX_HEALTH
+      @health = max_health
       @energy = MAX_ENERGY
       @shield_level = 0
       @damage_dealt = 0
@@ -43,6 +40,10 @@ module Rubowar
 
     def energy_regen
       SIZES[@size][:energy_regen]
+    end
+
+    def max_health
+      SIZES[@size][:max_health]
     end
 
     def speed
@@ -64,7 +65,6 @@ module Rubowar
         velocity_x: @velocity_x,
         velocity_y: @velocity_y,
         speed: speed,
-        body_angle: @body_angle,
         turret_angle: @turret_angle,
         health: @health,
         energy: @energy,
