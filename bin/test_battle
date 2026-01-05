@@ -1,0 +1,131 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "rubowar"
+require "optparse"
+
+options = {
+  tick_limit: 2000,
+  animate: false,
+  delay: 0.03
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: bin/test_battle [options] robot1.rb robot2.rb [robot3.rb ...]"
+
+  opts.on("-t", "--ticks LIMIT", Integer, "Tick limit (default: 2000)") do |t|
+    options[:tick_limit] = t
+  end
+
+  opts.on("-a", "--animate", "Show animated terminal output") do
+    options[:animate] = true
+  end
+
+  opts.on("-d", "--delay SECONDS", Float, "Animation delay in seconds (default: 0.03)") do |d|
+    options[:delay] = d
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+robot_files = if ARGV.empty?
+                # Default to example robots
+                Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
+              else
+                ARGV.map { |f| File.expand_path(f) }
+              end
+
+if robot_files.size < 2
+  puts "Error: Need at least 2 robots to battle"
+  puts "Usage: bin/test_battle [options] robot1.rb robot2.rb [robot3.rb ...]"
+  exit 1
+end
+
+# Load robot files
+robot_classes = []
+robot_files.each do |file|
+  unless File.exist?(file)
+    puts "Error: File not found: #{file}"
+    exit 1
+  end
+
+  # Get classes before loading
+  before = ObjectSpace.each_object(Class).select do |c|
+    c < Rubowar::Rubot
+  rescue StandardError
+    false
+  end
+
+  require file
+
+  # Find new class that includes Rubot
+  after = ObjectSpace.each_object(Class).select do |c|
+    c < Rubowar::Rubot
+  rescue StandardError
+    false
+  end
+  new_classes = after - before
+
+  if new_classes.empty?
+    puts "Error: No Rubot class found in #{file}"
+    exit 1
+  end
+
+  robot_classes << new_classes.first
+end
+
+puts "Starting battle with #{robot_classes.size} rubots:"
+robot_classes.each_with_index do |klass, i|
+  puts "  #{i + 1}. #{klass.name} (#{klass.size})"
+end
+puts
+
+battle = Rubowar::Battle.new(
+  robot_classes,
+  tick_limit: options[:tick_limit],
+  width: 800,
+  height: 400,
+  friction: 0.95
+)
+
+if options[:animate]
+  renderer = Rubowar::Renderers::Terminal.new(battle)
+
+  battle.on(:tick) do |state|
+    renderer.render(state)
+    sleep options[:delay]
+  end
+end
+
+start_time = Time.now
+battle.run
+elapsed = Time.now - start_time
+
+if options[:animate]
+  renderer = Rubowar::Renderers::Terminal.new(battle)
+  renderer.render_final(battle.winner)
+end
+
+puts "Battle finished at tick #{battle.tick_number} (#{elapsed.round(2)}s)"
+puts
+
+if battle.winner
+  puts "WINNER: #{battle.winner.rubot_class.name}"
+  puts "  Health: #{battle.winner.health.to_i}"
+  puts "  Energy: #{battle.winner.energy.to_i}"
+  puts "  Damage dealt: #{battle.winner.damage_dealt.to_i}"
+else
+  puts "DRAW - No winner"
+end
+
+puts
+puts "Final standings:"
+sorted = battle.arena.runners.sort_by { |r| [-r.health, -r.damage_dealt] }
+sorted.each_with_index do |r, i|
+  status = r.alive? ? "ALIVE" : "DEAD"
+  puts "  #{i + 1}. #{r.rubot_class.name}: HP=#{r.health.to_i} DMG=#{r.damage_dealt.to_i} [#{status}]"
+end
