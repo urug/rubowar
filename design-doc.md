@@ -227,7 +227,7 @@ rubowar/
 │   │   ├── energon.rb         # Energy power-up
 │   │   └── events.rb          # Event types for renderers
 │   └── rubowar.rb
-├── spec/
+├── test/
 ├── robots/                    # Example robots for learning
 │   ├── spinner.rb
 │   ├── tracker.rb
@@ -517,7 +517,7 @@ source 'https://rubygems.org'
 gemspec
 
 group :development, :test do
-  gem 'rspec', '~> 3.12'
+  gem 'minitest', '~> 5.20'
   gem 'rake'
 end
 ```
@@ -527,11 +527,11 @@ Minimal dependencies - the engine should be self-contained with no external runt
 ---
 
 ## Next Steps (Phase 1)
-1. Initialize gem structure (gemspec, lib/, spec/, robots/)
+1. Initialize gem structure (gemspec, lib/, test/, robots/)
 2. Implement `Rubot` module with state accessors and action methods
 3. Implement `Arena` with physics (movement, friction, wall collision)
 4. Implement `Match` runner with event emission
 5. Implement `Bullet` for projectile tracking
 6. Create terminal renderer
 7. Create example robots (Spinner, Tracker)
-8. Add specs for core functionality
+8. Add tests for core functionality

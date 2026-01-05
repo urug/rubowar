@@ -7,7 +7,7 @@
 - [ ] Create `Gemfile`
 - [ ] Create `lib/rubowar.rb` (main entry point)
 - [ ] Create `Rakefile` with test task
-- [ ] Set up `spec/spec_helper.rb`
+- [ ] Set up `test/test_helper.rb`
 
 ### Rubot Module (`lib/rubowar/rubot.rb`)
 - [ ] Module inclusion hook (registers robot class)
@@ -61,11 +61,11 @@
 - [ ] `spinner.rb` - Simple turret spinner, fires on sight
 - [ ] `tracker.rb` - Seeks and tracks enemies
 
-### Specs
-- [ ] Rubot module specs
-- [ ] Arena physics specs
-- [ ] Bullet specs
-- [ ] Match runner specs
+### Tests
+- [ ] Rubot module tests
+- [ ] Arena physics tests
+- [ ] Bullet tests
+- [ ] Match runner tests
 
 ---
 

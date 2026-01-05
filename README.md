@@ -145,7 +145,7 @@ rubowar/
 │   │   ├── energon.rb         # Energy power-up
 │   │   └── events.rb          # Event types
 │   └── rubowar.rb
-├── spec/
+├── test/
 ├── robots/                    # Example robots
 ├── bin/rubowar                # CLI
 └── rubowar.gemspec
