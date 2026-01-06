@@ -1,0 +1,214 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "rubowar"
+require "optparse"
+require "json"
+
+options = {
+  width: 800,
+  height: 600,
+  friction: 0.95,
+  tick_limit: 1000,
+  battles: 1,
+  format: "text",
+  seed: nil
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: bin/simulate [options] robot1.rb robot2.rb [robot3.rb ...]"
+
+  opts.separator ""
+  opts.separator "Arena options:"
+
+  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 800)") do |w|
+    options[:width] = w
+  end
+
+  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 600)") do |h|
+    options[:height] = h
+  end
+
+  opts.on("-f", "--friction FRICTION", Float, "Friction coefficient (default: 0.95)") do |f|
+    options[:friction] = f
+  end
+
+  opts.on("-t", "--ticks LIMIT", Integer, "Tick limit per battle (default: 1000)") do |t|
+    options[:tick_limit] = t
+  end
+
+  opts.separator ""
+  opts.separator "Simulation options:"
+
+  opts.on("-n", "--battles COUNT", Integer, "Number of battles to run (default: 1)") do |n|
+    options[:battles] = n
+  end
+
+  opts.on("-s", "--seed SEED", Integer, "Random seed for reproducibility") do |s|
+    options[:seed] = s
+  end
+
+  opts.separator ""
+  opts.separator "Output options:"
+
+  opts.on("-o", "--output FORMAT", %w[text json csv], "Output format: text, json, csv (default: text)") do |fmt|
+    options[:format] = fmt
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+# Load robot files
+robot_files = if ARGV.empty?
+                Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
+              else
+                ARGV.map { |f| File.expand_path(f) }
+              end
+
+if robot_files.size < 2
+  warn "Error: Need at least 2 robots to battle"
+  warn "Usage: bin/simulate [options] robot1.rb robot2.rb [robot3.rb ...]"
+  exit 1
+end
+
+robot_classes = []
+robot_files.each do |file|
+  unless File.exist?(file)
+    warn "Error: File not found: #{file}"
+    exit 1
+  end
+
+  before = ObjectSpace.each_object(Class).select { |c| c.include?(Rubowar::Rubot) rescue false }
+  require file
+  after = ObjectSpace.each_object(Class).select { |c| c.include?(Rubowar::Rubot) rescue false }
+  new_classes = after - before
+
+  if new_classes.empty?
+    warn "Error: No Rubot class found in #{file}"
+    exit 1
+  end
+
+  robot_classes << new_classes.first
+end
+
+# Set random seed if provided
+srand(options[:seed]) if options[:seed]
+
+# Run battles
+results = []
+options[:battles].times do |i|
+  battle = Rubowar::Battle.new(
+    robot_classes,
+    width: options[:width],
+    height: options[:height],
+    friction: options[:friction],
+    tick_limit: options[:tick_limit]
+  )
+
+  battle.run
+
+  battle_result = {
+    battle_number: i + 1,
+    ticks: battle.tick_number,
+    winner: battle.winner&.rubot_class&.name,
+    rubots: battle.arena.runners.map do |r|
+      {
+        name: r.rubot_class.name,
+        size: r.size,
+        alive: r.alive?,
+        health: r.health.round(1),
+        damage_dealt: r.damage_dealt.round(1),
+        damage_taken: r.damage_taken.round(1)
+      }
+    end
+  }
+
+  results << battle_result
+end
+
+# Generate summary statistics
+wins = Hash.new(0)
+total_damage = Hash.new(0.0)
+total_health = Hash.new(0.0)
+results.each do |r|
+  wins[r[:winner]] += 1 if r[:winner]
+  r[:rubots].each do |bot|
+    total_damage[bot[:name]] += bot[:damage_dealt]
+    total_health[bot[:name]] += bot[:health]
+  end
+end
+
+summary = {
+  battles: options[:battles],
+  arena: {
+    width: options[:width],
+    height: options[:height],
+    friction: options[:friction],
+    tick_limit: options[:tick_limit]
+  },
+  seed: options[:seed],
+  wins: wins,
+  avg_damage: total_damage.transform_values { |v| (v / options[:battles]).round(1) },
+  avg_health: total_health.transform_values { |v| (v / options[:battles]).round(1) }
+}
+
+# Output results
+case options[:format]
+when "json"
+  output = {
+    summary: summary,
+    battles: results
+  }
+  puts JSON.pretty_generate(output)
+
+when "csv"
+  # Header
+  puts "battle,ticks,winner,#{robot_classes.map { |c| "#{c.name}_hp,#{c.name}_dmg" }.join(",")}"
+
+  # Data rows
+  results.each do |r|
+    row = [r[:battle_number], r[:ticks], r[:winner] || "draw"]
+    robot_classes.each do |klass|
+      bot = r[:rubots].find { |b| b[:name] == klass.name }
+      row << (bot ? bot[:health] : 0)
+      row << (bot ? bot[:damage_dealt] : 0)
+    end
+    puts row.join(",")
+  end
+
+when "text"
+  puts "Simulation: #{options[:battles]} battle(s)"
+  puts "Arena: #{options[:width]}x#{options[:height]}, friction=#{options[:friction]}, tick_limit=#{options[:tick_limit]}"
+  puts "Rubots: #{robot_classes.map { |c| "#{c.name} (#{c.size})" }.join(", ")}"
+  puts
+
+  if options[:battles] == 1
+    r = results.first
+    puts "Result: #{r[:winner] || "Draw"} wins at tick #{r[:ticks]}"
+    puts
+    puts "Final standings:"
+    r[:rubots].sort_by { |b| [-b[:health], -b[:damage_dealt]] }.each_with_index do |bot, i|
+      status = bot[:alive] ? "ALIVE" : "DEAD"
+      puts "  #{i + 1}. #{bot[:name]}: HP=#{bot[:health].to_i} DMG=#{bot[:damage_dealt].to_i} [#{status}]"
+    end
+  else
+    puts "Win rates:"
+    robot_classes.each do |klass|
+      count = wins[klass.name]
+      pct = (count.to_f / options[:battles] * 100).round(1)
+      puts "  #{klass.name}: #{count}/#{options[:battles]} (#{pct}%)"
+    end
+    puts "  Draw: #{options[:battles] - wins.values.sum}/#{options[:battles]}" if wins.values.sum < options[:battles]
+
+    puts
+    puts "Averages per battle:"
+    robot_classes.each do |klass|
+      name = klass.name
+      puts "  #{name}: HP=#{summary[:avg_health][name]} DMG=#{summary[:avg_damage][name]}"
+    end
+  end
+end

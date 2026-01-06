@@ -7,9 +7,16 @@ module Rubowar
     def self.included(klass)
       klass.extend(ClassMethods)
       klass.extend(Forwardable)
+      klass.include(SensingCosts)
 
       # State accessors for game to set, rubots to read
       klass.attr_accessor :rubot_state, :arena_state, :actions
+
+      # Sensing results from previous tick (set by engine, read by rubot)
+      klass.attr_accessor :probe_result, :scan_result, :pulse_result, :detect_result
+
+      # Tracks energy committed to actions this tick (reset by engine each tick)
+      klass.attr_accessor :_pending_energy_spend
 
       # Delegate rubot state accessors
       klass.def_delegators :rubot_state,
@@ -20,7 +27,8 @@ module Rubowar
 
       # Delegate arena state accessors
       klass.def_delegators :arena_state,
-                           :arena_width, :arena_height, :friction, :tick_number, :energons
+                           :arena_width, :arena_height, :friction, :tick_number, :energons, :live_rubot_count,
+                           :energon_spawn_interval, :energon_growth_rate
     end
 
     module ClassMethods
@@ -70,36 +78,107 @@ module Rubowar
       actions << { type: :shield, energy: energy_amount }
     end
 
-    LOOK_ATTRIBUTES = %i[size velocity shield health energy].freeze
+    PROBE_ATTRIBUTES = %i[size position velocity turret_angle shield health energy].freeze
 
-    # Queues a look action and returns the result from the PREVIOUS tick's look.
-    # Since actions are processed after tick(), the current look result won't be
-    # available until the next tick. Returns nil if no previous look was performed
-    # or if no target was in line of sight.
+    # Queues a probe action. Returns true if enough energy, false otherwise.
+    # Results from the previous tick's probe are available via probe_result.
     #
-    # Base look (no arguments) costs 1 energy and returns { x:, y: }.
-    # Additional attributes can be requested at extra cost:
-    #   :size     - 1 energy (small/medium/large)
-    #   :velocity - 2 energy (velocity_x, velocity_y)
-    #   :shield   - 2 energy (shield_level)
-    #   :health   - 3 energy (current HP)
-    #   :energy   - 3 energy (current energy)
+    # Probe with no arguments defaults to :size (1 energy) - a detection ping that
+    # tells you something is there and its size, but not where.
+    #
+    # Available attributes:
+    #   :size         - 1 energy (small/medium/large) - detection ping
+    #   :position     - 4 energy (x, y coordinates)
+    #   :velocity     - 3 energy (velocity_x, velocity_y) - motion detector
+    #   :turret_angle - 2 energy (where their turret is pointing)
+    #   :shield       - 2 energy (shield_level)
+    #   :health       - 3 energy (current HP)
+    #   :energy       - 3 energy (current energy)
     #
     # Examples:
-    #   look                    # 1 energy  -> { x:, y: }
-    #   look(:size)             # 2 energy  -> { x:, y:, size: }
-    #   look(:size, :velocity)  # 4 energy  -> { x:, y:, size:, velocity_x:, velocity_y: }
-    def look(*attributes)
-      invalid = attributes - LOOK_ATTRIBUTES
-      raise ArgumentError, "Invalid look attributes: #{invalid.join(', ')}" if invalid.any?
+    #   probe                              # 1 energy  -> true/false
+    #   probe(:position)                   # 4 energy  -> true/false
+    #   probe(:position, :velocity)        # 7 energy  -> true/false
+    #
+    # Check probe_result for data: { size:, x:, y:, velocity_x:, ... } or {} if no target
+    def probe(*attributes)
+      attributes = [:size] if attributes.empty?
 
-      actions << { type: :look, attributes: attributes }
-      @_look_result
+      invalid = attributes - PROBE_ATTRIBUTES
+      raise ArgumentError, "Invalid probe attributes: #{invalid.join(', ')}" if invalid.any?
+
+      cost = probe_cost(attributes)
+      return false unless can_afford?(cost)
+
+      commit_energy(cost)
+      actions << { type: :probe, attributes: attributes }
+      true
     end
 
-    # @api private
-    # Used by game engine to set/clear look results
-    attr_writer :_look_result
+    # Queues a scan action. Returns true if enough energy, false otherwise.
+    # Results from the previous tick's scan are available via scan_result.
+    #
+    # Scan performs an arc scan centered on the turret direction.
+    #
+    # @param angle [Numeric] Arc width in degrees (centered on turret direction)
+    # @param distance [Numeric] Maximum range (radius) in units
+    # @param velocity [Boolean] Include velocity data (+2 energy)
+    # @param owner [Boolean] Include owner info for bullets (+1 energy)
+    #
+    # Energy cost: 3 + ceil(angle/20) + ceil(distance/100) [+2 for velocity] [+1 for owner]
+    #
+    # Check scan_result for data: [{ x:, y:, type: :rubot/:bullet, ... }, ...] or []
+    def scan(angle:, distance:, velocity: false, owner: false)
+      raise ArgumentError, "angle must be positive" if angle <= 0
+      raise ArgumentError, "distance must be positive" if distance <= 0
+
+      cost = scan_cost(angle: angle, distance: distance, velocity: velocity, owner: owner)
+      return false unless can_afford?(cost)
+
+      commit_energy(cost)
+      actions << { type: :scan, angle: angle, distance: distance, velocity: velocity, owner: owner }
+      true
+    end
+
+    # Queues a pulse action. Returns true if enough energy, false otherwise.
+    # Results from the previous tick's pulse are available via pulse_result.
+    #
+    # Pulse performs an omnidirectional radar ping centered on the rubot.
+    #
+    # @param distance [Numeric] Radius of detection circle in units
+    # @param owner [Boolean] Include owner info for bullets (+1 energy)
+    #
+    # Energy cost: 2 + ceil(distance/75) [+1 for owner]
+    #
+    # Check pulse_result for data: [{ x:, y:, type: :rubot/:bullet, ... }, ...] or []
+    def pulse(distance:, owner: false)
+      raise ArgumentError, "distance must be positive" if distance <= 0
+
+      cost = pulse_cost(distance: distance, owner: owner)
+      return false unless can_afford?(cost)
+
+      commit_energy(cost)
+      actions << { type: :pulse, distance: distance, owner: owner }
+      true
+    end
+
+    # Queues a detect action. Returns true if enough energy, false otherwise.
+    # Results are available via detect_result after the sense phase completes.
+    #
+    # Detect performs counter-intelligence: reports how many times you were
+    # probed, scanned, and pulsed in the current tick's sense phase.
+    #
+    # Energy cost: 2
+    #
+    # Check detect_result for data: { probed: N, scanned: N, pulsed: N }
+    def detect
+      cost = detect_cost
+      return false unless can_afford?(cost)
+
+      commit_energy(cost)
+      actions << { type: :detect }
+      true
+    end
 
     # Callbacks (override in rubot class)
     def on_spawn; end
@@ -115,6 +194,21 @@ module Rubowar
     end
 
     private
+
+    # Returns energy available for actions this tick
+    def available_energy
+      energy - (@_pending_energy_spend || 0)
+    end
+
+    # Checks if we can afford a given energy cost
+    def can_afford?(cost)
+      available_energy >= cost
+    end
+
+    # Commits energy to an action (tracks pending spend)
+    def commit_energy(cost)
+      @_pending_energy_spend = (@_pending_energy_spend || 0) + cost
+    end
 
     # Normalize degrees to -180..180 range (shortest turn)
     def normalize_degrees(degrees)

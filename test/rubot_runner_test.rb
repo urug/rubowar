@@ -127,6 +127,26 @@ describe Rubowar::RubotRunner do
     end
   end
 
+  describe "#max_shield" do
+    it "equals max_health for small rubots" do
+      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+
+      _(runner.max_shield).must_equal 80
+    end
+
+    it "equals max_health for medium rubots" do
+      runner = Rubowar::RubotRunner.new(DummyBot)
+
+      _(runner.max_shield).must_equal 100
+    end
+
+    it "equals max_health for large rubots" do
+      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+
+      _(runner.max_shield).must_equal 120
+    end
+  end
+
   describe "#speed" do
     it "calculates speed from velocity" do
       runner = Rubowar::RubotRunner.new(DummyBot)
@@ -233,22 +253,31 @@ describe Rubowar::RubotRunner do
   end
 
   describe "#degrade_shield" do
-    it "reduces shield by degradation constant" do
+    it "reduces shield by 12% (proportional decay)" do
+      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner.shield_level = 100
+
+      runner.degrade_shield
+
+      _(runner.shield_level).must_equal 88 # 100 * 0.88 = 88
+    end
+
+    it "floors the result" do
       runner = Rubowar::RubotRunner.new(DummyBot)
       runner.shield_level = 20
 
       runner.degrade_shield
 
-      _(runner.shield_level).must_equal 18
+      _(runner.shield_level).must_equal 17 # 20 * 0.88 = 17.6 → 17
     end
 
-    it "does not reduce shield below zero" do
+    it "decays to zero from low values" do
       runner = Rubowar::RubotRunner.new(DummyBot)
       runner.shield_level = 1
 
       runner.degrade_shield
 
-      _(runner.shield_level).must_equal 0
+      _(runner.shield_level).must_equal 0 # 1 * 0.88 = 0.88 → 0
     end
   end
 

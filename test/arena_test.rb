@@ -2,19 +2,19 @@
 
 require "test_helper"
 
-class LookTestBot
+class ProbeTestBot
   include Rubowar::Rubot
   size :medium
   def tick; end
 end
 
-class SmallLookTestBot
+class SmallProbeTestBot
   include Rubowar::Rubot
   size :small
   def tick; end
 end
 
-class LargeLookTestBot
+class LargeProbeTestBot
   include Rubowar::Rubot
   size :large
   def tick; end
@@ -24,7 +24,7 @@ def build_arena
   Rubowar::Arena.new(width: 800, height: 600)
 end
 
-def build_runner(x:, y:, turret_angle: 0, klass: LookTestBot)
+def build_runner(x:, y:, turret_angle: 0, klass: ProbeTestBot)
   runner = Rubowar::RubotRunner.new(klass)
   runner.x = x
   runner.y = y
@@ -40,7 +40,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 0
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_wall_damage, runner)
+      damage = arena.calculate_wall_damage( runner)
 
       _(damage).must_equal 2
     end
@@ -51,22 +51,104 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_wall_damage, runner)
+      damage = arena.calculate_wall_damage( runner)
 
       _(damage).must_equal 17 # 2 + 20 * 0.75
     end
 
     it "does not factor in mass" do
       arena = build_arena
-      small_runner = build_runner(x: 100, y: 100, klass: SmallLookTestBot)
-      large_runner = build_runner(x: 100, y: 100, klass: LargeLookTestBot)
+      small_runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
+      large_runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
       small_runner.velocity_x = 20
       large_runner.velocity_x = 20
 
-      small_damage = arena.send(:calculate_wall_damage, small_runner)
-      large_damage = arena.send(:calculate_wall_damage, large_runner)
+      small_damage = arena.calculate_wall_damage( small_runner)
+      large_damage = arena.calculate_wall_damage( large_runner)
 
       _(small_damage).must_equal large_damage
+    end
+  end
+
+  describe "#check_wall_collision" do
+    it "absorbs most velocity on bounce for small rubot" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 100, klass: SmallProbeTestBot)
+      runner.velocity_x = -10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      # Small mass (0.5625) * 0.12 = 0.0675 retention
+      # Bounced velocity: 10 * 0.0675 = 0.675
+      _(runner.velocity_x).must_be_close_to 0.675, 0.01
+    end
+
+    it "retains more velocity on bounce for medium rubot" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 100)
+      runner.velocity_x = -10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      # Medium mass (1.0) * 0.12 = 0.12 retention
+      # Bounced velocity: 10 * 0.12 = 1.2
+      _(runner.velocity_x).must_be_close_to 1.2, 0.01
+    end
+
+    it "retains most velocity on bounce for large rubot" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 100, klass: LargeProbeTestBot)
+      runner.velocity_x = -10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      # Large mass (1.5625) * 0.12 = 0.1875 retention
+      # Bounced velocity: 10 * 0.1875 = 1.875
+      _(runner.velocity_x).must_be_close_to 1.875, 0.01
+    end
+
+    it "reverses velocity direction on bounce" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 100)
+      runner.velocity_x = -10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      _(runner.velocity_x).must_be :>, 0 # Reversed from negative to positive
+    end
+
+    it "only affects the component that hit the wall" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 100)
+      runner.velocity_x = -10.0
+      runner.velocity_y = 5.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      _(runner.velocity_x).must_be :>, 0 # Bounced
+      _(runner.velocity_y).must_equal 5.0 # Unchanged
+    end
+
+    it "handles corner collision affecting both axes" do
+      arena = build_arena
+      runner = build_runner(x: 10, y: 10)
+      runner.velocity_x = -10.0
+      runner.velocity_y = -10.0
+      arena.runners = [runner]
+
+      arena.check_wall_collision( runner)
+
+      _(runner.velocity_x).must_be :>, 0 # Bounced
+      _(runner.velocity_y).must_be :>, 0 # Bounced
     end
   end
 
@@ -77,7 +159,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 0
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_collision_damage, runner)
+      damage = arena.calculate_collision_damage( runner)
 
       _(damage).must_equal 2
     end
@@ -88,29 +170,29 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_collision_damage, runner)
+      damage = arena.calculate_collision_damage( runner)
 
       _(damage).must_equal 12 # 2 + 1.0 * 20 * 0.5
     end
 
     it "deals less damage for small rubot at same speed" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: SmallLookTestBot)
+      runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_collision_damage, runner)
+      damage = arena.calculate_collision_damage( runner)
 
       _(damage).must_equal 8 # 2 + 0.5625 * 20 * 0.5 = 2 + 5.625 ≈ 8
     end
 
     it "deals more damage for large rubot at same speed" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: LargeLookTestBot)
+      runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.send(:calculate_collision_damage, runner)
+      damage = arena.calculate_collision_damage( runner)
 
       _(damage).must_equal 18 # 2 + 1.5625 * 20 * 0.5 = 2 + 15.625 ≈ 18
     end
@@ -121,25 +203,25 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100)
 
-      mass = arena.send(:mass_factor, runner)
+      mass = arena.mass_factor( runner)
 
       _(mass).must_equal 1.0
     end
 
     it "returns area ratio for small rubot" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: SmallLookTestBot)
+      runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
 
-      mass = arena.send(:mass_factor, runner)
+      mass = arena.mass_factor( runner)
 
       _(mass).must_equal 0.5625 # (15/20)^2
     end
 
     it "returns area ratio for large rubot" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: LargeLookTestBot)
+      runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
 
-      mass = arena.send(:mass_factor, runner)
+      mass = arena.mass_factor( runner)
 
       _(mass).must_equal 1.5625 # (25/20)^2
     end
@@ -148,13 +230,13 @@ describe Rubowar::Arena do
   describe "#process_thrust" do
     it "costs less for small rubot at same speed" do
       arena = build_arena
-      small_runner = build_runner(x: 100, y: 100, klass: SmallLookTestBot)
+      small_runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
       medium_runner = build_runner(x: 200, y: 100)
       small_runner.energy = 100
       medium_runner.energy = 100
 
-      arena.send(:process_thrust, small_runner, 3, 0)
-      arena.send(:process_thrust, medium_runner, 3, 0)
+      arena.process_thrust(runner: small_runner, speed: 3, angle: 0)
+      arena.process_thrust(runner: medium_runner, speed: 3, angle: 0)
 
       # Small: (3/1.5)² × 0.5625 = 4 × 0.5625 = 2.25
       # Medium: (3/1.5)² × 1.0 = 4 × 1.0 = 4
@@ -163,13 +245,13 @@ describe Rubowar::Arena do
 
     it "costs more for large rubot at same speed" do
       arena = build_arena
-      large_runner = build_runner(x: 100, y: 100, klass: LargeLookTestBot)
+      large_runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
       medium_runner = build_runner(x: 200, y: 100)
       large_runner.energy = 100
       medium_runner.energy = 100
 
-      arena.send(:process_thrust, large_runner, 3, 0)
-      arena.send(:process_thrust, medium_runner, 3, 0)
+      arena.process_thrust(runner: large_runner, speed: 3, angle: 0)
+      arena.process_thrust(runner: medium_runner, speed: 3, angle: 0)
 
       # Large: (3/1.5)² × 1.5625 = 4 × 1.5625 = 6.25
       # Medium: (3/1.5)² × 1.0 = 4 × 1.0 = 4
@@ -181,7 +263,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
       runner.energy = 100
 
-      arena.send(:process_thrust, runner, 5, 0) # East
+      arena.process_thrust(runner: runner, speed: 5, angle: 0) # East
 
       _(runner.velocity_x).must_be_close_to 5.0, 0.01
       _(runner.velocity_y).must_be_close_to 0.0, 0.01
@@ -193,7 +275,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 5.0 # Moving east
       runner.energy = 100
 
-      arena.send(:process_thrust, runner, 3, 180) # Thrust west (against)
+      arena.process_thrust(runner: runner, speed: 3, angle: 180) # Thrust west (against)
 
       # Cost should be 2x: (3/1.5)² × 1.0 × 2.0 = 8
       _(runner.energy).must_be_close_to 92, 0.1
@@ -204,7 +286,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
       runner.energy = 2 # Not enough for full thrust
 
-      arena.send(:process_thrust, runner, 5, 0)
+      arena.process_thrust(runner: runner, speed: 5, angle: 0)
 
       _(runner.energy).must_equal 0
       _(runner.velocity_x).must_be :>, 0
@@ -212,13 +294,13 @@ describe Rubowar::Arena do
     end
   end
 
-  describe "#find_rubot_in_line_of_sight" do
+  describe "#find_probe_target" do
     it "returns nil when no other rubots exist" do
       arena = build_arena
       runner = build_runner(x: 100, y: 100, turret_angle: 0)
-      arena.instance_variable_set(:@runners, [runner])
+      arena.runners = [runner]
 
-      result = arena.send(:find_rubot_in_line_of_sight, runner)
+      result = arena.find_probe_target( runner)
 
       _(result).must_be_nil
     end
@@ -227,9 +309,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 200, y: 100, turret_angle: 0) # Facing east
       target = build_runner(x: 100, y: 100) # West of shooter
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -238,9 +320,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0) # Facing east
       target = build_runner(x: 200, y: 100) # East of shooter
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -249,9 +331,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0) # Facing east
       target = build_runner(x: 200, y: 110) # Slightly offset but within radius (20)
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -260,9 +342,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0) # Facing east
       target = build_runner(x: 200, y: 150) # Too far offset (50 > radius of 20)
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -272,9 +354,9 @@ describe Rubowar::Arena do
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       near_target = build_runner(x: 200, y: 100)
       far_target = build_runner(x: 400, y: 100)
-      arena.instance_variable_set(:@runners, [shooter, far_target, near_target])
+      arena.runners = [shooter, far_target, near_target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal near_target
     end
@@ -284,9 +366,9 @@ describe Rubowar::Arena do
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       dead_target = build_runner(x: 200, y: 100)
       dead_target.health = 0
-      arena.instance_variable_set(:@runners, [shooter, dead_target])
+      arena.runners = [shooter, dead_target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -295,9 +377,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 90) # Facing north
       target = build_runner(x: 100, y: 200) # North of shooter
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -306,9 +388,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 200, y: 100, turret_angle: 180) # Facing west
       target = build_runner(x: 100, y: 100) # West of shooter
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -317,9 +399,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 200, turret_angle: 270) # Facing south
       target = build_runner(x: 100, y: 100) # South of shooter
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -328,9 +410,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 45)
       target = build_runner(x: 200, y: 200) # Northeast, on the 45° line
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -339,9 +421,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 200, y: 100, turret_angle: 135)
       target = build_runner(x: 100, y: 200) # Northwest
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -350,9 +432,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       target = build_runner(x: 200, y: 119) # Offset by 19, just inside radius of 20
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal target
     end
@@ -361,9 +443,9 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       target = build_runner(x: 200, y: 121) # Offset by 21, just outside radius of 20
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -371,9 +453,9 @@ describe Rubowar::Arena do
     it "does not detect self" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -381,10 +463,10 @@ describe Rubowar::Arena do
     it "detects small rubot with radius 15" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      small_target = build_runner(x: 200, y: 114, klass: SmallLookTestBot) # Offset 14, inside radius 15
-      arena.instance_variable_set(:@runners, [shooter, small_target])
+      small_target = build_runner(x: 200, y: 114, klass: SmallProbeTestBot) # Offset 14, inside radius 15
+      arena.runners = [shooter, small_target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal small_target
     end
@@ -392,10 +474,10 @@ describe Rubowar::Arena do
     it "misses small rubot outside its radius" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      small_target = build_runner(x: 200, y: 116, klass: SmallLookTestBot) # Offset 16, outside radius 15
-      arena.instance_variable_set(:@runners, [shooter, small_target])
+      small_target = build_runner(x: 200, y: 116, klass: SmallProbeTestBot) # Offset 16, outside radius 15
+      arena.runners = [shooter, small_target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_be_nil
     end
@@ -403,17 +485,17 @@ describe Rubowar::Arena do
     it "detects large rubot with radius 25" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      large_target = build_runner(x: 200, y: 124, klass: LargeLookTestBot) # Offset 24, inside radius 25
-      arena.instance_variable_set(:@runners, [shooter, large_target])
+      large_target = build_runner(x: 200, y: 124, klass: LargeProbeTestBot) # Offset 24, inside radius 25
+      arena.runners = [shooter, large_target]
 
-      result = arena.send(:find_rubot_in_line_of_sight, shooter)
+      result = arena.find_probe_target( shooter)
 
       _(result).must_equal large_target
     end
   end
 
-  describe "#build_look_result" do
-    it "returns only x, y with no attributes" do
+  describe "#build_probe_result" do
+    it "returns empty hash with no attributes" do
       arena = build_arena
       target = build_runner(x: 200, y: 150)
       target.velocity_x = 5.0
@@ -421,10 +503,10 @@ describe Rubowar::Arena do
       target.health = 80
       target.energy = 60
 
-      result = arena.send(:build_look_result, target, [])
+      result = arena.build_probe_result(target: target, attributes: [])
 
-      _(result[:x]).must_equal 200
-      _(result[:y]).must_equal 150
+      _(result.key?(:x)).must_equal false
+      _(result.key?(:y)).must_equal false
       _(result.key?(:size)).must_equal false
       _(result.key?(:velocity_x)).must_equal false
       _(result.key?(:shield_level)).must_equal false
@@ -432,11 +514,22 @@ describe Rubowar::Arena do
       _(result.key?(:energy)).must_equal false
     end
 
+    it "returns x, y with position attribute" do
+      arena = build_arena
+      target = build_runner(x: 200, y: 150)
+
+      result = arena.build_probe_result(target: target, attributes: [:position])
+
+      _(result[:x]).must_equal 200
+      _(result[:y]).must_equal 150
+      _(result.key?(:size)).must_equal false
+    end
+
     it "adds size when requested" do
       arena = build_arena
       target = build_runner(x: 200, y: 150)
 
-      result = arena.send(:build_look_result, target, [:size])
+      result = arena.build_probe_result(target: target, attributes: [:size])
 
       _(result[:size]).must_equal :medium
       _(result.key?(:velocity_x)).must_equal false
@@ -448,11 +541,22 @@ describe Rubowar::Arena do
       target.velocity_x = 5.0
       target.velocity_y = -3.0
 
-      result = arena.send(:build_look_result, target, [:velocity])
+      result = arena.build_probe_result(target: target, attributes: [:velocity])
 
       _(result[:velocity_x]).must_equal 5.0
       _(result[:velocity_y]).must_equal(-3.0)
+      _(result.key?(:x)).must_equal false
       _(result.key?(:size)).must_equal false
+    end
+
+    it "adds turret_angle when requested" do
+      arena = build_arena
+      target = build_runner(x: 200, y: 150, turret_angle: 45)
+
+      result = arena.build_probe_result(target: target, attributes: [:turret_angle])
+
+      _(result[:turret_angle]).must_equal 45
+      _(result.key?(:x)).must_equal false
     end
 
     it "adds shield_level when requested" do
@@ -460,7 +564,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.shield_level = 25
 
-      result = arena.send(:build_look_result, target, [:shield])
+      result = arena.build_probe_result(target: target, attributes: [:shield])
 
       _(result[:shield_level]).must_equal 25
       _(result.key?(:health)).must_equal false
@@ -471,7 +575,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.health = 75
 
-      result = arena.send(:build_look_result, target, [:health])
+      result = arena.build_probe_result(target: target, attributes: [:health])
 
       _(result[:health]).must_equal 75
       _(result.key?(:energy)).must_equal false
@@ -482,7 +586,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.energy = 45
 
-      result = arena.send(:build_look_result, target, [:energy])
+      result = arena.build_probe_result(target: target, attributes: [:energy])
 
       _(result[:energy]).must_equal 45
     end
@@ -494,7 +598,7 @@ describe Rubowar::Arena do
       target.velocity_y = -3.0
       target.health = 75
 
-      result = arena.send(:build_look_result, target, [:velocity, :health])
+      result = arena.build_probe_result(target: target, attributes: [:position, :velocity, :health])
 
       _(result[:x]).must_equal 200
       _(result[:y]).must_equal 150
@@ -507,38 +611,49 @@ describe Rubowar::Arena do
     end
   end
 
-  describe "#process_look" do
-    it "sets look result on rubot instance when target found" do
+  describe "#process_probe" do
+    it "sets probe result on rubot instance when target found" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       target = build_runner(x: 200, y: 100)
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      arena.send(:process_look, shooter, [])
+      arena.process_probe(runner: shooter, attributes: [:position])
 
-      result = shooter.instance.instance_variable_get(:@_look_result)
+      result = shooter.instance.probe_result
       _(result).wont_be_nil
       _(result[:x]).must_equal 200
     end
 
-    it "sets look result to nil when no target found" do
+    it "sets probe result to empty hash when no target found" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      arena.send(:process_look, shooter, [])
+      arena.process_probe(runner: shooter, attributes: [:size])
 
-      result = shooter.instance.instance_variable_get(:@_look_result)
-      _(result).must_be_nil
+      result = shooter.instance.probe_result
+      _(result).must_equal({})
     end
 
-    it "spends base energy cost of 1 with no attributes" do
+    it "spends zero energy with no attributes" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       shooter.energy = 50
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      arena.send(:process_look, shooter, [])
+      arena.process_probe(runner: shooter, attributes: [])
+
+      _(shooter.energy).must_equal 50
+    end
+
+    it "spends 1 energy for size attribute" do
+      arena = build_arena
+      shooter = build_runner(x: 100, y: 100, turret_angle: 0)
+      shooter.energy = 50
+      arena.runners = [shooter]
+
+      arena.process_probe(runner: shooter, attributes: [:size])
 
       _(shooter.energy).must_equal 49
     end
@@ -547,79 +662,79 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       shooter.energy = 50
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      arena.send(:process_look, shooter, [:size, :velocity])
+      arena.process_probe(runner: shooter, attributes: [:size, :velocity])
 
-      _(shooter.energy).must_equal 46 # 50 - 1 (base) - 1 (size) - 2 (velocity)
+      _(shooter.energy).must_equal 46 # 50 - 1 (size) - 3 (velocity)
     end
 
     it "spends full cost for all attributes" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       shooter.energy = 50
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      arena.send(:process_look, shooter, [:size, :velocity, :shield, :health, :energy])
+      arena.process_probe(runner: shooter, attributes: [:size, :position, :velocity, :shield, :health, :energy])
 
-      _(shooter.energy).must_equal 38 # 50 - 1 - 1 - 2 - 2 - 3 - 3 = 38
+      _(shooter.energy).must_equal 34 # 50 - 1 - 4 - 3 - 2 - 3 - 3 = 34
     end
 
     it "returns false and drains energy when insufficient" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       shooter.energy = 2
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      result = arena.send(:process_look, shooter, [:health]) # costs 4 (1 base + 3 health)
+      result = arena.process_probe(runner: shooter, attributes: [:health]) # costs 3 (health only)
 
       _(result).must_equal false
       _(shooter.energy).must_equal 0
     end
 
-    it "updates look result when target moves out of sight" do
+    it "updates probe result when target moves out of sight" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       target = build_runner(x: 200, y: 100)
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      arena.send(:process_look, shooter, [])
-      first_result = shooter.instance.instance_variable_get(:@_look_result)
-      _(first_result).wont_be_nil
+      arena.process_probe(runner: shooter, attributes: [:size])
+      first_result = shooter.instance.probe_result
+      _(first_result).wont_be_empty
 
       target.y = 200
-      arena.send(:process_look, shooter, [])
-      second_result = shooter.instance.instance_variable_get(:@_look_result)
+      arena.process_probe(runner: shooter, attributes: [:size])
+      second_result = shooter.instance.probe_result
 
-      _(second_result).must_be_nil
+      _(second_result).must_be_empty
     end
 
-    it "updates look result when new target appears" do
+    it "updates probe result when new target appears" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      arena.instance_variable_set(:@runners, [shooter])
+      arena.runners = [shooter]
 
-      arena.send(:process_look, shooter, [])
-      first_result = shooter.instance.instance_variable_get(:@_look_result)
-      _(first_result).must_be_nil
+      arena.process_probe(runner: shooter, attributes: [:position])
+      first_result = shooter.instance.probe_result
+      _(first_result).must_be_empty
 
       target = build_runner(x: 200, y: 100)
-      arena.instance_variable_set(:@runners, [shooter, target])
-      arena.send(:process_look, shooter, [])
-      second_result = shooter.instance.instance_variable_get(:@_look_result)
+      arena.runners = [shooter, target]
+      arena.process_probe(runner: shooter, attributes: [:position])
+      second_result = shooter.instance.probe_result
 
-      _(second_result).wont_be_nil
+      _(second_result).wont_be_empty
       _(second_result[:x]).must_equal 200
     end
 
     it "returns size only when requested" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      small_target = build_runner(x: 200, y: 100, klass: SmallLookTestBot)
-      arena.instance_variable_set(:@runners, [shooter, small_target])
+      small_target = build_runner(x: 200, y: 100, klass: SmallProbeTestBot)
+      arena.runners = [shooter, small_target]
 
-      arena.send(:process_look, shooter, [:size])
-      result = shooter.instance.instance_variable_get(:@_look_result)
+      arena.process_probe(runner: shooter, attributes: [:size])
+      result = shooter.instance.probe_result
 
       _(result[:size]).must_equal :small
     end
@@ -628,12 +743,634 @@ describe Rubowar::Arena do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       target = build_runner(x: 200, y: 100)
-      arena.instance_variable_set(:@runners, [shooter, target])
+      arena.runners = [shooter, target]
 
-      arena.send(:process_look, shooter, [])
-      result = shooter.instance.instance_variable_get(:@_look_result)
+      arena.process_probe(runner: shooter, attributes: [])
+      result = shooter.instance.probe_result
 
       _(result.key?(:size)).must_equal false
+    end
+  end
+
+  describe "#in_arc?" do
+    it "returns true for target directly in front within distance" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: 200, y: 100)
+
+      _(result).must_equal true
+    end
+
+    it "returns false for target beyond max distance" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 50, x: 200, y: 100)
+
+      _(result).must_equal false
+    end
+
+    it "returns true for target within arc angle" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      # Target at 10 degrees, arc is 30 degrees (±15)
+      target_x = 100 + 100 * Math.cos(10 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(10 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal true
+    end
+
+    it "returns false for target outside arc angle" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      # Target at 45 degrees, arc is 30 degrees (±15)
+      target_x = 100 + 100 * Math.cos(45 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(45 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal false
+    end
+
+    it "handles turret angle 90 (north)" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 90)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: 100, y: 200)
+
+      _(result).must_equal true
+    end
+
+    it "handles turret angle 180 (west)" do
+      arena = build_arena
+      scanner = build_runner(x: 200, y: 100, turret_angle: 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: 100, y: 100)
+
+      _(result).must_equal true
+    end
+
+    it "handles turret angle 270 (south)" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 200, turret_angle: 270)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: 100, y: 100)
+
+      _(result).must_equal true
+    end
+
+    it "returns true at edge of arc angle" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      # Target at exactly 15 degrees, arc is 30 degrees (±15)
+      target_x = 100 + 100 * Math.cos(15 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(15 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal true
+    end
+
+    it "returns false just outside arc angle" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      # Target at 16 degrees, arc is 30 degrees (±15)
+      target_x = 100 + 100 * Math.cos(16 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(16 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal false
+    end
+
+    it "handles negative arc angles (behind turret direction)" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      # Target at -10 degrees
+      target_x = 100 + 100 * Math.cos(-10 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(-10 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal true
+    end
+
+    it "handles wraparound at 360 degrees" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 350)
+      # Target at 10 degrees (20 degree difference across 0)
+      target_x = 100 + 100 * Math.cos(10 * Math::PI / 180)
+      target_y = 100 + 100 * Math.sin(10 * Math::PI / 180)
+
+      result = arena.in_arc?(runner: scanner, angle: 60, distance: 200, x: target_x, y: target_y)
+
+      _(result).must_equal true
+    end
+  end
+
+  describe "#process_scan" do
+    it "calculates correct energy cost for base scan" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      scanner.energy = 100
+      arena.runners = [scanner]
+
+      arena.process_scan(runner: scanner, angle: 20, distance: 100, velocity: false, owner: false)
+
+      # Cost: 3 base + ceil(20/20) + ceil(100/100) = 3 + 1 + 1 = 5
+      _(scanner.energy).must_equal 95
+    end
+
+    it "calculates correct energy cost with velocity" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      scanner.energy = 100
+      arena.runners = [scanner]
+
+      arena.process_scan(runner: scanner, angle: 20, distance: 100, velocity: true, owner: false)
+
+      # Cost: 3 base + 1 + 1 + 2 velocity = 7
+      _(scanner.energy).must_equal 93
+    end
+
+    it "calculates correct cost for large scan area" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      scanner.energy = 100
+      arena.runners = [scanner]
+
+      arena.process_scan(runner: scanner, angle: 90, distance: 300, velocity: false, owner: false)
+
+      # Cost: 3 base + ceil(90/20) + ceil(300/100) = 3 + 5 + 3 = 11
+      _(scanner.energy).must_equal 89
+    end
+
+    it "returns empty array when no targets in arc" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 100, y: 300) # North, not in east-facing arc
+      arena.runners = [scanner, target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result).must_equal []
+    end
+
+    it "returns rubot in arc" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 200, y: 100)
+      arena.runners = [scanner, target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result.length).must_equal 1
+      _(result[0][:x]).must_equal 200
+      _(result[0][:y]).must_equal 100
+      _(result[0][:type]).must_equal :rubot
+    end
+
+    it "returns multiple rubots in arc" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target1 = build_runner(x: 200, y: 100)
+      target2 = build_runner(x: 250, y: 110)
+      arena.runners = [scanner, target1, target2]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 300, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result.length).must_equal 2
+      _(result.all? { |r| r[:type] == :rubot }).must_equal true
+    end
+
+    it "does not include self in results" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      arena.runners = [scanner]
+
+      arena.process_scan(runner: scanner, angle: 360, distance: 500, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result).must_equal []
+    end
+
+    it "does not include dead rubots" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      dead_target = build_runner(x: 200, y: 100)
+      dead_target.health = 0
+      arena.runners = [scanner, dead_target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result).must_equal []
+    end
+
+    it "includes velocity when requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 200, y: 100)
+      target.velocity_x = 5.0
+      target.velocity_y = -3.0
+      arena.runners = [scanner, target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: true, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result[0][:velocity_x]).must_equal 5.0
+      _(result[0][:velocity_y]).must_equal(-3.0)
+    end
+
+    it "does not include velocity when not requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 200, y: 100)
+      target.velocity_x = 5.0
+      arena.runners = [scanner, target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result[0].key?(:velocity_x)).must_equal false
+    end
+
+    it "detects bullets in arc" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      bullet = Rubowar::Bullet.new(x: 200, y: 100, angle: 180, damage: 10, owner: scanner)
+      arena.runners = [scanner]
+      arena.bullets = [bullet]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result.length).must_equal 1
+      _(result[0][:type]).must_equal :bullet
+    end
+
+    it "includes bullet velocity when requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      bullet = Rubowar::Bullet.new(x: 200, y: 100, angle: 180, damage: 10, owner: scanner)
+      arena.runners = [scanner]
+      arena.bullets = [bullet]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: true, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result[0].key?(:velocity_x)).must_equal true
+      _(result[0].key?(:velocity_y)).must_equal true
+    end
+
+    it "returns both rubots and bullets in arc" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 200, y: 100)
+      bullet = Rubowar::Bullet.new(x: 250, y: 100, angle: 180, damage: 10, owner: scanner)
+      arena.runners = [scanner, target]
+      arena.bullets = [bullet]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 300, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      _(result.length).must_equal 2
+      types = result.map { |r| r[:type] }
+      _(types).must_include :rubot
+      _(types).must_include :bullet
+    end
+
+    it "returns false and drains energy when insufficient" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      scanner.energy = 3
+      arena.runners = [scanner]
+
+      result = arena.process_scan(runner: scanner, angle: 20, distance: 100, velocity: false, owner: false)
+
+      _(result).must_equal false
+      _(scanner.energy).must_equal 0
+    end
+
+    it "adds owner cost when owner option is true" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      scanner.energy = 100
+      arena.runners = [scanner]
+
+      arena.process_scan(runner: scanner, angle: 20, distance: 100, velocity: false, owner: true)
+
+      # Cost: 3 base + 1 angle + 1 distance + 1 owner = 6
+      _(scanner.energy).must_equal 94
+    end
+
+    it "includes owner info for bullets when requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 200, y: 100, angle: 180, damage: 10, owner: shooter)
+      arena.runners = [scanner, shooter]
+      arena.bullets = [bullet]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: true)
+      result = scanner.instance.scan_result
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result[:owner]).must_equal "ProbeTestBot"
+    end
+
+    it "sets owner to nil for rubots when owner requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      target = build_runner(x: 200, y: 100)
+      arena.runners = [scanner, target]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: true)
+      result = scanner.instance.scan_result
+
+      _(result[0][:owner]).must_be_nil
+    end
+
+    it "does not include owner when not requested" do
+      arena = build_arena
+      scanner = build_runner(x: 100, y: 100, turret_angle: 0)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 200, y: 100, angle: 180, damage: 10, owner: shooter)
+      arena.runners = [scanner, shooter]
+      arena.bullets = [bullet]
+
+      arena.process_scan(runner: scanner, angle: 30, distance: 200, velocity: false, owner: false)
+      result = scanner.instance.scan_result
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result.key?(:owner)).must_equal false
+    end
+  end
+
+  describe "#within_distance?" do
+    it "returns true for target within distance" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+
+      result = arena.within_distance?(runner: runner, distance: 150, x: 200, y: 100)
+
+      _(result).must_equal true
+    end
+
+    it "returns false for target beyond distance" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+
+      result = arena.within_distance?(runner: runner, distance: 50, x: 200, y: 100)
+
+      _(result).must_equal false
+    end
+
+    it "returns true at exact distance" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+
+      result = arena.within_distance?(runner: runner, distance: 100, x: 200, y: 100)
+
+      _(result).must_equal true
+    end
+
+    it "works in all directions" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+
+      # North
+      _(arena.within_distance?(runner: runner, distance: 100, x: 100, y: 200)).must_equal true
+      # South
+      _(arena.within_distance?(runner: runner, distance: 100, x: 100, y: 0)).must_equal true
+      # East
+      _(arena.within_distance?(runner: runner, distance: 100, x: 200, y: 100)).must_equal true
+      # West
+      _(arena.within_distance?(runner: runner, distance: 100, x: 0, y: 100)).must_equal true
+    end
+  end
+
+  describe "#process_pulse" do
+    it "calculates correct energy cost" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 100
+      arena.runners = [runner]
+
+      arena.process_pulse(runner: runner, distance: 75, owner: false)
+
+      # Cost: 2 base + ceil(75/75) = 2 + 1 = 3
+      _(runner.energy).must_equal 97
+    end
+
+    it "calculates correct cost for longer distance" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 100
+      arena.runners = [runner]
+
+      arena.process_pulse(runner: runner, distance: 200, owner: false)
+
+      # Cost: 2 base + ceil(200/75) = 2 + 3 = 5
+      _(runner.energy).must_equal 95
+    end
+
+    it "returns empty array when no targets in range" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target = build_runner(x: 500, y: 500) # Far away
+      arena.runners = [runner, target]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result).must_equal []
+    end
+
+    it "returns rubot in range" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target = build_runner(x: 150, y: 100) # 50 units away
+      arena.runners = [runner, target]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result.length).must_equal 1
+      _(result[0][:x]).must_equal 150
+      _(result[0][:y]).must_equal 100
+      _(result[0][:type]).must_equal :rubot
+    end
+
+    it "returns multiple rubots in range" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target1 = build_runner(x: 150, y: 100)
+      target2 = build_runner(x: 100, y: 150)
+      arena.runners = [runner, target1, target2]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result.length).must_equal 2
+      _(result.all? { |r| r[:type] == :rubot }).must_equal true
+    end
+
+    it "does not include self in results" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      arena.process_pulse(runner: runner, distance: 500, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result).must_equal []
+    end
+
+    it "does not include dead rubots" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      dead_target = build_runner(x: 150, y: 100)
+      dead_target.health = 0
+      arena.runners = [runner, dead_target]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result).must_equal []
+    end
+
+    it "detects bullets in range" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 150, y: 100, angle: 180, damage: 10, owner: runner)
+      arena.runners = [runner]
+      arena.bullets = [bullet]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result.length).must_equal 1
+      _(result[0][:type]).must_equal :bullet
+    end
+
+    it "returns both rubots and bullets in range" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target = build_runner(x: 150, y: 100)
+      bullet = Rubowar::Bullet.new(x: 100, y: 150, angle: 180, damage: 10, owner: runner)
+      arena.runners = [runner, target]
+      arena.bullets = [bullet]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result.length).must_equal 2
+      types = result.map { |r| r[:type] }
+      _(types).must_include :rubot
+      _(types).must_include :bullet
+    end
+
+    it "does not include velocity data" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target = build_runner(x: 150, y: 100)
+      target.velocity_x = 5.0
+      target.velocity_y = -3.0
+      arena.runners = [runner, target]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result[0].key?(:velocity_x)).must_equal false
+      _(result[0].key?(:velocity_y)).must_equal false
+    end
+
+    it "returns false and drains energy when insufficient" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 2
+      arena.runners = [runner]
+
+      result = arena.process_pulse(runner: runner, distance: 75, owner: false)
+
+      _(result).must_equal false
+      _(runner.energy).must_equal 0
+    end
+
+    it "detects targets in all directions" do
+      arena = build_arena
+      runner = build_runner(x: 200, y: 200)
+      north = build_runner(x: 200, y: 250)
+      south = build_runner(x: 200, y: 150)
+      east = build_runner(x: 250, y: 200)
+      west = build_runner(x: 150, y: 200)
+      arena.runners = [runner, north, south, east, west]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      _(result.length).must_equal 4
+    end
+
+    it "adds owner cost when owner option is true" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 100
+      arena.runners = [runner]
+
+      arena.process_pulse(runner: runner, distance: 75, owner: true)
+
+      # Cost: 2 base + 1 distance + 1 owner = 4
+      _(runner.energy).must_equal 96
+    end
+
+    it "includes owner info for bullets when requested" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 150, y: 100, angle: 180, damage: 10, owner: shooter)
+      arena.runners = [runner, shooter]
+      arena.bullets = [bullet]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: true)
+      result = runner.instance.pulse_result
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result[:owner]).must_equal "ProbeTestBot"
+    end
+
+    it "sets owner to nil for rubots when owner requested" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      target = build_runner(x: 150, y: 100)
+      arena.runners = [runner, target]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: true)
+      result = runner.instance.pulse_result
+
+      _(result[0][:owner]).must_be_nil
+    end
+
+    it "does not include owner when not requested" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 150, y: 100, angle: 180, damage: 10, owner: shooter)
+      arena.runners = [runner, shooter]
+      arena.bullets = [bullet]
+
+      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      result = runner.instance.pulse_result
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result.key?(:owner)).must_equal false
     end
   end
 end

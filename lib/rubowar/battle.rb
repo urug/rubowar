@@ -50,7 +50,7 @@ module Rubowar
     end
 
     def run_tick
-      # 1. Set up state and call each rubot's tick
+      # 1. Set up state and call each rubot's tick to queue actions
       @arena.runners.each do |runner|
         next if runner.dead?
 
@@ -64,20 +64,13 @@ module Rubowar
         end
       end
 
-      # 2. Process queued actions
-      @arena.runners.each do |runner|
-        next if runner.dead?
+      # 2. Process actions in phases for fairness (no spawn-order advantage)
+      process_sense_phase
+      process_move_phase
+      process_combat_phase
 
-        actions = runner.instance.actions
-        actions.each do |action|
-          success = @arena.process_action(runner, action)
-          emit(:action_failed, { runner: runner, action: action }) unless success
-        end
-        actions.clear
-      end
-
-      # 3. Update physics
-      @arena.update
+      # 3. Process energons (collection after movement, then spawning)
+      process_energon_phase
 
       # 4. Regenerate energy and degrade shields
       @arena.regenerate_and_degrade
@@ -91,11 +84,102 @@ module Rubowar
       end
     end
 
+    # Phase 1: All sensing actions (probe, scan, pulse, detect)
+    # Detect is processed last so it reports current tick's detection counts
+    def process_sense_phase
+      # 1a. Reset detection counts (prepare for this tick's sensing)
+      @arena.runners.each(&:reset_detection_counts)
+
+      # 1b. Process probe/scan/pulse (increments detection counts on targets)
+      @arena.runners.each do |runner|
+        next if runner.dead?
+
+        runner.instance.actions.each do |action|
+          next unless %i[probe scan pulse].include?(action[:type])
+
+          success = @arena.process_action(runner: runner, action: action)
+          emit(:action_failed, { runner: runner, action: action }) unless success
+        end
+      end
+
+      # 1c. Process detect actions last (reports this tick's detection counts)
+      @arena.runners.each do |runner|
+        next if runner.dead?
+
+        runner.instance.actions.each do |action|
+          next unless action[:type] == :detect
+
+          success = @arena.process_action(runner: runner, action: action)
+          emit(:action_failed, { runner: runner, action: action }) unless success
+        end
+      end
+    end
+
+    # Phase 2: All movement actions (thrust, turret), then rubot physics
+    # Rubots move simultaneously, then collisions are resolved
+    def process_move_phase
+      @arena.runners.each do |runner|
+        next if runner.dead?
+
+        runner.instance.actions.each do |action|
+          next unless %i[thrust turret].include?(action[:type])
+
+          success = @arena.process_action(runner: runner, action: action)
+          emit(:action_failed, { runner: runner, action: action }) unless success
+        end
+      end
+
+      @arena.update_rubot_physics
+    end
+
+    # Phase 3: All combat actions (fire, shield), then bullet physics
+    # Bullets spawn from post-movement positions, then move and hit
+    def process_combat_phase
+      @arena.runners.each do |runner|
+        next if runner.dead?
+
+        actions = runner.instance.actions
+        actions.each do |action|
+          next unless %i[fire shield].include?(action[:type])
+
+          success = @arena.process_action(runner: runner, action: action)
+          emit(:action_failed, { runner: runner, action: action }) unless success
+        end
+        actions.clear
+      end
+
+      @arena.update_bullet_physics
+    end
+
+    # Phase 4: Energon collection and spawning
+    def process_energon_phase
+      # Check for collections (after movement)
+      collections = @arena.check_energon_collection(@tick_number)
+      collections.each do |collection|
+        emit(:energon_collect, {
+          runner: collection[:runner],
+          x: collection[:energon].x,
+          y: collection[:energon].y,
+          amount: collection[:amount]
+        })
+      end
+
+      # Spawn new energon every ENERGON_SPAWN_INTERVAL ticks
+      return unless (@tick_number % Arena::ENERGON_SPAWN_INTERVAL).zero?
+
+      energon = @arena.spawn_energon(@tick_number)
+      emit(:energon_spawn, { x: energon.x, y: energon.y }) if energon
+    end
+
     def setup_rubot_for_tick(runner)
       runner.instance.rubot_state = runner.to_state
       runner.instance.arena_state = @arena.to_state(@tick_number)
       runner.instance.actions ||= []
-      runner.instance._look_result = nil
+      # Reset pending energy spend for this tick's upfront energy checks
+      runner.instance._pending_energy_spend = 0
+      # Note: Do NOT clear probe_result, scan_result, pulse_result here.
+      # They contain results from the PREVIOUS tick's sensing actions,
+      # which rubots need to read during the current tick.
     end
 
     def battle_over?
@@ -111,8 +195,8 @@ module Rubowar
                 elsif alive_runners.empty?
                   nil
                 else
-                  # Tiebreaker: highest HP, then most damage dealt
-                  alive_runners.max_by { |r| [r.health, r.damage_dealt] }
+                  # Tiebreaker: most damage dealt, then highest HP
+                  alive_runners.max_by { |r| [r.damage_dealt, r.health] }
                 end
     end
 

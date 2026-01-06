@@ -176,43 +176,171 @@ describe Rubowar::Rubot do
     end
   end
 
-  describe "#look" do
-    it "queues a look action with no attributes" do
+  describe "#probe" do
+    it "queues a probe action defaulting to size when no attributes given" do
       bot = build_bot
 
-      bot.look
+      bot.probe
 
-      _(bot.actions).must_equal [{ type: :look, attributes: [] }]
+      _(bot.actions).must_equal [{ type: :probe, attributes: [:size] }]
     end
 
-    it "queues a look action with single attribute" do
+    it "queues a probe action with single attribute" do
       bot = build_bot
 
-      bot.look(:size)
+      bot.probe(:position)
 
-      _(bot.actions).must_equal [{ type: :look, attributes: [:size] }]
+      _(bot.actions).must_equal [{ type: :probe, attributes: [:position] }]
     end
 
-    it "queues a look action with multiple attributes" do
+    it "queues a probe action with multiple attributes" do
       bot = build_bot
 
-      bot.look(:size, :velocity, :health)
+      bot.probe(:position, :velocity, :health)
 
-      _(bot.actions).must_equal [{ type: :look, attributes: [:size, :velocity, :health] }]
+      _(bot.actions).must_equal [{ type: :probe, attributes: [:position, :velocity, :health] }]
     end
 
     it "raises ArgumentError for invalid attributes" do
       bot = build_bot
 
-      _ { bot.look(:invalid) }.must_raise ArgumentError
+      _ { bot.probe(:invalid) }.must_raise ArgumentError
     end
 
     it "accepts all valid attributes" do
       bot = build_bot
 
-      bot.look(:size, :velocity, :shield, :health, :energy)
+      bot.probe(:size, :position, :velocity, :shield, :health, :energy)
 
-      _(bot.actions.first[:attributes]).must_equal [:size, :velocity, :shield, :health, :energy]
+      _(bot.actions.first[:attributes]).must_equal [:size, :position, :velocity, :shield, :health, :energy]
+    end
+  end
+
+  describe "#scan" do
+    it "queues a scan action with angle and distance" do
+      bot = build_bot
+
+      bot.scan(angle: 30, distance: 200)
+
+      _(bot.actions).must_equal [{ type: :scan, angle: 30, distance: 200, velocity: false, owner: false }]
+    end
+
+    it "queues a scan action with velocity option" do
+      bot = build_bot
+
+      bot.scan(angle: 30, distance: 200, velocity: true)
+
+      _(bot.actions).must_equal [{ type: :scan, angle: 30, distance: 200, velocity: true, owner: false }]
+    end
+
+    it "queues a scan action with owner option" do
+      bot = build_bot
+
+      bot.scan(angle: 30, distance: 200, owner: true)
+
+      _(bot.actions).must_equal [{ type: :scan, angle: 30, distance: 200, velocity: false, owner: true }]
+    end
+
+    it "returns true when enough energy" do
+      bot = build_bot
+
+      result = bot.scan(angle: 30, distance: 200)
+
+      _(result).must_equal true
+    end
+
+    it "returns false when insufficient energy" do
+      bot = build_bot(energy: 1)
+
+      result = bot.scan(angle: 30, distance: 200)
+
+      _(result).must_equal false
+      _(bot.actions).must_be_empty
+    end
+
+    it "scan_result returns previous tick result" do
+      bot = build_bot
+      bot.scan_result = [{ x: 100, y: 200, type: :rubot }]
+
+      _(bot.scan_result).must_equal [{ x: 100, y: 200, type: :rubot }]
+    end
+
+    it "raises ArgumentError for zero angle" do
+      bot = build_bot
+
+      _ { bot.scan(angle: 0, distance: 200) }.must_raise ArgumentError
+    end
+
+    it "raises ArgumentError for negative angle" do
+      bot = build_bot
+
+      _ { bot.scan(angle: -10, distance: 200) }.must_raise ArgumentError
+    end
+
+    it "raises ArgumentError for zero distance" do
+      bot = build_bot
+
+      _ { bot.scan(angle: 30, distance: 0) }.must_raise ArgumentError
+    end
+
+    it "raises ArgumentError for negative distance" do
+      bot = build_bot
+
+      _ { bot.scan(angle: 30, distance: -100) }.must_raise ArgumentError
+    end
+  end
+
+  describe "#pulse" do
+    it "queues a pulse action with distance" do
+      bot = build_bot
+
+      bot.pulse(distance: 100)
+
+      _(bot.actions).must_equal [{ type: :pulse, distance: 100, owner: false }]
+    end
+
+    it "queues a pulse action with owner option" do
+      bot = build_bot
+
+      bot.pulse(distance: 100, owner: true)
+
+      _(bot.actions).must_equal [{ type: :pulse, distance: 100, owner: true }]
+    end
+
+    it "returns true when enough energy" do
+      bot = build_bot
+
+      result = bot.pulse(distance: 100)
+
+      _(result).must_equal true
+    end
+
+    it "returns false when insufficient energy" do
+      bot = build_bot(energy: 1)
+
+      result = bot.pulse(distance: 100)
+
+      _(result).must_equal false
+      _(bot.actions).must_be_empty
+    end
+
+    it "pulse_result returns previous tick result" do
+      bot = build_bot
+      bot.pulse_result = [{ x: 150, y: 250, type: :rubot }]
+
+      _(bot.pulse_result).must_equal [{ x: 150, y: 250, type: :rubot }]
+    end
+
+    it "raises ArgumentError for zero distance" do
+      bot = build_bot
+
+      _ { bot.pulse(distance: 0) }.must_raise ArgumentError
+    end
+
+    it "raises ArgumentError for negative distance" do
+      bot = build_bot
+
+      _ { bot.pulse(distance: -50) }.must_raise ArgumentError
     end
   end
 end

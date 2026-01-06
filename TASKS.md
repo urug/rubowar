@@ -22,7 +22,7 @@
 - [x] Action method: `turret(degrees)`
 - [x] Action method: `fire(energy)`
 - [x] Action method: `shield(energy)`
-- [x] Action method: `look(*attributes)` - attribute-based costs
+- [x] Action method: `probe(*attributes)` - attribute-based costs
 - [x] Action queuing system
 
 ### Arena (`lib/rubowar/arena.rb`)
@@ -34,7 +34,7 @@
 - [x] Rubot collision detection + push apart + momentum damage (2 + mass x speed x 0.5)
 - [x] Max speed enforcement (20 u/tick)
 - [x] Thrust processing with mass and direction multiplier
-- [x] Look processing with attribute-based costs
+- [x] Probe processing with attribute-based costs
 
 ### RubotRunner (`lib/rubowar/rubot_runner.rb`)
 - [x] Size-based stats: radius, energy_regen, max_health
@@ -75,8 +75,12 @@
 - [x] Battle status output
 
 ### Example Rubots (`robots/`)
-- [x] `spinner.rb` - Simple turret spinner, fires on sight
-- [x] `tracker.rb` - Seeks and tracks enemies with patrol behavior
+- [x] `spinner.rb` - Stationary turret spinner, fires on sight
+- [x] `coroner.rb` - Corner-camping sniper with lead calculation
+- [x] `crusher.rb` - Large ramming tank, no bullets
+- [x] `hunter.rb` - Small pursuit predator with intercept logic
+- [x] `patroller.rb` - Perimeter patrol with wall-based energon collection
+- [x] `avoider.rb` - Evasive bot with energon collection and detect usage
 
 ### Tests
 - [x] Rubot module tests
@@ -105,15 +109,29 @@
 - [x] Momentum-based rubot collision: `2 + mass x speed x 0.5`
 - [x] Speed-based wall collision: `2 + speed x 0.75`
 
-### Look System
-- [x] Attribute-based look costs
+### Probe System
+- [x] Attribute-based probe costs
 - [x] Base cost: 1 energy (returns x, y)
 - [x] `:size`: +1 energy
 - [x] `:velocity`: +2 energy
 - [x] `:shield`: +2 energy
 - [x] `:health`: +3 energy
 - [x] `:energy`: +3 energy
-- [x] Look returns previous tick's result (1-tick delay)
+- [x] Probe returns previous tick's result (1-tick delay)
+
+### Scan System
+- [x] `scan(angle:, distance:, velocity:)` arc scan method
+- [x] Cost: `3 + ceil(angle/20) + ceil(distance/100)` [+2 for velocity]
+- [x] Returns all rubots and bullets in arc
+- [x] Base result: `{x:, y:, type:}`, with velocity: adds `velocity_x`, `velocity_y`
+- [x] Scan returns previous tick's result (1-tick delay)
+
+### Pulse System
+- [x] `pulse(distance:)` omnidirectional radar method
+- [x] Cost: `2 + ceil(distance/75)`
+- [x] Returns all rubots and bullets within radius
+- [x] Result: `{x:, y:, type:}` (position only, no velocity)
+- [x] Pulse returns previous tick's result (1-tick delay)
 
 ### Callbacks
 - [x] `on_hit(damage, direction)`
@@ -125,21 +143,29 @@
 
 ---
 
-## Phase 3: Energons & CLI - NOT STARTED
+## Phase 3: Energons & CLI - PARTIAL
 
-### Energons (`lib/rubowar/energon.rb`)
-- [ ] Spawn logic (every ~150 ticks, max 2)
-- [ ] Random energy value (20-80)
-- [ ] Collection detection (15 unit radius)
-- [ ] `on_energon(amount)` callback triggering
-- [ ] `energons` accessor (always visible, free)
+### Energons (`lib/rubowar/energon.rb`) - COMPLETE
+- [x] Spawn logic (every 80 ticks, configurable via ENERGON_SPAWN_INTERVAL)
+- [x] Time-based value: starts at 1, grows +1/tick (configurable via GROWTH_RATE)
+- [x] Collection detection (8 unit radius, touch to collect)
+- [x] `on_energon(amount)` callback triggering
+- [x] `energons` accessor (always visible, free) - returns `[{x:, y:}]`
+- [x] Wall buffer: 15% of smaller arena dimension (spawns away from edges)
+- [x] Max-min distance spawn algorithm (spawns equidistant from all bots)
+- [x] `energon_spawn_interval` and `energon_growth_rate` accessors for rubots
 
-### CLI (`bin/rubowar`)
+### Detect Action - COMPLETE
+- [x] `detect` counter-intelligence action (2 energy)
+- [x] Returns `{ probed:, scanned:, pulsed: }` counts from current tick
+- [x] Processed during sense phase with other sensing actions
+
+### CLI (`bin/rubowar`) - NOT STARTED
 - [ ] Load rubot files
 - [ ] Run battle with options (arena size, tick limit)
 - [ ] Output results
 
-### Replay System
+### Replay System - NOT STARTED
 - [ ] Event log recording
 - [ ] JSON serialization
 
@@ -171,8 +197,8 @@
 
 ### Combat
 - `FIRE_DAMAGE_MULTIPLIER = 1.5`
-- `MAX_SHIELD = 50`
-- `SHIELD_DEGRADATION = 2/tick`
+- `MAX_SHIELD = max_health` (80/100/120 by size)
+- `SHIELD_DECAY_RATE = 0.12` (12% per tick)
 
 ### Movement
 - `MAX_SPEED = 20`
@@ -182,12 +208,29 @@
 ### Collisions
 - `COLLISION_BASE_DAMAGE = 2`
 - `COLLISION_VELOCITY_MULTIPLIER = 0.5` (rubot)
-- `WALL_VELOCITY_MULTIPLIER = 0.75` (wall)
+- `WALL_VELOCITY_MULTIPLIER = 0.75` (wall damage)
+- `WALL_BOUNCE_COEFFICIENT = 0.12` (velocity retention = mass x 0.12)
 
 ### Sensing
 - `TURRET_TURN_DIVISOR = 30.0`
-- `LOOK_BASE_COST = 1`
-- `LOOK_COSTS = { size: 1, velocity: 2, shield: 2, health: 3, energy: 3 }`
+- `PROBE_BASE_COST = 1`
+- `PROBE_COSTS = { size: 1, position: 4, velocity: 3, turret_angle: 2, shield: 2, health: 3, energy: 3 }`
+- `SCAN_BASE_COST = 3`
+- `SCAN_ANGLE_DIVISOR = 20.0`
+- `SCAN_DISTANCE_DIVISOR = 100.0`
+- `SCAN_VELOCITY_COST = 2`
+- `SCAN_OWNER_COST = 1`
+- `PULSE_BASE_COST = 2`
+- `PULSE_DISTANCE_DIVISOR = 75.0`
+- `PULSE_OWNER_COST = 1`
+- `DETECT_COST = 2`
+
+### Energons
+- `ENERGON_SPAWN_INTERVAL = 80`
+- `ENERGON_WALL_BUFFER_RATIO = 0.15`
+- `ENERGON_INITIAL_VALUE = 1`
+- `ENERGON_GROWTH_RATE = 1.0`
+- `ENERGON_RADIUS = 8`
 
 ### Bullets
 - `SPEED = 18`

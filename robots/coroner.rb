@@ -1,0 +1,229 @@
+# frozen_string_literal: true
+
+# A defensive sniper that camps corners and takes precise shots.
+# Flees to another corner if enemies get too close.
+class Coroner
+  include Rubowar::Rubot
+
+  size :medium
+
+  CORNER_BUFFER = 60
+  DANGER_DISTANCE = 150
+  SCAN_ANGLE = 60
+  FIRE_TOLERANCE = 10
+
+  def on_spawn
+    @mode = :moving_to_corner
+    @corner = closest_corner
+    @scan_direction = 1
+    @last_target = nil
+    @tracking = false
+  end
+
+  def tick
+    check_for_danger
+
+    case @mode
+    when :moving_to_corner
+      move_to_corner_tick
+    when :scanning
+      scanning_tick
+    when :fleeing
+      fleeing_tick
+    end
+  end
+
+  def on_hit(_damage, direction)
+    # When hit, flee in the opposite direction
+    @corner = corner_away_from(direction)
+    @mode = :fleeing
+  end
+
+  def on_wall
+    # If we hit a wall while fleeing, we're probably in a corner
+    @mode = :scanning if @mode == :fleeing
+  end
+
+  private
+
+  def corners
+    @corners ||= [
+      { x: CORNER_BUFFER, y: CORNER_BUFFER },                           # bottom-left
+      { x: arena_width - CORNER_BUFFER, y: CORNER_BUFFER },             # bottom-right
+      { x: CORNER_BUFFER, y: arena_height - CORNER_BUFFER },            # top-left
+      { x: arena_width - CORNER_BUFFER, y: arena_height - CORNER_BUFFER } # top-right
+    ]
+  end
+
+  def closest_corner
+    corners.min_by { |c| distance_to(c[:x], c[:y]) }
+  end
+
+  def farthest_corner
+    corners.max_by { |c| distance_to(c[:x], c[:y]) }
+  end
+
+  def corner_away_from(direction)
+    # Find corner that's most opposite to the threat direction
+    threat_x = x + Math.cos(direction * Math::PI / 180) * 100
+    threat_y = y + Math.sin(direction * Math::PI / 180) * 100
+    corners.max_by { |c| Math.sqrt((c[:x] - threat_x)**2 + (c[:y] - threat_y)**2) }
+  end
+
+  def check_for_danger
+    return if @mode == :fleeing
+
+    # SENSE: Queue danger pulse for next tick
+    pulse(distance: DANGER_DISTANCE)
+
+    # Process previous pulse results for nearby threats
+    if pulse_result
+      rubots = pulse_result.select { |t| t[:type] == :rubot }
+
+      unless rubots.empty?
+        # Something is too close - flee!
+        closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
+        threat_angle = angle_to(closest[:x], closest[:y])
+        @corner = corner_away_from(threat_angle)
+        @mode = :fleeing
+      end
+    end
+  end
+
+  def move_to_corner_tick
+    dist = distance_to(@corner[:x], @corner[:y])
+
+    if dist < CORNER_BUFFER / 2
+      @mode = :scanning
+      return
+    end
+
+    angle = angle_to(@corner[:x], @corner[:y])
+    thrust(speed: 5, angle: angle) if speed < 5
+  end
+
+  def scanning_tick
+    if @tracking
+      tracking_tick
+    else
+      sweeping_tick
+    end
+
+    # Build shields while camping
+    shield(3) if energy > 70 && shield_level < 25
+  end
+
+  def sweeping_tick
+    # SENSE: Queue new scan for next tick
+    scan(angle: 70, distance: scan_distance) if energy > 20
+
+    # Process previous scan results for targets
+    if scan_result
+      rubots = scan_result.select { |t| t[:type] == :rubot }
+
+      if rubots.any?
+        # Found target! Switch to tracking mode
+        closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
+        @last_target = closest
+        @last_target_tick = tick_number
+        @tracking = true
+        @ticks_without_probe_hit = 0
+      end
+    end
+
+    # MOVE: Sweep turret to find targets
+    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    turret_offset = normalize_angle(turret_angle - center_angle)
+
+    if turret_offset.abs > 100
+      turret(turret_offset > 0 ? -15 : 15)
+    else
+      if turret_offset > 80 && @scan_direction > 0
+        @scan_direction = -1
+      elsif turret_offset < -80 && @scan_direction < 0
+        @scan_direction = 1
+      end
+      turret(6 * @scan_direction)
+    end
+  end
+
+  def tracking_tick
+    # SENSE: Queue probe to check alignment
+    probe(:position, :velocity) if energy > 20
+
+    # Process previous probe result
+    if probe_result&.any?
+      # Probe hit! Update target info
+      @last_target = probe_result
+      @last_target_tick = tick_number
+      @ticks_without_probe_hit = 0
+    else
+      # No probe hit - increment miss counter
+      @ticks_without_probe_hit = (@ticks_without_probe_hit || 0) + 1
+
+      # Give up tracking after too many misses
+      if @ticks_without_probe_hit > 20
+        @tracking = false
+        return
+      end
+    end
+
+    # MOVE: Aim at predicted target position
+    if @last_target
+      target_x, target_y = @last_target[:x], @last_target[:y]
+
+      # Lead moving targets
+      if @last_target[:velocity_x] && @last_target[:velocity_y]
+        dist = distance_to(target_x, target_y)
+        lead_time = dist / 15.0
+        target_x += @last_target[:velocity_x] * lead_time
+        target_y += @last_target[:velocity_y] * lead_time
+      end
+
+      target_angle = angle_to(target_x, target_y)
+      turret_diff = normalize_angle(target_angle - turret_angle)
+
+      # Only adjust turret if significantly off - otherwise hold steady for probe
+      turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
+    end
+
+    # COMBAT: Fire if probe detected a target
+    fire(15) if probe_result&.any? && energy > 25
+  end
+
+  def fleeing_tick
+    dist = distance_to(@corner[:x], @corner[:y])
+
+    if dist < CORNER_BUFFER / 2
+      @mode = :scanning
+      return
+    end
+
+    # MOVE: Run to corner
+    angle = angle_to(@corner[:x], @corner[:y])
+    thrust(speed: 6, angle: angle) if speed < 6
+
+    # COMBAT: Build shields while fleeing
+    shield(5) if energy > 40 && shield_level < 30
+  end
+
+  def scan_distance
+    # Scale scan distance to arena size
+    @scan_distance ||= (Math.sqrt(arena_width**2 + arena_height**2) * 0.6).round.clamp(300, 700)
+  end
+
+  def distance_to(target_x, target_y)
+    Math.sqrt((target_x - x)**2 + (target_y - y)**2)
+  end
+
+  def angle_to(target_x, target_y)
+    Math.atan2(target_y - y, target_x - x) * 180 / Math::PI
+  end
+
+  def normalize_angle(angle)
+    angle = angle % 360
+    angle -= 360 if angle > 180
+    angle += 360 if angle < -180
+    angle
+  end
+end

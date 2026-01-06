@@ -7,9 +7,13 @@ class Spinner
   size :medium
 
   def tick
-    turret(10)
+    # SENSE: Queue probe for next tick
+    probe
 
-    target = look
-    fire(10) if target && energy > 20
+    # MOVE: Spin turret
+    turret(7)
+
+    # COMBAT: Fire if previous probe detected a target
+    fire(10) if probe_result&.any? && energy > 20
   end
 end

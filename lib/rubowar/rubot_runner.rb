@@ -8,14 +8,14 @@ module Rubowar
       large: { radius: 25, energy_regen: 12, max_health: 120 }
     }.freeze
     MAX_ENERGY = 100
-    MAX_SHIELD = 50
     MAX_SPEED = 20
-    SHIELD_DEGRADATION = 2
+    SHIELD_DECAY_RATE = 0.12
 
     attr_accessor :x, :y, :velocity_x, :velocity_y
     attr_accessor :turret_angle
     attr_accessor :health, :energy, :shield_level
     attr_accessor :damage_dealt, :damage_taken
+    attr_accessor :times_probed, :times_scanned, :times_pulsed
     attr_reader :size, :rubot_class, :instance
 
     def initialize(rubot_class)
@@ -31,6 +31,9 @@ module Rubowar
       @shield_level = 0
       @damage_dealt = 0
       @damage_taken = 0
+      @times_probed = 0
+      @times_scanned = 0
+      @times_pulsed = 0
       @instance = rubot_class.new
     end
 
@@ -44,6 +47,10 @@ module Rubowar
 
     def max_health
       SIZES[@size][:max_health]
+    end
+
+    def max_shield
+      max_health # Shield cap equals HP cap
     end
 
     def speed
@@ -92,7 +99,13 @@ module Rubowar
     end
 
     def degrade_shield
-      @shield_level = [@shield_level - SHIELD_DEGRADATION, 0].max
+      @shield_level = (@shield_level * (1 - SHIELD_DECAY_RATE)).floor
+    end
+
+    def reset_detection_counts
+      @times_probed = 0
+      @times_scanned = 0
+      @times_pulsed = 0
     end
 
     # Attempts to spend energy. If insufficient energy, drains to zero and returns false.
