@@ -5,7 +5,7 @@
 class Crusher
   include Rubowar::Rubot
 
-  size :large  # Large = more collision damage, more HP (120)
+  size :large # Large = more collision damage, more HP (120)
 
   ENERGON_COLLECT_RANGE = 300
 
@@ -32,8 +32,8 @@ class Crusher
     # Attacker is behind us - turn and chase
     attacker_angle = (direction + 180) % 360
     @target = {
-      x: x + Math.cos(attacker_angle * Math::PI / 180) * 100,
-      y: y + Math.sin(attacker_angle * Math::PI / 180) * 100
+      x: x + (Math.cos(attacker_angle * Math::PI / 180) * 100),
+      y: y + (Math.sin(attacker_angle * Math::PI / 180) * 100)
     }
   end
 
@@ -56,10 +56,10 @@ class Crusher
     @last_pulse_tick = tick_number
 
     # Process previous pulse results
-    if pulse_result
-      rubots = pulse_result.select { |t| t[:type] == :rubot }
-      @target = rubots.min_by { |t| distance_to(t[:x], t[:y]) } unless rubots.empty?
-    end
+    return unless pulse_result
+
+    rubots = pulse_result.select { |t| t[:type] == :rubot }
+    @target = rubots.min_by { |t| distance_to(t[:x], t[:y]) } unless rubots.empty?
   end
 
   def chase_and_ram
@@ -106,15 +106,15 @@ class Crusher
       shield(6) if energy > 20 && shield_level < 60
     elsif dist < 250
       shield(4) if energy > 25 && shield_level < 40
-    else
-      shield(3) if energy > 30 && shield_level < 30
+    elsif energy > 30 && shield_level < 30
+      shield(3)
     end
   end
 
   def wander
     # Check for energons while wandering
     if energy < 80
-      energon = find_best_energon
+      energon = find_nearest_energon(max_distance: ENERGON_COLLECT_RANGE)
       if energon
         @target_energon = energon
         return collecting_tick
@@ -127,25 +127,10 @@ class Crusher
 
     # MOVE: Head toward center, spin turret
     turret(10)
-    thrust(speed: 4, angle: angle)
+    thrust(speed: 4, angle:)
 
     # COMBAT: Light shields
     shield(3) if energy > 40 && shield_level < 30
-  end
-
-  def distance_to(tx, ty)
-    Math.sqrt((tx - x)**2 + (ty - y)**2)
-  end
-
-  def angle_to(tx, ty)
-    Math.atan2(ty - y, tx - x) * 180 / Math::PI
-  end
-
-  def normalize_angle(angle)
-    angle %= 360
-    angle -= 360 if angle > 180
-    angle += 360 if angle < -180
-    angle
   end
 
   def collecting_tick
@@ -165,20 +150,5 @@ class Crusher
 
     # Light shields while collecting
     shield(3) if energy > 40 && shield_level < 30
-  end
-
-  def find_best_energon
-    return nil if energons.empty?
-
-    nearby = energons.select { |e| distance_to(e[:x], e[:y]) < ENERGON_COLLECT_RANGE }
-    return nil if nearby.empty?
-
-    nearby.min_by { |e| distance_to(e[:x], e[:y]) }
-  end
-
-  def energon_still_exists?(target)
-    return false unless target
-
-    energons.any? { |e| e[:x] == target[:x] && e[:y] == target[:y] }
   end
 end

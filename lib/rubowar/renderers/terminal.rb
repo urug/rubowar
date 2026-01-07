@@ -52,7 +52,7 @@ module Rubowar
         tick_state[:runners].each_with_index do |rubot, index|
           gx = (rubot.x / SCALE).to_i.clamp(0, @width - 1)
           gy = (@height - 1 - (rubot.y / SCALE).to_i).clamp(0, @height - 1)
-          char = rubot.health > 0 ? RUBOT_CHARS[index] : "X"
+          char = rubot.health.positive? ? RUBOT_CHARS[index] : "X"
           grid[gy][gx] = char
         end
 
@@ -60,10 +60,10 @@ module Rubowar
       end
 
       def print_grid(grid)
-        border = "+" + "-" * @width + "+"
+        border = "+#{"-" * @width}+"
         puts border
         grid.each do |row|
-          puts "|" + row.join + "|"
+          puts "|#{row.join}|"
         end
         puts border
       end
@@ -74,7 +74,7 @@ module Rubowar
 
         tick_state[:runners].each_with_index do |rubot, index|
           char = RUBOT_CHARS[index]
-          status = rubot.health > 0 ? "ALIVE" : "DEAD"
+          status = rubot.health.positive? ? "ALIVE" : "DEAD"
           puts "#{char}: HP=#{rubot.health.to_i.to_s.rjust(3)} E=#{rubot.energy.to_i.to_s.rjust(3)} Shield=#{rubot.shield_level.to_i.to_s.rjust(2)} [#{status}]"
         end
       end

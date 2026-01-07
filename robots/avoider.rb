@@ -6,7 +6,7 @@
 class Avoider
   include Rubowar::Rubot
 
-  size :medium  # 100 HP - can win attrition wars now
+  size :medium # 100 HP - can win attrition wars now
 
   ORBIT_RADIUS_RATIO = 0.20
   ORBIT_SPEED = 4       # Reduced from 5 to conserve energy for firing
@@ -15,9 +15,10 @@ class Avoider
   EVASIVE_SPEED_MAX = 6
   DANGER_DISTANCE_RATIO = 0.25
   WALL_BUFFER = 50
-  STATIONARY_THRESHOLD = 1.5  # Target moving slower than this is "stationary"
+  STATIONARY_THRESHOLD = 1.5 # Target moving slower than this is "stationary"
   ENERGON_COLLECT_RANGE = 200  # How far we'll go to collect an energon
   ENERGON_MIN_VALUE_TICK = 30  # Only collect if energon has been around this long (worth ~14 energy)
+  BULLET_SPEED = Rubowar::Config::Combat::BULLET_SPEED
 
   def on_spawn
     @mode = :orbiting
@@ -28,7 +29,7 @@ class Avoider
     @speed_phase = 0
 
     # Sensing state
-    @sensing_mode = :pulse  # Rotate through :pulse, :scan, :probe
+    @sensing_mode = :pulse # Rotate through :pulse, :scan, :probe
     @incoming_bullets = []
 
     # Energon collection state
@@ -44,7 +45,7 @@ class Avoider
     # Healthy (>50%): be aggressive, orbit and attack
     # Hurt (<50%): be defensive, flee and evade
     @defensive_mode = health < 40
-    @energy_surplus = energy > 70  # Flush with energy - be aggressive!
+    @energy_surplus = energy > 70 # Flush with energy - be aggressive!
 
     # MOVE + COMBAT: Mode-specific behavior
     case @mode
@@ -59,7 +60,7 @@ class Avoider
     end
   end
 
-  def on_energon(amount)
+  def on_energon(_amount)
     # Successfully collected - return to orbiting
     @target_energon = nil
     @mode = :orbiting
@@ -92,12 +93,12 @@ class Avoider
     _pulsed = detect_result[:pulsed] || 0
 
     # Being probed = someone is actively targeting us with precision - EVADE NOW
-    if probed > 0
+    if probed.positive?
       @mode = :evasive
       @evasive_ticks = [20, @evasive_ticks].max
-      @orbit_direction *= -1  # Always change direction when probed
+      @orbit_direction *= -1 # Always change direction when probed
     # Being scanned = someone's turret arc is on us - likely to fire soon
-    elsif scanned > 0
+    elsif scanned.positive?
       @mode = :evasive unless @mode == :evasive
       @evasive_ticks = [12, @evasive_ticks].max
       @orbit_direction *= -1 if rand < 0.4
@@ -134,12 +135,12 @@ class Avoider
     end
 
     # Track nearby bullets for evasion
-    if bullets.any?
-      # More cautious when defensive
-      bullet_range = @defensive_mode ? 150 : 100
-      nearby = bullets.select { |b| distance_to(b[:x], b[:y]) < bullet_range }
-      @incoming_bullets = nearby if nearby.any?
-    end
+    return unless bullets.any?
+
+    # More cautious when defensive
+    bullet_range = @defensive_mode ? 150 : 100
+    nearby = bullets.select { |b| distance_to(b[:x], b[:y]) < bullet_range }
+    @incoming_bullets = nearby if nearby.any?
   end
 
   def process_scan_results
@@ -157,21 +158,22 @@ class Avoider
     end
 
     # Filter for dangerous bullets (headed toward us)
-    if bullets.any?
-      dangerous = bullets.select { |b| bullet_threatening?(b) }
-      @incoming_bullets = dangerous if dangerous.any?
-    end
+    return unless bullets.any?
+
+    dangerous = bullets.select { |b| bullet_threatening?(b) }
+    @incoming_bullets = dangerous if dangerous.any?
   end
 
   def process_probe_results
     # Update threat with probe data (includes velocity if requested)
-    if @threat && probe_result[:x]
-      @threat[:x] = probe_result[:x]
-      @threat[:y] = probe_result[:y]
-      @threat[:velocity_x] = probe_result[:velocity_x] if probe_result[:velocity_x]
-      @threat[:velocity_y] = probe_result[:velocity_y] if probe_result[:velocity_y]
-    end
-    # Note: We no longer check turret_angle here - detect handles evasion triggers
+    return unless @threat && probe_result[:x]
+
+    @threat[:x] = probe_result[:x]
+    @threat[:y] = probe_result[:y]
+    @threat[:velocity_x] = probe_result[:velocity_x] if probe_result[:velocity_x]
+    @threat[:velocity_y] = probe_result[:velocity_y] if probe_result[:velocity_y]
+
+    # NOTE: We no longer check turret_angle here - detect handles evasion triggers
   end
 
   def queue_next_sense
@@ -182,15 +184,15 @@ class Avoider
 
     # Pulse to find targets - distance must cover spawn range (50% of diagonal)
     # Pulse every 8 ticks to conserve energy for detect
-    if @sense_tick % 8 == 0 && energy > 20
+    if (@sense_tick % 8).zero? && energy > 20
       pulse_dist = (arena_diagonal * 0.55).round
       pulse(distance: pulse_dist)
     end
 
     # Probe when turret aligned - get velocity data for leading shots
-    if @threat && turret_aligned_with_threat? && @sense_tick % 5 == 0 && energy > 20
-      probe(:position, :velocity)
-    end
+    return unless @threat && turret_aligned_with_threat? && (@sense_tick % 5).zero? && energy > 20
+
+    probe(:position, :velocity)
   end
 
   def bullet_threatening?(bullet)
@@ -211,8 +213,8 @@ class Avoider
 
   def orbit_tick
     # Check for energons to collect when safe
-    if !@threat && !@incoming_bullets.any? && energy < 80
-      target = find_best_energon
+    if !@threat && @incoming_bullets.none? && energy < 80
+      target = find_nearest_energon(max_distance: ENERGON_COLLECT_RANGE)
       if target
         @target_energon = target
         @mode = :collecting
@@ -229,18 +231,18 @@ class Avoider
       # Orbit around the THREAT, not the center - stay at optimal range
       threat_dist = distance_to(@threat[:x], @threat[:y])
       angle_to_threat = angle_to(@threat[:x], @threat[:y])
-      optimal_range = danger_distance * 1.5  # Stay just outside flee range
+      optimal_range = danger_distance * 1.5 # Stay just outside flee range
 
-      if threat_dist < optimal_range - 30
-        # Too close - move away while strafing
-        orbit_angle = angle_to_threat + 180 + (30 * @orbit_direction)
-      elsif threat_dist > optimal_range + 50
-        # Too far - move closer while strafing
-        orbit_angle = angle_to_threat + (60 * @orbit_direction)
-      else
-        # Good range - strafe perpendicular
-        orbit_angle = angle_to_threat + (90 * @orbit_direction)
-      end
+      orbit_angle = if threat_dist < optimal_range - 30
+                      # Too close - move away while strafing
+                      angle_to_threat + 180 + (30 * @orbit_direction)
+                    elsif threat_dist > optimal_range + 50
+                      # Too far - move closer while strafing
+                      angle_to_threat + (60 * @orbit_direction)
+                    else
+                      # Good range - strafe perpendicular
+                      angle_to_threat + (90 * @orbit_direction)
+                    end
 
       thrust(speed: ORBIT_SPEED, angle: orbit_angle)
     else
@@ -307,15 +309,15 @@ class Avoider
         fire(15) if turret_aligned_with_threat? && energy > 30
       elsif target_stationary?
         fire(10) if turret_aligned_with_threat? && energy > 15
-      else
-        fire(10) if turret_aligned_with_threat? && energy > 35
+      elsif turret_aligned_with_threat? && energy > 35
+        fire(10)
       end
     end
 
     if @energy_surplus
       shield(6) if energy > 50 && shield_level < 50
-    else
-      shield(3) if energy > 45 && shield_level < 25
+    elsif energy > 45 && shield_level < 25
+      shield(3)
     end
   end
 
@@ -354,15 +356,15 @@ class Avoider
         fire(15) if turret_aligned_with_threat? && energy > 30
       elsif target_stationary?
         fire(10) if turret_aligned_with_threat? && energy > 15
-      else
-        fire(8) if turret_aligned_with_threat? && energy > 35
+      elsif turret_aligned_with_threat? && energy > 35
+        fire(8)
       end
     end
 
     if @energy_surplus
       shield(6) if energy > 50 && shield_level < 50
-    else
-      shield(4) if energy > 50 && shield_level < 35
+    elsif energy > 50 && shield_level < 35
+      shield(4)
     end
   end
 
@@ -395,26 +397,6 @@ class Avoider
     # No combat while collecting - focus on the prize
   end
 
-  def find_best_energon
-    return nil if energons.empty?
-
-    # Find energons within collection range
-    nearby = energons.select do |e|
-      distance_to(e[:x], e[:y]) < ENERGON_COLLECT_RANGE
-    end
-
-    return nil if nearby.empty?
-
-    # Pick the closest one (they grow in value over time, so closer = faster pickup)
-    nearby.min_by { |e| distance_to(e[:x], e[:y]) }
-  end
-
-  def energon_still_exists?(target)
-    return false unless target
-
-    energons.any? { |e| e[:x] == target[:x] && e[:y] == target[:y] }
-  end
-
   def calculate_dodge_angle
     return @flee_angle || rand(360) if @incoming_bullets.empty?
 
@@ -425,11 +407,11 @@ class Avoider
       if b[:velocity_x] && b[:velocity_y]
         # With velocity: dodge perpendicular to bullet travel
         bullet_heading = Math.atan2(b[:velocity_y], b[:velocity_x]) * 180 / Math::PI
-        bullet_heading + 90 * @orbit_direction
+        bullet_heading + (90 * @orbit_direction)
       else
         # Without velocity: move perpendicular to bullet's line of approach
         # (assume bullet is heading toward us)
-        bullet_to_us + 90 * @orbit_direction
+        bullet_to_us + (90 * @orbit_direction)
       end
     end
 
@@ -447,7 +429,7 @@ class Avoider
     # Lead the target
     if @threat[:velocity_x] && @threat[:velocity_y]
       dist = distance_to(target_x, target_y)
-      lead_time = dist / 15.0
+      lead_time = dist / BULLET_SPEED
       target_x += @threat[:velocity_x] * lead_time
       target_y += @threat[:velocity_y] * lead_time
     end
@@ -470,7 +452,7 @@ class Avoider
 
     # Check if we have velocity data
     if @threat[:velocity_x] && @threat[:velocity_y]
-      speed = Math.sqrt(@threat[:velocity_x]**2 + @threat[:velocity_y]**2)
+      speed = Math.sqrt((@threat[:velocity_x]**2) + (@threat[:velocity_y]**2))
       speed < STATIONARY_THRESHOLD
     else
       # No velocity data - assume stationary (conservative)
@@ -498,33 +480,18 @@ class Avoider
   end
 
   def arena_diagonal
-    @arena_diagonal ||= Math.sqrt(arena_width**2 + arena_height**2)
-  end
-
-  def distance_to(tx, ty)
-    Math.sqrt((tx - x)**2 + (ty - y)**2)
-  end
-
-  def angle_to(tx, ty)
-    Math.atan2(ty - y, tx - x) * 180 / Math::PI
-  end
-
-  def normalize_angle(angle)
-    angle %= 360
-    angle -= 360 if angle > 180
-    angle += 360 if angle < -180
-    angle
+    @arena_diagonal ||= Math.sqrt((arena_width**2) + (arena_height**2))
   end
 
   def adjust_angle_from_walls(angle)
     if x < WALL_BUFFER
-      angle = 0 + rand(-45..45)
+      angle = rand(-45..45)
     elsif x > arena_width - WALL_BUFFER
-      angle = 180 + rand(-45..45)
+      angle = rand(135..225)
     elsif y < WALL_BUFFER
-      angle = 90 + rand(-45..45)
+      angle = rand(45..135)
     elsif y > arena_height - WALL_BUFFER
-      angle = 270 + rand(-45..45)
+      angle = rand(225..315)
     end
     angle % 360
   end

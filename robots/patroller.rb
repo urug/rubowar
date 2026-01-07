@@ -11,10 +11,10 @@ class Patroller
   CORNER_DISTANCE = 80
   SPEED_SLOW = 4
   SPEED_FAST = 6
-  BULLET_SPEED = 15
-  PULSE_RANGE = 500  # Must cover most of arena to find corner campers
+  BULLET_SPEED = Rubowar::Config::Combat::BULLET_SPEED
+  PULSE_RANGE = 500 # Must cover most of arena to find corner campers
   SCAN_RANGE = 400
-  ENERGON_WALL_PROXIMITY = 120  # Only collect energons this close to our wall
+  ENERGON_WALL_PROXIMITY = 120 # Only collect energons this close to our wall
 
   def on_spawn
     @clockwise = true
@@ -76,15 +76,13 @@ class Patroller
     end
 
     # Process probe results - precise tracking
-    if probe_result&.any?
-      acquire_or_update_target(probe_result)
-    end
+    acquire_or_update_target(probe_result) if probe_result&.any?
 
     # Age out stale target
-    if @target
-      @tracking_ticks += 1
-      @target = nil if @tracking_ticks > 25
-    end
+    return unless @target
+
+    @tracking_ticks += 1
+    @target = nil if @tracking_ticks > 25
   end
 
   def acquire_or_update_target(data)
@@ -102,15 +100,11 @@ class Patroller
 
     if @target
       # Have a target - probe every 4 ticks to save energy (probe costs 7)
-      if turret_aligned? && energy > 25 && @sense_tick % 4 == 0
-        probe(:position, :velocity)
-      end
-    else
+      probe(:position, :velocity) if turret_aligned? && energy > 25 && (@sense_tick % 4).zero?
+    elsif (@sense_tick % 8).zero? && energy > 20
       # No target - pulse every 8 ticks (costs 7 energy)
       # Skip expensive scans - pulse finds everyone
-      if @sense_tick % 8 == 0 && energy > 20
-        pulse(distance: PULSE_RANGE)
-      end
+      pulse(distance: PULSE_RANGE)
     end
   end
 
@@ -143,7 +137,7 @@ class Patroller
             end
 
     # MOVE: Head to wall, aim turret
-    thrust(speed: SPEED_FAST, angle: angle)
+    thrust(speed: SPEED_FAST, angle:)
     aim_turret
 
     # COMBAT: Fire if aligned
@@ -152,22 +146,16 @@ class Patroller
 
   def patrol_perimeter
     # Reverse at corners
-    if near_any_corner?
-      @clockwise = !@clockwise
-    end
+    @clockwise = !@clockwise if near_any_corner?
 
     # Check for energons near our wall (only if no combat target and low-ish energy)
     if !@target && energy < 70
       energon = find_energon_on_my_wall
-      if energon
-        @target_energon = energon
-      end
+      @target_energon = energon if energon
     end
 
     # Clear energon target if it's gone
-    if @target_energon && !energon_still_exists?(@target_energon)
-      @target_energon = nil
-    end
+    @target_energon = nil if @target_energon && !energon_still_exists?(@target_energon)
 
     # MOVE: Patrol with oscillating speed, or collect energon
     @speed_phase = (@speed_phase + 1) % 20
@@ -226,8 +214,8 @@ class Patroller
     time_to_target = dist / BULLET_SPEED
     lead_ticks = [time_to_target, 10].min
 
-    lead_x = @target[:x] + @target[:velocity_x] * lead_ticks
-    lead_y = @target[:y] + @target[:velocity_y] * lead_ticks
+    lead_x = @target[:x] + (@target[:velocity_x] * lead_ticks)
+    lead_y = @target[:y] + (@target[:velocity_y] * lead_ticks)
 
     lead_x = lead_x.clamp(20, arena_width - 20)
     lead_y = lead_y.clamp(20, arena_height - 20)
@@ -270,21 +258,6 @@ class Patroller
                     end
   end
 
-  def distance_to(tx, ty)
-    Math.sqrt((tx - x)**2 + (ty - y)**2)
-  end
-
-  def angle_to(tx, ty)
-    Math.atan2(ty - y, tx - x) * 180 / Math::PI
-  end
-
-  def normalize_angle(angle)
-    angle %= 360
-    angle -= 360 if angle > 180
-    angle += 360 if angle < -180
-    angle
-  end
-
   def find_energon_on_my_wall
     return nil if energons.empty?
 
@@ -301,11 +274,7 @@ class Patroller
     end
 
     return nil if nearby.empty?
-    nearby.min_by { |e| distance_to(e[:x], e[:y]) }
-  end
 
-  def energon_still_exists?(target)
-    return false unless target
-    energons.any? { |e| e[:x] == target[:x] && e[:y] == target[:y] }
+    nearby.min_by { |e| distance_to(e[:x], e[:y]) }
   end
 end

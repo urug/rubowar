@@ -4,18 +4,21 @@ require "test_helper"
 
 class ProbeTestBot
   include Rubowar::Rubot
+
   size :medium
   def tick; end
 end
 
 class SmallProbeTestBot
   include Rubowar::Rubot
+
   size :small
   def tick; end
 end
 
 class LargeProbeTestBot
   include Rubowar::Rubot
+
   size :large
   def tick; end
 end
@@ -40,7 +43,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 0
       runner.velocity_y = 0
 
-      damage = arena.calculate_wall_damage( runner)
+      damage = arena.calculate_wall_damage(runner)
 
       _(damage).must_equal 2
     end
@@ -51,7 +54,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.calculate_wall_damage( runner)
+      damage = arena.calculate_wall_damage(runner)
 
       _(damage).must_equal 17 # 2 + 20 * 0.75
     end
@@ -63,8 +66,8 @@ describe Rubowar::Arena do
       small_runner.velocity_x = 20
       large_runner.velocity_x = 20
 
-      small_damage = arena.calculate_wall_damage( small_runner)
-      large_damage = arena.calculate_wall_damage( large_runner)
+      small_damage = arena.calculate_wall_damage(small_runner)
+      large_damage = arena.calculate_wall_damage(large_runner)
 
       _(small_damage).must_equal large_damage
     end
@@ -78,7 +81,7 @@ describe Rubowar::Arena do
       runner.velocity_y = 0.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       # Small mass (0.5625) * 0.12 = 0.0675 retention
       # Bounced velocity: 10 * 0.0675 = 0.675
@@ -92,7 +95,7 @@ describe Rubowar::Arena do
       runner.velocity_y = 0.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       # Medium mass (1.0) * 0.12 = 0.12 retention
       # Bounced velocity: 10 * 0.12 = 1.2
@@ -106,7 +109,7 @@ describe Rubowar::Arena do
       runner.velocity_y = 0.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       # Large mass (1.5625) * 0.12 = 0.1875 retention
       # Bounced velocity: 10 * 0.1875 = 1.875
@@ -120,7 +123,7 @@ describe Rubowar::Arena do
       runner.velocity_y = 0.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       _(runner.velocity_x).must_be :>, 0 # Reversed from negative to positive
     end
@@ -132,7 +135,7 @@ describe Rubowar::Arena do
       runner.velocity_y = 5.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       _(runner.velocity_x).must_be :>, 0 # Bounced
       _(runner.velocity_y).must_equal 5.0 # Unchanged
@@ -145,7 +148,7 @@ describe Rubowar::Arena do
       runner.velocity_y = -10.0
       arena.runners = [runner]
 
-      arena.check_wall_collision( runner)
+      arena.check_wall_collision(runner)
 
       _(runner.velocity_x).must_be :>, 0 # Bounced
       _(runner.velocity_y).must_be :>, 0 # Bounced
@@ -159,7 +162,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 0
       runner.velocity_y = 0
 
-      damage = arena.calculate_collision_damage( runner)
+      damage = arena.calculate_collision_damage(runner)
 
       _(damage).must_equal 2
     end
@@ -170,7 +173,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.calculate_collision_damage( runner)
+      damage = arena.calculate_collision_damage(runner)
 
       _(damage).must_equal 12 # 2 + 1.0 * 20 * 0.5
     end
@@ -181,7 +184,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.calculate_collision_damage( runner)
+      damage = arena.calculate_collision_damage(runner)
 
       _(damage).must_equal 8 # 2 + 0.5625 * 20 * 0.5 = 2 + 5.625 ≈ 8
     end
@@ -192,7 +195,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 20
       runner.velocity_y = 0
 
-      damage = arena.calculate_collision_damage( runner)
+      damage = arena.calculate_collision_damage(runner)
 
       _(damage).must_equal 18 # 2 + 1.5625 * 20 * 0.5 = 2 + 15.625 ≈ 18
     end
@@ -203,7 +206,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100)
 
-      mass = arena.mass_factor( runner)
+      mass = arena.mass_factor(runner)
 
       _(mass).must_equal 1.0
     end
@@ -212,7 +215,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
 
-      mass = arena.mass_factor( runner)
+      mass = arena.mass_factor(runner)
 
       _(mass).must_equal 0.5625 # (15/20)^2
     end
@@ -221,7 +224,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
 
-      mass = arena.mass_factor( runner)
+      mass = arena.mass_factor(runner)
 
       _(mass).must_equal 1.5625 # (25/20)^2
     end
@@ -263,7 +266,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
       runner.energy = 100
 
-      arena.process_thrust(runner: runner, speed: 5, angle: 0) # East
+      arena.process_thrust(runner:, speed: 5, angle: 0) # East
 
       _(runner.velocity_x).must_be_close_to 5.0, 0.01
       _(runner.velocity_y).must_be_close_to 0.0, 0.01
@@ -275,7 +278,7 @@ describe Rubowar::Arena do
       runner.velocity_x = 5.0 # Moving east
       runner.energy = 100
 
-      arena.process_thrust(runner: runner, speed: 3, angle: 180) # Thrust west (against)
+      arena.process_thrust(runner:, speed: 3, angle: 180) # Thrust west (against)
 
       # Cost should be 2x: (3/1.5)² × 1.0 × 2.0 = 8
       _(runner.energy).must_be_close_to 92, 0.1
@@ -286,7 +289,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
       runner.energy = 2 # Not enough for full thrust
 
-      arena.process_thrust(runner: runner, speed: 5, angle: 0)
+      arena.process_thrust(runner:, speed: 5, angle: 0)
 
       _(runner.energy).must_equal 0
       _(runner.velocity_x).must_be :>, 0
@@ -300,7 +303,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100, turret_angle: 0)
       arena.runners = [runner]
 
-      result = arena.find_probe_target( runner)
+      result = arena.find_probe_target(runner)
 
       _(result).must_be_nil
     end
@@ -311,7 +314,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 100, y: 100) # West of shooter
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -322,7 +325,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 100) # East of shooter
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -333,7 +336,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 110) # Slightly offset but within radius (20)
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -344,7 +347,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150) # Too far offset (50 > radius of 20)
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -356,7 +359,7 @@ describe Rubowar::Arena do
       far_target = build_runner(x: 400, y: 100)
       arena.runners = [shooter, far_target, near_target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal near_target
     end
@@ -368,7 +371,7 @@ describe Rubowar::Arena do
       dead_target.health = 0
       arena.runners = [shooter, dead_target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -379,7 +382,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 100, y: 200) # North of shooter
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -390,7 +393,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 100, y: 100) # West of shooter
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -401,7 +404,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 100, y: 100) # South of shooter
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -412,7 +415,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 200) # Northeast, on the 45° line
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -423,7 +426,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 100, y: 200) # Northwest
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -434,7 +437,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 119) # Offset by 19, just inside radius of 20
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal target
     end
@@ -445,7 +448,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 121) # Offset by 21, just outside radius of 20
       arena.runners = [shooter, target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -455,7 +458,7 @@ describe Rubowar::Arena do
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
       arena.runners = [shooter]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -466,7 +469,7 @@ describe Rubowar::Arena do
       small_target = build_runner(x: 200, y: 114, klass: SmallProbeTestBot) # Offset 14, inside radius 15
       arena.runners = [shooter, small_target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal small_target
     end
@@ -477,7 +480,7 @@ describe Rubowar::Arena do
       small_target = build_runner(x: 200, y: 116, klass: SmallProbeTestBot) # Offset 16, outside radius 15
       arena.runners = [shooter, small_target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_be_nil
     end
@@ -488,7 +491,7 @@ describe Rubowar::Arena do
       large_target = build_runner(x: 200, y: 124, klass: LargeProbeTestBot) # Offset 24, inside radius 25
       arena.runners = [shooter, large_target]
 
-      result = arena.find_probe_target( shooter)
+      result = arena.find_probe_target(shooter)
 
       _(result).must_equal large_target
     end
@@ -503,7 +506,7 @@ describe Rubowar::Arena do
       target.health = 80
       target.energy = 60
 
-      result = arena.build_probe_result(target: target, attributes: [])
+      result = arena.build_probe_result(target:, attributes: [])
 
       _(result.key?(:x)).must_equal false
       _(result.key?(:y)).must_equal false
@@ -518,7 +521,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_runner(x: 200, y: 150)
 
-      result = arena.build_probe_result(target: target, attributes: [:position])
+      result = arena.build_probe_result(target:, attributes: [:position])
 
       _(result[:x]).must_equal 200
       _(result[:y]).must_equal 150
@@ -529,7 +532,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_runner(x: 200, y: 150)
 
-      result = arena.build_probe_result(target: target, attributes: [:size])
+      result = arena.build_probe_result(target:, attributes: [:size])
 
       _(result[:size]).must_equal :medium
       _(result.key?(:velocity_x)).must_equal false
@@ -541,7 +544,7 @@ describe Rubowar::Arena do
       target.velocity_x = 5.0
       target.velocity_y = -3.0
 
-      result = arena.build_probe_result(target: target, attributes: [:velocity])
+      result = arena.build_probe_result(target:, attributes: [:velocity])
 
       _(result[:velocity_x]).must_equal 5.0
       _(result[:velocity_y]).must_equal(-3.0)
@@ -553,7 +556,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_runner(x: 200, y: 150, turret_angle: 45)
 
-      result = arena.build_probe_result(target: target, attributes: [:turret_angle])
+      result = arena.build_probe_result(target:, attributes: [:turret_angle])
 
       _(result[:turret_angle]).must_equal 45
       _(result.key?(:x)).must_equal false
@@ -564,7 +567,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.shield_level = 25
 
-      result = arena.build_probe_result(target: target, attributes: [:shield])
+      result = arena.build_probe_result(target:, attributes: [:shield])
 
       _(result[:shield_level]).must_equal 25
       _(result.key?(:health)).must_equal false
@@ -575,7 +578,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.health = 75
 
-      result = arena.build_probe_result(target: target, attributes: [:health])
+      result = arena.build_probe_result(target:, attributes: [:health])
 
       _(result[:health]).must_equal 75
       _(result.key?(:energy)).must_equal false
@@ -586,7 +589,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 200, y: 150)
       target.energy = 45
 
-      result = arena.build_probe_result(target: target, attributes: [:energy])
+      result = arena.build_probe_result(target:, attributes: [:energy])
 
       _(result[:energy]).must_equal 45
     end
@@ -598,7 +601,7 @@ describe Rubowar::Arena do
       target.velocity_y = -3.0
       target.health = 75
 
-      result = arena.build_probe_result(target: target, attributes: [:position, :velocity, :health])
+      result = arena.build_probe_result(target:, attributes: %i[position velocity health])
 
       _(result[:x]).must_equal 200
       _(result[:y]).must_equal 150
@@ -664,7 +667,7 @@ describe Rubowar::Arena do
       shooter.energy = 50
       arena.runners = [shooter]
 
-      arena.process_probe(runner: shooter, attributes: [:size, :velocity])
+      arena.process_probe(runner: shooter, attributes: %i[size velocity])
 
       _(shooter.energy).must_equal 46 # 50 - 1 (size) - 3 (velocity)
     end
@@ -675,7 +678,7 @@ describe Rubowar::Arena do
       shooter.energy = 50
       arena.runners = [shooter]
 
-      arena.process_probe(runner: shooter, attributes: [:size, :position, :velocity, :shield, :health, :energy])
+      arena.process_probe(runner: shooter, attributes: %i[size position velocity shield health energy])
 
       _(shooter.energy).must_equal 34 # 50 - 1 - 4 - 3 - 2 - 3 - 3 = 34
     end
@@ -775,8 +778,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 0)
       # Target at 10 degrees, arc is 30 degrees (±15)
-      target_x = 100 + 100 * Math.cos(10 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(10 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(10 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(10 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
 
@@ -787,8 +790,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 0)
       # Target at 45 degrees, arc is 30 degrees (±15)
-      target_x = 100 + 100 * Math.cos(45 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(45 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(45 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(45 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
 
@@ -826,8 +829,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 0)
       # Target at exactly 15 degrees, arc is 30 degrees (±15)
-      target_x = 100 + 100 * Math.cos(15 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(15 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(15 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(15 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
 
@@ -838,8 +841,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 0)
       # Target at 16 degrees, arc is 30 degrees (±15)
-      target_x = 100 + 100 * Math.cos(16 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(16 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(16 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(16 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
 
@@ -850,8 +853,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 0)
       # Target at -10 degrees
-      target_x = 100 + 100 * Math.cos(-10 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(-10 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(-10 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(-10 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 30, distance: 200, x: target_x, y: target_y)
 
@@ -862,8 +865,8 @@ describe Rubowar::Arena do
       arena = build_arena
       scanner = build_runner(x: 100, y: 100, turret_angle: 350)
       # Target at 10 degrees (20 degree difference across 0)
-      target_x = 100 + 100 * Math.cos(10 * Math::PI / 180)
-      target_y = 100 + 100 * Math.sin(10 * Math::PI / 180)
+      target_x = 100 + (100 * Math.cos(10 * Math::PI / 180))
+      target_y = 100 + (100 * Math.sin(10 * Math::PI / 180))
 
       result = arena.in_arc?(runner: scanner, angle: 60, distance: 200, x: target_x, y: target_y)
 
@@ -1118,7 +1121,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100)
 
-      result = arena.within_distance?(runner: runner, distance: 150, x: 200, y: 100)
+      result = arena.within_distance?(runner:, distance: 150, x: 200, y: 100)
 
       _(result).must_equal true
     end
@@ -1127,7 +1130,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100)
 
-      result = arena.within_distance?(runner: runner, distance: 50, x: 200, y: 100)
+      result = arena.within_distance?(runner:, distance: 50, x: 200, y: 100)
 
       _(result).must_equal false
     end
@@ -1136,7 +1139,7 @@ describe Rubowar::Arena do
       arena = build_arena
       runner = build_runner(x: 100, y: 100)
 
-      result = arena.within_distance?(runner: runner, distance: 100, x: 200, y: 100)
+      result = arena.within_distance?(runner:, distance: 100, x: 200, y: 100)
 
       _(result).must_equal true
     end
@@ -1146,13 +1149,13 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
 
       # North
-      _(arena.within_distance?(runner: runner, distance: 100, x: 100, y: 200)).must_equal true
+      _(arena.within_distance?(runner:, distance: 100, x: 100, y: 200)).must_equal true
       # South
-      _(arena.within_distance?(runner: runner, distance: 100, x: 100, y: 0)).must_equal true
+      _(arena.within_distance?(runner:, distance: 100, x: 100, y: 0)).must_equal true
       # East
-      _(arena.within_distance?(runner: runner, distance: 100, x: 200, y: 100)).must_equal true
+      _(arena.within_distance?(runner:, distance: 100, x: 200, y: 100)).must_equal true
       # West
-      _(arena.within_distance?(runner: runner, distance: 100, x: 0, y: 100)).must_equal true
+      _(arena.within_distance?(runner:, distance: 100, x: 0, y: 100)).must_equal true
     end
   end
 
@@ -1163,7 +1166,7 @@ describe Rubowar::Arena do
       runner.energy = 100
       arena.runners = [runner]
 
-      arena.process_pulse(runner: runner, distance: 75, owner: false)
+      arena.process_pulse(runner:, distance: 75, owner: false)
 
       # Cost: 2 base + ceil(75/75) = 2 + 1 = 3
       _(runner.energy).must_equal 97
@@ -1175,7 +1178,7 @@ describe Rubowar::Arena do
       runner.energy = 100
       arena.runners = [runner]
 
-      arena.process_pulse(runner: runner, distance: 200, owner: false)
+      arena.process_pulse(runner:, distance: 200, owner: false)
 
       # Cost: 2 base + ceil(200/75) = 2 + 3 = 5
       _(runner.energy).must_equal 95
@@ -1187,7 +1190,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 500, y: 500) # Far away
       arena.runners = [runner, target]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result).must_equal []
@@ -1199,7 +1202,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 150, y: 100) # 50 units away
       arena.runners = [runner, target]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result.length).must_equal 1
@@ -1215,7 +1218,7 @@ describe Rubowar::Arena do
       target2 = build_runner(x: 100, y: 150)
       arena.runners = [runner, target1, target2]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result.length).must_equal 2
@@ -1227,7 +1230,7 @@ describe Rubowar::Arena do
       runner = build_runner(x: 100, y: 100)
       arena.runners = [runner]
 
-      arena.process_pulse(runner: runner, distance: 500, owner: false)
+      arena.process_pulse(runner:, distance: 500, owner: false)
       result = runner.instance.pulse_result
 
       _(result).must_equal []
@@ -1240,7 +1243,7 @@ describe Rubowar::Arena do
       dead_target.health = 0
       arena.runners = [runner, dead_target]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result).must_equal []
@@ -1253,7 +1256,7 @@ describe Rubowar::Arena do
       arena.runners = [runner]
       arena.bullets = [bullet]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result.length).must_equal 1
@@ -1268,7 +1271,7 @@ describe Rubowar::Arena do
       arena.runners = [runner, target]
       arena.bullets = [bullet]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result.length).must_equal 2
@@ -1285,7 +1288,7 @@ describe Rubowar::Arena do
       target.velocity_y = -3.0
       arena.runners = [runner, target]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result[0].key?(:velocity_x)).must_equal false
@@ -1298,7 +1301,7 @@ describe Rubowar::Arena do
       runner.energy = 2
       arena.runners = [runner]
 
-      result = arena.process_pulse(runner: runner, distance: 75, owner: false)
+      result = arena.process_pulse(runner:, distance: 75, owner: false)
 
       _(result).must_equal false
       _(runner.energy).must_equal 0
@@ -1313,7 +1316,7 @@ describe Rubowar::Arena do
       west = build_runner(x: 150, y: 200)
       arena.runners = [runner, north, south, east, west]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       _(result.length).must_equal 4
@@ -1325,7 +1328,7 @@ describe Rubowar::Arena do
       runner.energy = 100
       arena.runners = [runner]
 
-      arena.process_pulse(runner: runner, distance: 75, owner: true)
+      arena.process_pulse(runner:, distance: 75, owner: true)
 
       # Cost: 2 base + 1 distance + 1 owner = 4
       _(runner.energy).must_equal 96
@@ -1339,7 +1342,7 @@ describe Rubowar::Arena do
       arena.runners = [runner, shooter]
       arena.bullets = [bullet]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: true)
+      arena.process_pulse(runner:, distance: 100, owner: true)
       result = runner.instance.pulse_result
 
       bullet_result = result.find { |r| r[:type] == :bullet }
@@ -1352,7 +1355,7 @@ describe Rubowar::Arena do
       target = build_runner(x: 150, y: 100)
       arena.runners = [runner, target]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: true)
+      arena.process_pulse(runner:, distance: 100, owner: true)
       result = runner.instance.pulse_result
 
       _(result[0][:owner]).must_be_nil
@@ -1366,7 +1369,7 @@ describe Rubowar::Arena do
       arena.runners = [runner, shooter]
       arena.bullets = [bullet]
 
-      arena.process_pulse(runner: runner, distance: 100, owner: false)
+      arena.process_pulse(runner:, distance: 100, owner: false)
       result = runner.instance.pulse_result
 
       bullet_result = result.find { |r| r[:type] == :bullet }

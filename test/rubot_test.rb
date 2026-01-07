@@ -4,17 +4,20 @@ require "test_helper"
 
 class TestBot
   include Rubowar::Rubot
+
   def tick; end
 end
 
 class SmallBot
   include Rubowar::Rubot
+
   size :small
   def tick; end
 end
 
 class LargeBot
   include Rubowar::Rubot
+
   size :large
   def tick; end
 end
@@ -26,7 +29,7 @@ def build_bot(energy: 50, health: 100)
     velocity_x: 1.0, velocity_y: 2.0,
     speed: Math.sqrt(5),
     turret_angle: 90.0,
-    health: health, energy: energy, shield_level: 10,
+    health:, energy:, shield_level: 10,
     damage_dealt: 25, damage_taken: 20,
     size: :medium
   )
@@ -198,7 +201,7 @@ describe Rubowar::Rubot do
 
       bot.probe(:position, :velocity, :health)
 
-      _(bot.actions).must_equal [{ type: :probe, attributes: [:position, :velocity, :health] }]
+      _(bot.actions).must_equal [{ type: :probe, attributes: %i[position velocity health] }]
     end
 
     it "raises ArgumentError for invalid attributes" do
@@ -212,7 +215,7 @@ describe Rubowar::Rubot do
 
       bot.probe(:size, :position, :velocity, :shield, :health, :energy)
 
-      _(bot.actions.first[:attributes]).must_equal [:size, :position, :velocity, :shield, :health, :energy]
+      _(bot.actions.first[:attributes]).must_equal %i[size position velocity shield health energy]
     end
   end
 

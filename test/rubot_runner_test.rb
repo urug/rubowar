@@ -4,18 +4,21 @@ require "test_helper"
 
 class DummyBot
   include Rubowar::Rubot
+
   size :medium
   def tick; end
 end
 
 class SmallDummyBot
   include Rubowar::Rubot
+
   size :small
   def tick; end
 end
 
 class LargeDummyBot
   include Rubowar::Rubot
+
   size :large
   def tick; end
 end
@@ -31,7 +34,7 @@ describe Rubowar::RubotRunner do
     it "starts with full energy" do
       runner = Rubowar::RubotRunner.new(DummyBot)
 
-      _(runner.energy).must_equal Rubowar::RubotRunner::MAX_ENERGY
+      _(runner.energy).must_equal Rubowar::Config::Rubot::MAX_ENERGY
     end
 
     it "starts with zero shield" do
@@ -248,7 +251,7 @@ describe Rubowar::RubotRunner do
 
       runner.regenerate_energy
 
-      _(runner.energy).must_equal Rubowar::RubotRunner::MAX_ENERGY
+      _(runner.energy).must_equal Rubowar::Config::Rubot::MAX_ENERGY
     end
   end
 
@@ -300,7 +303,7 @@ describe Rubowar::RubotRunner do
 
       runner.clamp_speed
 
-      _(runner.speed).must_be_close_to Rubowar::RubotRunner::MAX_SPEED, 0.001
+      _(runner.speed).must_be_close_to Rubowar::Config::Physics::MAX_SPEED, 0.001
     end
   end
 

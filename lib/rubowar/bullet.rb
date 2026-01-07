@@ -1,10 +1,18 @@
 # frozen_string_literal: true
 
+# [file]
+# purpose = "Projectile tracking for fired bullets"
+# responsibility = "Position updates, collision detection, ownership"
+# pattern = "Entity"
+#
+# [class.Bullet]
+# purpose = "Represents a bullet in flight"
+# constants = { SPEED = 18, RADIUS = 3 }
+# damage = "Set by firing rubot (energy * 1.5)"
+# note = "Bullets travel in straight lines, removed when out of bounds or hitting target"
+
 module Rubowar
   class Bullet
-    SPEED = 18
-    RADIUS = 3
-
     attr_reader :x, :y, :velocity_x, :velocity_y, :damage, :owner, :radius
 
     def initialize(x:, y:, angle:, damage:, owner:)
@@ -12,11 +20,11 @@ module Rubowar
       @y = y.to_f
       @damage = damage.to_f
       @owner = owner
-      @radius = RADIUS
+      @radius = Config::Combat::BULLET_RADIUS
 
       radians = angle * Math::PI / 180
-      @velocity_x = Math.cos(radians) * SPEED
-      @velocity_y = Math.sin(radians) * SPEED
+      @velocity_x = Math.cos(radians) * Config::Combat::BULLET_SPEED
+      @velocity_y = Math.sin(radians) * Config::Combat::BULLET_SPEED
     end
 
     def update
@@ -25,7 +33,7 @@ module Rubowar
     end
 
     def out_of_bounds?(width, height)
-      @x < 0 || @x > width || @y < 0 || @y > height
+      @x.negative? || @x > width || @y.negative? || @y > height
     end
   end
 end

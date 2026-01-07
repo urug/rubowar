@@ -5,6 +5,7 @@ require "test_helper"
 # Test bot that moves and fires to test phased action processing
 class MoveAndFireBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_accessor :move_angle, :should_fire
@@ -23,6 +24,7 @@ end
 # Test bot that records its position when firing
 class PositionRecordingBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_reader :position_when_fired, :position_at_tick_start
@@ -33,7 +35,7 @@ class PositionRecordingBot
   end
 
   def tick
-    @position_at_tick_start = { x: x, y: y }
+    @position_at_tick_start = { x:, y: }
     thrust(speed: 10, angle: 0) # Move east
     fire(10)
   end
@@ -42,6 +44,7 @@ end
 # Test bot that stores pulse results each tick
 class PulseTestBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_reader :pulse_results_per_tick
@@ -60,6 +63,7 @@ end
 # Test bot that stores probe results each tick
 class ProbeTestBotForBattle
   include Rubowar::Rubot
+
   size :medium
 
   attr_reader :probe_results_per_tick
@@ -80,6 +84,7 @@ end
 # Test bot that stores scan results each tick
 class ScanTestBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_reader :scan_results_per_tick
@@ -98,6 +103,7 @@ end
 # Stationary target bot
 class StationaryBot
   include Rubowar::Rubot
+
   size :medium
   def tick; end
 end
@@ -105,6 +111,7 @@ end
 # Test bot that detects if it's being sensed
 class DetectTestBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_reader :detect_results_per_tick
@@ -123,6 +130,7 @@ end
 # Test bot that actively senses a target
 class SensingBot
   include Rubowar::Rubot
+
   size :medium
 
   attr_accessor :do_probe, :do_scan, :do_pulse
@@ -161,7 +169,7 @@ describe Rubowar::Battle do
     it "probe results from tick N are available in tick N+1" do
       battle = Rubowar::Battle.new([ProbeTestBotForBattle, StationaryBot], tick_limit: 5)
 
-      # Position robots so prober's turret will sweep across target
+      # Position rubots so prober's turret will sweep across target
       prober_runner = battle.arena.runners.find { |r| r.instance.is_a?(ProbeTestBotForBattle) }
       target_runner = battle.arena.runners.find { |r| r.instance.is_a?(StationaryBot) }
 
@@ -332,8 +340,8 @@ describe Rubowar::Battle do
 
       # Redefine tick to fire first, then pulse
       bot.instance.define_singleton_method(:tick) do
-        fire(10)      # Queued first in code
-        pulse(distance: 100)  # Queued second, but processed first!
+        fire(10) # Queued first in code
+        pulse(distance: 100) # Queued second, but processed first!
         thrust(speed: 1, angle: 0)
       end
 
@@ -387,7 +395,7 @@ describe Rubowar::Battle do
       detector.y = 300.0
 
       battle.send(:call_on_spawn)
-      sensor.instance.do_probe = true  # Set AFTER on_spawn resets it
+      sensor.instance.do_probe = true # Set AFTER on_spawn resets it
       battle.send(:run_tick)
 
       # Detector should report being probed
@@ -410,7 +418,7 @@ describe Rubowar::Battle do
       detector.y = 300.0
 
       battle.send(:call_on_spawn)
-      sensor.instance.do_scan = true  # Set AFTER on_spawn resets it
+      sensor.instance.do_scan = true # Set AFTER on_spawn resets it
       battle.send(:run_tick)
 
       # Detector should report being scanned
@@ -433,7 +441,7 @@ describe Rubowar::Battle do
       detector.y = 300.0
 
       battle.send(:call_on_spawn)
-      sensor.instance.do_pulse = true  # Set AFTER on_spawn resets it
+      sensor.instance.do_pulse = true # Set AFTER on_spawn resets it
       battle.send(:run_tick)
 
       # Detector should report being pulsed
@@ -481,7 +489,7 @@ describe Rubowar::Battle do
       detector.y = 300.0
 
       battle.send(:call_on_spawn)
-      sensor.instance.do_pulse = true  # Set AFTER on_spawn resets it
+      sensor.instance.do_pulse = true # Set AFTER on_spawn resets it
       battle.send(:run_tick)
 
       # First tick: pulsed

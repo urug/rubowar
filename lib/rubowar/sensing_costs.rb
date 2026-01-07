@@ -1,57 +1,43 @@
 # frozen_string_literal: true
 
+# [file]
+# purpose = "Shared cost calculations for sensing actions"
+# responsibility = "Calculate energy costs for probe, scan, pulse, detect"
+# pattern = "Mixin Module"
+#
+# [module.SensingCosts]
+# purpose = "DRY cost calculations used by both Rubot and Arena"
+# usage = "Rubot checks upfront if it can afford; Arena deducts when processing"
+#
+# [costs]
+# probe = "0 base + 1-4 per attribute (size=1, position=4, velocity=3, health=3, etc.)"
+# scan = "3 base + ceil(angle/20) + ceil(distance/100) [+2 velocity] [+1 owner]"
+# pulse = "2 base + ceil(distance/75) [+1 owner]"
+# detect = "2 flat"
+
 module Rubowar
-  # Shared cost calculations for sensing actions (probe, scan, pulse).
-  # Used by both Rubot (for upfront energy checks) and Arena (for processing).
   module SensingCosts
-    # Probe costs
-    PROBE_BASE_COST = 0
-    PROBE_ATTRIBUTE_COSTS = {
-      size: 1,
-      position: 4,
-      velocity: 3,
-      turret_angle: 2,
-      shield: 2,
-      health: 3,
-      energy: 3
-    }.freeze
-
-    # Scan costs
-    SCAN_BASE_COST = 3
-    SCAN_ANGLE_DIVISOR = 20.0
-    SCAN_DISTANCE_DIVISOR = 100.0
-    SCAN_VELOCITY_COST = 2
-    SCAN_OWNER_COST = 1
-
-    # Pulse costs
-    PULSE_BASE_COST = 2
-    PULSE_DISTANCE_DIVISOR = 75.0
-    PULSE_OWNER_COST = 1
-
-    # Detect cost (counter-intelligence)
-    DETECT_COST = 2
-
     def probe_cost(attributes)
-      PROBE_BASE_COST + attributes.sum { |attr| PROBE_ATTRIBUTE_COSTS[attr] || 0 }
+      Config::Sensing::PROBE_BASE_COST + attributes.sum { |attr| Config::Sensing::PROBE_ATTRIBUTE_COSTS[attr] || 0 }
     end
 
     def scan_cost(angle:, distance:, velocity: false, owner: false)
-      cost = SCAN_BASE_COST +
-             (angle / SCAN_ANGLE_DIVISOR).ceil +
-             (distance / SCAN_DISTANCE_DIVISOR).ceil
-      cost += SCAN_VELOCITY_COST if velocity
-      cost += SCAN_OWNER_COST if owner
+      cost = Config::Sensing::SCAN_BASE_COST +
+             (angle / Config::Sensing::SCAN_ANGLE_DIVISOR).ceil +
+             (distance / Config::Sensing::SCAN_DISTANCE_DIVISOR).ceil
+      cost += Config::Sensing::SCAN_VELOCITY_COST if velocity
+      cost += Config::Sensing::SCAN_OWNER_COST if owner
       cost
     end
 
     def pulse_cost(distance:, owner: false)
-      cost = PULSE_BASE_COST + (distance / PULSE_DISTANCE_DIVISOR).ceil
-      cost += PULSE_OWNER_COST if owner
+      cost = Config::Sensing::PULSE_BASE_COST + (distance / Config::Sensing::PULSE_DISTANCE_DIVISOR).ceil
+      cost += Config::Sensing::PULSE_OWNER_COST if owner
       cost
     end
 
     def detect_cost
-      DETECT_COST
+      Config::Sensing::DETECT_COST
     end
   end
 end

@@ -1,7 +1,16 @@
 # frozen_string_literal: true
 
+# [file]
+# purpose = "Immutable snapshot of arena state passed to rubots each tick"
+# responsibility = "Read-only view of arena dimensions, energons, and game state"
+# pattern = "Value Object (Data.define)"
+#
+# [ArenaState]
+# purpose = "Provides rubots with arena info without exposing mutable state"
+# fields = ["arena_width", "arena_height", "friction", "tick_number", "energons", "live_rubot_count"]
+# immutable = true
+
 module Rubowar
-  # Immutable snapshot of arena state passed to robots each tick
   ArenaState = Data.define(
     :arena_width, :arena_height, :friction, :tick_number,
     :energons, :live_rubot_count,

@@ -1,21 +1,30 @@
 # frozen_string_literal: true
 
+# [file]
+# purpose = "Internal mutable state tracker for the game engine"
+# responsibility = "Track position, health, energy, and stats for each rubot"
+# pattern = "State Container"
+#
+# [class.RubotRunner]
+# purpose = "Wraps a Rubot instance with mutable game state"
+# note = "Players never interact with this directly - they get immutable RubotState snapshots"
+# collaborators = ["Arena", "Battle", "RubotState"]
+#
+# [sizes]
+# small = { radius = 15, energy_regen = 8, max_health = 80 }
+# medium = { radius = 20, energy_regen = 10, max_health = 100 }
+# large = { radius = 25, energy_regen = 12, max_health = 120 }
+# tradeoffs = "Small = agile but fragile, Large = tanky but costly to move"
+#
+# [damage_methods]
+# apply_damage = "Normal damage, shields absorb first"
+# apply_collision_damage = "Physical impact, bypasses shields"
+
 module Rubowar
   class RubotRunner
-    SIZES = {
-      small: { radius: 15, energy_regen: 8, max_health: 80 },
-      medium: { radius: 20, energy_regen: 10, max_health: 100 },
-      large: { radius: 25, energy_regen: 12, max_health: 120 }
-    }.freeze
-    MAX_ENERGY = 100
-    MAX_SPEED = 20
-    SHIELD_DECAY_RATE = 0.12
 
-    attr_accessor :x, :y, :velocity_x, :velocity_y
-    attr_accessor :turret_angle
-    attr_accessor :health, :energy, :shield_level
-    attr_accessor :damage_dealt, :damage_taken
-    attr_accessor :times_probed, :times_scanned, :times_pulsed
+    attr_accessor :x, :y, :velocity_x, :velocity_y, :turret_angle, :health, :energy, :shield_level, :damage_dealt,
+                  :damage_taken, :times_probed, :times_scanned, :times_pulsed
     attr_reader :size, :rubot_class, :instance
 
     def initialize(rubot_class)
@@ -27,7 +36,7 @@ module Rubowar
       @velocity_y = 0.0
       @turret_angle = 0.0
       @health = max_health
-      @energy = MAX_ENERGY
+      @energy = Config::Rubot::MAX_ENERGY
       @shield_level = 0
       @damage_dealt = 0
       @damage_taken = 0
@@ -38,15 +47,15 @@ module Rubowar
     end
 
     def radius
-      SIZES[@size][:radius]
+      Config::Rubot::SIZES[@size][:radius]
     end
 
     def energy_regen
-      SIZES[@size][:energy_regen]
+      Config::Rubot::SIZES[@size][:energy_regen]
     end
 
     def max_health
-      SIZES[@size][:max_health]
+      Config::Rubot::SIZES[@size][:max_health]
     end
 
     def max_shield
@@ -54,11 +63,11 @@ module Rubowar
     end
 
     def speed
-      Math.sqrt(@velocity_x**2 + @velocity_y**2)
+      Math.sqrt((@velocity_x**2) + (@velocity_y**2))
     end
 
     def alive?
-      @health > 0
+      @health.positive?
     end
 
     def dead?
@@ -71,7 +80,7 @@ module Rubowar
         y: @y,
         velocity_x: @velocity_x,
         velocity_y: @velocity_y,
-        speed: speed,
+        speed:,
         turret_angle: @turret_angle,
         health: @health,
         energy: @energy,
@@ -83,23 +92,30 @@ module Rubowar
     end
 
     def apply_damage(amount)
-      if @shield_level > 0
+      if @shield_level.positive?
         absorbed = [@shield_level, amount].min
         @shield_level -= absorbed
         amount -= absorbed
       end
 
       @health -= amount
-      @health = 0 if @health < 0
+      @health = 0 if @health.negative?
+      @damage_taken += amount
+    end
+
+    # Apply collision damage (bypasses shields - physical impact)
+    def apply_collision_damage(amount)
+      @health -= amount
+      @health = 0 if @health.negative?
       @damage_taken += amount
     end
 
     def regenerate_energy
-      @energy = [@energy + energy_regen, MAX_ENERGY].min
+      @energy = [@energy + energy_regen, Config::Rubot::MAX_ENERGY].min
     end
 
     def degrade_shield
-      @shield_level = (@shield_level * (1 - SHIELD_DECAY_RATE)).floor
+      @shield_level = (@shield_level * (1 - Config::Rubot::SHIELD_DECAY_RATE)).floor
     end
 
     def reset_detection_counts
@@ -122,9 +138,9 @@ module Rubowar
 
     def clamp_speed
       current_speed = speed
-      return unless current_speed > MAX_SPEED
+      return unless current_speed > Config::Physics::MAX_SPEED
 
-      scale = MAX_SPEED / current_speed
+      scale = Config::Physics::MAX_SPEED / current_speed
       @velocity_x *= scale
       @velocity_y *= scale
     end

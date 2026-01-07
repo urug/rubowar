@@ -173,7 +173,7 @@
 
 ## Phase 4: Sandboxing & Safety - NOT STARTED
 
-### Process Isolation (`lib/rubowar/robot_runner.rb`)
+### Process Isolation (`lib/rubowar/rubot_runner.rb`)
 - [ ] Subprocess spawning for rubot code
 - [ ] JSON state serialization
 - [ ] JSON action deserialization
@@ -201,7 +201,7 @@
 - `SHIELD_DECAY_RATE = 0.12` (12% per tick)
 
 ### Movement
-- `MAX_SPEED = 20`
+- `MAX_SPEED = 30`
 - `THRUST_MULTIPLIER = 1.5`
 - `DEFAULT_FRICTION = 0.95`
 

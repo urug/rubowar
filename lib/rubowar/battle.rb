@@ -1,15 +1,45 @@
 # frozen_string_literal: true
 
+require "timeout"
+
+# [file]
+# purpose = "Game loop orchestration for rubot battles"
+# responsibility = "Tick execution, event emission, win condition detection"
+# pattern = "Game Loop / Event Emitter"
+#
+# [class.Battle]
+# purpose = "Orchestrates a complete battle from start to finish"
+# input = "Array of Rubot classes to compete"
+# output = "Winner, events log, final state"
+# collaborators = ["Arena", "RubotRunner"]
+#
+# [tick_phases]
+# order = [
+#   "1. Collect actions from all rubots (call tick method)",
+#   "2. Process sensing actions (probe, scan, pulse, detect)",
+#   "3. Process movement actions (thrust, turret)",
+#   "4. Process combat actions (fire, shield)",
+#   "5. Update physics (bullets, collisions, friction)",
+#   "6. Check win conditions"
+# ]
+# fairness = "Actions processed in phases to prevent spawn-order advantage"
+#
+# [events]
+# types = ["tick", "death", "hit", "battle_end"]
+# usage = "battle.on(:death) { |data| puts data[:runner].rubot_class.name }"
+
 module Rubowar
   class Battle
-    DEFAULT_TICK_LIMIT = 10_000
-    ERROR_DAMAGE = 10
-
     attr_reader :arena, :tick_number, :winner, :events
 
-    def initialize(rubot_classes, width: Arena::DEFAULT_WIDTH, height: Arena::DEFAULT_HEIGHT,
-                   friction: Arena::DEFAULT_FRICTION, tick_limit: DEFAULT_TICK_LIMIT)
-      @arena = Arena.new(width: width, height: height, friction: friction)
+    def initialize(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
+                   friction: Config::Arena::DEFAULT_FRICTION, tick_limit: Config::Battle::DEFAULT_TICK_LIMIT)
+      validate_rubot_classes!(rubot_classes)
+      validate_dimensions!(width, height)
+      validate_friction!(friction)
+      validate_tick_limit!(tick_limit)
+
+      @arena = Arena.new(width:, height:, friction:)
       @arena.spawn_rubots(rubot_classes)
       @tick_limit = tick_limit
       @tick_number = 0
@@ -57,10 +87,15 @@ module Rubowar
         setup_rubot_for_tick(runner)
 
         begin
-          runner.instance.tick
+          Timeout.timeout(Config::Battle::TICK_TIMEOUT) do
+            runner.instance.tick
+          end
+        rescue Timeout::Error
+          runner.apply_damage(Config::Battle::TIMEOUT_DAMAGE)
+          emit(:error, { runner:, error: "Tick timeout exceeded #{Config::Battle::TICK_TIMEOUT}s" })
         rescue StandardError => e
-          runner.apply_damage(ERROR_DAMAGE)
-          emit(:error, { runner: runner, error: e })
+          runner.apply_damage(Config::Battle::ERROR_DAMAGE)
+          emit(:error, { runner:, error: e })
         end
       end
 
@@ -80,7 +115,7 @@ module Rubowar
         next unless runner.dead?
 
         runner.instance.on_death
-        emit(:death, { runner: runner })
+        emit(:death, { runner: })
       end
     end
 
@@ -97,22 +132,24 @@ module Rubowar
         runner.instance.actions.each do |action|
           next unless %i[probe scan pulse].include?(action[:type])
 
-          success = @arena.process_action(runner: runner, action: action)
-          emit(:action_failed, { runner: runner, action: action }) unless success
+          success = @arena.process_action(runner:, action:)
+          emit(:action_failed, { runner:, action: }) unless success
         end
       end
 
       # 1c. Process detect actions last (reports this tick's detection counts)
+      # rubocop:disable Style/CombinableLoops -- detect must run AFTER all sensing completes
       @arena.runners.each do |runner|
         next if runner.dead?
 
         runner.instance.actions.each do |action|
           next unless action[:type] == :detect
 
-          success = @arena.process_action(runner: runner, action: action)
-          emit(:action_failed, { runner: runner, action: action }) unless success
+          success = @arena.process_action(runner:, action:)
+          emit(:action_failed, { runner:, action: }) unless success
         end
       end
+      # rubocop:enable Style/CombinableLoops
     end
 
     # Phase 2: All movement actions (thrust, turret), then rubot physics
@@ -124,8 +161,8 @@ module Rubowar
         runner.instance.actions.each do |action|
           next unless %i[thrust turret].include?(action[:type])
 
-          success = @arena.process_action(runner: runner, action: action)
-          emit(:action_failed, { runner: runner, action: action }) unless success
+          success = @arena.process_action(runner:, action:)
+          emit(:action_failed, { runner:, action: }) unless success
         end
       end
 
@@ -142,8 +179,8 @@ module Rubowar
         actions.each do |action|
           next unless %i[fire shield].include?(action[:type])
 
-          success = @arena.process_action(runner: runner, action: action)
-          emit(:action_failed, { runner: runner, action: action }) unless success
+          success = @arena.process_action(runner:, action:)
+          emit(:action_failed, { runner:, action: }) unless success
         end
         actions.clear
       end
@@ -157,15 +194,15 @@ module Rubowar
       collections = @arena.check_energon_collection(@tick_number)
       collections.each do |collection|
         emit(:energon_collect, {
-          runner: collection[:runner],
-          x: collection[:energon].x,
-          y: collection[:energon].y,
-          amount: collection[:amount]
-        })
+               runner: collection[:runner],
+               x: collection[:energon].x,
+               y: collection[:energon].y,
+               amount: collection[:amount]
+             })
       end
 
       # Spawn new energon every ENERGON_SPAWN_INTERVAL ticks
-      return unless (@tick_number % Arena::ENERGON_SPAWN_INTERVAL).zero?
+      return unless (@tick_number % Config::Arena::ENERGON_SPAWN_INTERVAL).zero?
 
       energon = @arena.spawn_energon(@tick_number)
       emit(:energon_spawn, { x: energon.x, y: energon.y }) if energon
@@ -177,7 +214,7 @@ module Rubowar
       runner.instance.actions ||= []
       # Reset pending energy spend for this tick's upfront energy checks
       runner.instance._pending_energy_spend = 0
-      # Note: Do NOT clear probe_result, scan_result, pulse_result here.
+      # NOTE: Do NOT clear probe_result, scan_result, pulse_result here.
       # They contain results from the PREVIOUS tick's sensing actions,
       # which rubots need to read during the current tick.
     end
@@ -212,6 +249,23 @@ module Rubowar
       event = { type: event_type, **data }
       @events << event
       @callbacks[event_type].each { |callback| callback.call(data) }
+    end
+
+    def validate_rubot_classes!(rubot_classes)
+      raise InsufficientRubotsError, "need at least 2 rubots for a battle" if rubot_classes.size < 2
+    end
+
+    def validate_dimensions!(width, height)
+      raise InvalidDimensionsError, "width must be positive" unless width.positive?
+      raise InvalidDimensionsError, "height must be positive" unless height.positive?
+    end
+
+    def validate_friction!(friction)
+      raise InvalidFrictionError, "friction must be between 0 and 1" unless (0..1).cover?(friction)
+    end
+
+    def validate_tick_limit!(tick_limit)
+      raise InvalidTickLimitError, "tick_limit must be positive" unless tick_limit.positive?
     end
   end
 end

@@ -1,31 +1,39 @@
 # frozen_string_literal: true
 
+# [file]
+# purpose = "Physics engine for the Rubowar battle arena"
+# responsibility = "Movement, collisions, bullets, sensing, energon spawning"
+# pattern = "Game Engine / Simulation"
+#
+# [class.Arena]
+# purpose = "Manages all physical interactions in the battle space"
+# input = "Rubot actions (thrust, fire, scan, etc.)"
+# output = "Updated positions, damage events, sensing results"
+# collaborators = ["RubotRunner", "Bullet", "Energon", "Battle"]
+#
+# [constants]
+# physics = [
+#   "COLLISION_BASE_DAMAGE - Base damage for any collision (2)",
+#   "COLLISION_VELOCITY_MULTIPLIER - Damage scaling with speed (0.5)",
+#   "WALL_BOUNCE_COEFFICIENT - Energy retained on wall bounce (0.12)",
+#   "DEFAULT_FRICTION - Velocity decay per tick (0.95)"
+# ]
+# sensing = [
+#   "Probe - Check turret line for target, returns attributes",
+#   "Scan - Arc scan from turret, returns positions in cone",
+#   "Pulse - Omnidirectional radar ping, returns nearby objects",
+#   "Detect - Counter-intelligence, reports who scanned you"
+# ]
+
 module Rubowar
   class Arena
     include SensingCosts
 
-    DEFAULT_WIDTH = 800
-    DEFAULT_HEIGHT = 600
-    DEFAULT_FRICTION = 0.95
-    COLLISION_BASE_DAMAGE = 2
-    COLLISION_VELOCITY_MULTIPLIER = 0.5
-    WALL_VELOCITY_MULTIPLIER = 0.75
-    WALL_BOUNCE_COEFFICIENT = 0.12
-    # Spawn distance ratios (relative to arena dimensions)
-    SPAWN_WALL_BUFFER_RATIO = 0.08        # 8% of smaller dimension
-    SPAWN_MIN_DISTANCE_RATIO = 0.12       # 12% of diagonal
-    SPAWN_MAX_DISTANCE_RATIO = 0.50       # 50% of diagonal
-    THRUST_MULTIPLIER = 1.5
-    FIRE_DAMAGE_MULTIPLIER = 1.5
-    TURRET_TURN_DIVISOR = 24.0
-    STATIONARY_SPEED_THRESHOLD = 0.1
-    ENERGON_WALL_BUFFER_RATIO = 0.15  # 15% of smaller dimension
-    ENERGON_SPAWN_INTERVAL = 80
-
     attr_reader :width, :height, :friction
     attr_accessor :bullets, :runners, :energons
 
-    def initialize(width: DEFAULT_WIDTH, height: DEFAULT_HEIGHT, friction: DEFAULT_FRICTION)
+    def initialize(width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
+                   friction: Config::Arena::DEFAULT_FRICTION)
       @width = width
       @height = height
       @friction = friction
@@ -36,19 +44,19 @@ module Rubowar
 
     # Spawn distance calculations based on arena size
     def arena_diagonal
-      Math.sqrt(@width**2 + @height**2)
+      Math.sqrt((@width**2) + (@height**2))
     end
 
     def spawn_wall_buffer
-      ([@width, @height].min * SPAWN_WALL_BUFFER_RATIO).round
+      ([@width, @height].min * Config::Arena::SPAWN_WALL_BUFFER_RATIO).round
     end
 
     def spawn_min_distance
-      (arena_diagonal * SPAWN_MIN_DISTANCE_RATIO).round
+      (arena_diagonal * Config::Arena::SPAWN_MIN_DISTANCE_RATIO).round
     end
 
     def spawn_max_distance
-      (arena_diagonal * SPAWN_MAX_DISTANCE_RATIO).round
+      (arena_diagonal * Config::Arena::SPAWN_MAX_DISTANCE_RATIO).round
     end
 
     def spawn_rubots(rubot_classes)
@@ -67,11 +75,11 @@ module Rubowar
         arena_width: @width,
         arena_height: @height,
         friction: @friction,
-        tick_number: tick_number,
+        tick_number:,
         energons: @energons.map { |e| { x: e.x, y: e.y } },
-        live_rubot_count: @runners.count { |r| r.alive? },
-        energon_spawn_interval: ENERGON_SPAWN_INTERVAL,
-        energon_growth_rate: Energon::GROWTH_RATE
+        live_rubot_count: @runners.count(&:alive?),
+        energon_spawn_interval: Config::Arena::ENERGON_SPAWN_INTERVAL,
+        energon_growth_rate: Config::Energon::GROWTH_RATE
       )
     end
 
@@ -104,21 +112,22 @@ module Rubowar
     def process_action(runner:, action:)
       case action[:type]
       when :thrust
-        process_thrust(runner: runner, speed: action[:speed], angle: action[:angle])
+        process_thrust(runner:, speed: action[:speed], angle: action[:angle])
       when :turret
-        process_turret(runner: runner, degrees: action[:degrees])
+        process_turret(runner:, degrees: action[:degrees])
       when :fire
-        process_fire(runner: runner, energy: action[:energy])
+        process_fire(runner:, energy: action[:energy])
       when :shield
-        process_shield(runner: runner, energy: action[:energy])
+        process_shield(runner:, energy: action[:energy])
       when :probe
-        process_probe(runner: runner, attributes: action[:attributes])
+        process_probe(runner:, attributes: action[:attributes])
       when :scan
-        process_scan(runner: runner, angle: action[:angle], distance: action[:distance], velocity: action[:velocity], owner: action[:owner])
+        process_scan(runner:, angle: action[:angle], distance: action[:distance], velocity: action[:velocity],
+                     owner: action[:owner])
       when :pulse
-        process_pulse(runner: runner, distance: action[:distance], owner: action[:owner])
+        process_pulse(runner:, distance: action[:distance], owner: action[:owner])
       when :detect
-        process_detect(runner: runner)
+        process_detect(runner:)
       else
         false
       end
@@ -143,12 +152,12 @@ module Rubowar
       placed_runners = @runners.select { |r| r.x != 0 || r.y != 0 }
 
       max_attempts.times do
-        x = rand(wall_buffer + radius..@width - wall_buffer - radius)
-        y = rand(wall_buffer + radius..@height - wall_buffer - radius)
+        x = rand((wall_buffer + radius)..(@width - wall_buffer - radius))
+        y = rand((wall_buffer + radius)..(@height - wall_buffer - radius))
 
         # Check minimum distance from all placed runners
         too_close = placed_runners.any? do |other|
-          distance = Math.sqrt((x - other.x)**2 + (y - other.y)**2)
+          distance = Math.sqrt(((x - other.x)**2) + ((y - other.y)**2))
           distance < min_dist
         end
         next if too_close
@@ -156,20 +165,17 @@ module Rubowar
         # Check maximum distance (at least one runner must be within max_dist, if any exist)
         if placed_runners.any?
           close_enough = placed_runners.any? do |other|
-            distance = Math.sqrt((x - other.x)**2 + (y - other.y)**2)
+            distance = Math.sqrt(((x - other.x)**2) + ((y - other.y)**2))
             distance <= max_dist
           end
           next unless close_enough
         end
 
-        return { x: x, y: y }
+        return { x:, y: }
       end
 
-      # Fallback: just place it somewhere valid for walls
-      {
-        x: rand(wall_buffer + radius..@width - wall_buffer - radius),
-        y: rand(wall_buffer + radius..@height - wall_buffer - radius)
-      }
+      raise SpawnError, "Could not find valid spawn position after #{max_attempts} attempts. " \
+                        "Arena may be too small for #{@runners.size} rubots."
     end
 
     def apply_friction(runner)
@@ -184,9 +190,9 @@ module Rubowar
 
     def check_wall_collision(runner)
       hit_wall = false
-      bounce_factor = mass_factor(runner) * WALL_BOUNCE_COEFFICIENT
+      bounce_factor = mass_factor(runner) * Config::Physics::WALL_BOUNCE_COEFFICIENT
 
-      if runner.x - runner.radius < 0
+      if (runner.x - runner.radius).negative?
         runner.x = runner.radius
         runner.velocity_x = -runner.velocity_x * bounce_factor
         hit_wall = true
@@ -196,7 +202,7 @@ module Rubowar
         hit_wall = true
       end
 
-      if runner.y - runner.radius < 0
+      if (runner.y - runner.radius).negative?
         runner.y = runner.radius
         runner.velocity_y = -runner.velocity_y * bounce_factor
         hit_wall = true
@@ -206,24 +212,24 @@ module Rubowar
         hit_wall = true
       end
 
-      if hit_wall
-        runner.apply_damage(calculate_wall_damage(runner))
-        runner.instance.on_wall
-      end
+      return unless hit_wall
+
+      runner.apply_collision_damage(calculate_wall_damage(runner))
+      runner.instance.on_wall
     end
 
     def check_rubot_collisions
       @runners.combination(2).each do |runner_a, runner_b|
         next if runner_a.dead? || runner_b.dead?
 
-        distance = Math.sqrt((runner_a.x - runner_b.x)**2 + (runner_a.y - runner_b.y)**2)
+        distance = Math.sqrt(((runner_a.x - runner_b.x)**2) + ((runner_a.y - runner_b.y)**2))
         min_distance = runner_a.radius + runner_b.radius
 
         next unless distance < min_distance
 
         # Push apart
         overlap = min_distance - distance
-        if distance > 0
+        if distance.positive?
           dx = (runner_a.x - runner_b.x) / distance
           dy = (runner_a.y - runner_b.y) / distance
           runner_a.x += dx * overlap / 2
@@ -232,12 +238,12 @@ module Rubowar
           runner_b.y -= dy * overlap / 2
         end
 
-        # Apply momentum-based damage
+        # Apply momentum-based damage (bypasses shields - physical impact)
         damage_to_a = calculate_collision_damage(runner_b)
         damage_to_b = calculate_collision_damage(runner_a)
 
-        runner_a.apply_damage(damage_to_a)
-        runner_b.apply_damage(damage_to_b)
+        runner_a.apply_collision_damage(damage_to_a)
+        runner_b.apply_collision_damage(damage_to_b)
 
         runner_a.instance.on_collision(runner_b.to_state)
         runner_b.instance.on_collision(runner_a.to_state)
@@ -245,17 +251,17 @@ module Rubowar
     end
 
     def calculate_wall_damage(runner)
-      (COLLISION_BASE_DAMAGE + runner.speed * WALL_VELOCITY_MULTIPLIER).round
+      (Config::Physics::COLLISION_BASE_DAMAGE + (runner.speed * Config::Physics::WALL_VELOCITY_MULTIPLIER)).round
     end
 
     def calculate_collision_damage(attacker)
       mass = mass_factor(attacker)
-      momentum_damage = mass * attacker.speed * COLLISION_VELOCITY_MULTIPLIER
-      (COLLISION_BASE_DAMAGE + momentum_damage).round
+      momentum_damage = mass * attacker.speed * Config::Physics::COLLISION_VELOCITY_MULTIPLIER
+      (Config::Physics::COLLISION_BASE_DAMAGE + momentum_damage).round
     end
 
     def mass_factor(runner)
-      medium_radius = RubotRunner::SIZES[:medium][:radius].to_f
+      medium_radius = Config::Rubot::SIZES[:medium][:radius].to_f
       (runner.radius / medium_radius)**2
     end
 
@@ -271,7 +277,7 @@ module Rubowar
       @runners.each do |runner|
         next if runner.dead?
 
-        distance = Math.sqrt((bullet.x - runner.x)**2 + (bullet.y - runner.y)**2)
+        distance = Math.sqrt(((bullet.x - runner.x)**2) + ((bullet.y - runner.y)**2))
         next unless distance < bullet.radius + runner.radius
 
         runner.apply_damage(bullet.damage)
@@ -291,9 +297,9 @@ module Rubowar
       return false if runner.energy <= 0
 
       mass = mass_factor(runner)
-      direction_multiplier = thrust_momentum_multiplier(runner: runner, angle: angle)
-      base_cost = (speed / THRUST_MULTIPLIER)**2
-      required_energy = base_cost * mass * direction_multiplier
+      direction_multiplier = thrust_momentum_multiplier(runner:, angle:)
+      base_cost = (speed / Config::Physics::THRUST_MULTIPLIER)**2
+      required_energy = (base_cost * mass * direction_multiplier).ceil
 
       if runner.energy >= required_energy
         # Full thrust
@@ -305,7 +311,7 @@ module Rubowar
         runner.energy = 0
         # Reverse the formula: speed = sqrt(energy / (mass * direction_multiplier)) * THRUST_MULTIPLIER
         effective_energy = available_energy / (mass * direction_multiplier)
-        actual_speed = Math.sqrt(effective_energy) * THRUST_MULTIPLIER
+        actual_speed = Math.sqrt(effective_energy) * Config::Physics::THRUST_MULTIPLIER
       end
 
       radians = angle * Math::PI / 180
@@ -315,7 +321,7 @@ module Rubowar
     end
 
     def thrust_momentum_multiplier(runner:, angle:)
-      return 1.0 if runner.speed < STATIONARY_SPEED_THRESHOLD
+      return 1.0 if runner.speed < Config::Physics::STATIONARY_SPEED_THRESHOLD
 
       current_angle = Math.atan2(runner.velocity_y, runner.velocity_x) * 180 / Math::PI
       angle_diff = (angle - current_angle).abs % 360
@@ -326,7 +332,7 @@ module Rubowar
     end
 
     def process_turret(runner:, degrees:)
-      cost = degrees.abs / TURRET_TURN_DIVISOR
+      cost = (degrees.abs / Config::Combat::TURRET_TURN_DIVISOR).ceil
       return false unless runner.spend_energy(cost)
 
       runner.turret_angle = (runner.turret_angle + degrees) % 360
@@ -336,14 +342,14 @@ module Rubowar
     def process_fire(runner:, energy:)
       return false unless runner.spend_energy(energy)
 
-      damage = energy * FIRE_DAMAGE_MULTIPLIER
+      damage = (energy * Config::Combat::FIRE_DAMAGE_MULTIPLIER).ceil
       radians = runner.turret_angle * Math::PI / 180
-      spawn_distance = runner.radius + Bullet::RADIUS
+      spawn_distance = runner.radius + Config::Combat::BULLET_RADIUS
       bullet = Bullet.new(
-        x: runner.x + Math.cos(radians) * spawn_distance,
-        y: runner.y + Math.sin(radians) * spawn_distance,
+        x: runner.x + (Math.cos(radians) * spawn_distance),
+        y: runner.y + (Math.sin(radians) * spawn_distance),
         angle: runner.turret_angle,
-        damage: damage,
+        damage:,
         owner: runner
       )
       @bullets << bullet
@@ -362,7 +368,7 @@ module Rubowar
       return false unless runner.spend_energy(cost)
 
       target = find_probe_target(runner)
-      result = target ? build_probe_result(target: target, attributes: attributes) : {}
+      result = target ? build_probe_result(target:, attributes:) : {}
 
       # Track that this target was probed
       target.times_probed += 1 if target
@@ -387,15 +393,15 @@ module Rubowar
         dy = other.y - runner.y
 
         # Project onto ray direction
-        projection = dx * dir_x + dy * dir_y
+        projection = (dx * dir_x) + (dy * dir_y)
         next if projection <= 0 # Behind the runner
 
         # Closest point on ray to other's center
-        closest_x = runner.x + dir_x * projection
-        closest_y = runner.y + dir_y * projection
+        closest_x = runner.x + (dir_x * projection)
+        closest_y = runner.y + (dir_y * projection)
 
         # Distance from closest point to other's center
-        dist_to_center = Math.sqrt((closest_x - other.x)**2 + (closest_y - other.y)**2)
+        dist_to_center = Math.sqrt(((closest_x - other.x)**2) + ((closest_y - other.y)**2))
 
         # Check if ray passes through other's radius
         next unless dist_to_center <= other.radius
@@ -434,7 +440,7 @@ module Rubowar
     end
 
     def process_scan(runner:, angle:, distance:, velocity:, owner:)
-      cost = scan_cost(angle: angle, distance: distance, velocity: velocity, owner: owner)
+      cost = scan_cost(angle:, distance:, velocity:, owner:)
       return false unless runner.spend_energy(cost)
 
       results = []
@@ -442,7 +448,7 @@ module Rubowar
       # Find rubots in arc
       @runners.each do |other|
         next if other == runner || other.dead?
-        next unless in_arc?(runner: runner, angle: angle, distance: distance, x: other.x, y: other.y)
+        next unless in_arc?(runner:, angle:, distance:, x: other.x, y: other.y)
 
         # Track that this rubot was scanned
         other.times_scanned += 1
@@ -458,7 +464,7 @@ module Rubowar
 
       # Find bullets in arc
       @bullets.each do |bullet|
-        next unless in_arc?(runner: runner, angle: angle, distance: distance, x: bullet.x, y: bullet.y)
+        next unless in_arc?(runner:, angle:, distance:, x: bullet.x, y: bullet.y)
 
         result = { x: bullet.x, y: bullet.y, type: :bullet }
         if velocity
@@ -478,10 +484,10 @@ module Rubowar
     def in_arc?(runner:, angle:, distance:, x:, y:)
       dx = x - runner.x
       dy = y - runner.y
-      actual_distance = Math.sqrt(dx * dx + dy * dy)
+      actual_distance = Math.sqrt((dx * dx) + (dy * dy))
 
       return false if actual_distance > distance
-      return false if actual_distance < 0.001 # Too close to measure angle
+      return false if actual_distance < Float::EPSILON # Too close to measure angle
 
       # Calculate angle to target (in degrees)
       target_angle = Math.atan2(dy, dx) * 180 / Math::PI
@@ -495,7 +501,7 @@ module Rubowar
     end
 
     def process_pulse(runner:, distance:, owner:)
-      cost = pulse_cost(distance: distance, owner: owner)
+      cost = pulse_cost(distance:, owner:)
       return false unless runner.spend_energy(cost)
 
       results = []
@@ -503,7 +509,7 @@ module Rubowar
       # Find rubots within distance
       @runners.each do |other|
         next if other == runner || other.dead?
-        next unless within_distance?(runner: runner, distance: distance, x: other.x, y: other.y)
+        next unless within_distance?(runner:, distance:, x: other.x, y: other.y)
 
         # Track that this rubot was pulsed
         other.times_pulsed += 1
@@ -515,7 +521,7 @@ module Rubowar
 
       # Find bullets within distance
       @bullets.each do |bullet|
-        next unless within_distance?(runner: runner, distance: distance, x: bullet.x, y: bullet.y)
+        next unless within_distance?(runner:, distance:, x: bullet.x, y: bullet.y)
 
         result = { x: bullet.x, y: bullet.y, type: :bullet }
         result[:owner] = bullet.owner.rubot_class.name if owner
@@ -529,7 +535,7 @@ module Rubowar
     def within_distance?(runner:, distance:, x:, y:)
       dx = x - runner.x
       dy = y - runner.y
-      actual_distance = Math.sqrt(dx * dx + dy * dy)
+      actual_distance = Math.sqrt((dx * dx) + (dy * dy))
       actual_distance <= distance
     end
 
@@ -566,9 +572,9 @@ module Rubowar
         collector = find_energon_collector(energon)
         if collector
           amount = energon.value_int(tick_number)
-          collector.energy = [collector.energy + amount, RubotRunner::MAX_ENERGY].min
+          collector.energy = [collector.energy + amount, Config::Rubot::MAX_ENERGY].min
           collector.instance.on_energon(amount)
-          collections << { runner: collector, energon: energon, amount: amount }
+          collections << { runner: collector, energon:, amount: }
           true # Remove this energon
         else
           false # Keep this energon
@@ -588,7 +594,7 @@ module Rubowar
       best_min_distance = -1
 
       # Calculate wall buffer based on arena size (15% of smaller dimension)
-      wall_buffer = ([@width, @height].min * ENERGON_WALL_BUFFER_RATIO).round
+      wall_buffer = ([@width, @height].min * Config::Arena::ENERGON_WALL_BUFFER_RATIO).round
 
       # Sample candidate positions using a grid
       grid_step = 20
@@ -596,7 +602,7 @@ module Rubowar
         (wall_buffer..(@height - wall_buffer)).step(grid_step) do |cy|
           # Find minimum distance to any alive bot
           min_dist = alive_runners.map do |runner|
-            Math.sqrt((cx - runner.x)**2 + (cy - runner.y)**2)
+            Math.sqrt(((cx - runner.x)**2) + ((cy - runner.y)**2))
           end.min
 
           # Tolerance of 20 units for "equally good" positions
@@ -617,8 +623,8 @@ module Rubowar
       @runners.find do |runner|
         next false if runner.dead?
 
-        distance = Math.sqrt((energon.x - runner.x)**2 + (energon.y - runner.y)**2)
-        distance < runner.radius + Energon::RADIUS
+        distance = Math.sqrt(((energon.x - runner.x)**2) + ((energon.y - runner.y)**2))
+        distance < runner.radius + Config::Energon::RADIUS
       end
     end
   end

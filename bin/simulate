@@ -62,29 +62,37 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-# Load robot files
-robot_files = if ARGV.empty?
+# Load rubot files
+rubot_files = if ARGV.empty?
                 Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
               else
                 ARGV.map { |f| File.expand_path(f) }
               end
 
-if robot_files.size < 2
-  warn "Error: Need at least 2 robots to battle"
+if rubot_files.size < 2
+  warn "Error: Need at least 2 rubots to battle"
   warn "Usage: bin/simulate [options] robot1.rb robot2.rb [robot3.rb ...]"
   exit 1
 end
 
 robot_classes = []
-robot_files.each do |file|
+rubot_files.each do |file|
   unless File.exist?(file)
     warn "Error: File not found: #{file}"
     exit 1
   end
 
-  before = ObjectSpace.each_object(Class).select { |c| c.include?(Rubowar::Rubot) rescue false }
+  before = ObjectSpace.each_object(Class).select do |c|
+    c.include?(Rubowar::Rubot)
+  rescue StandardError
+    false
+  end
   require file
-  after = ObjectSpace.each_object(Class).select { |c| c.include?(Rubowar::Rubot) rescue false }
+  after = ObjectSpace.each_object(Class).select do |c|
+    c.include?(Rubowar::Rubot)
+  rescue StandardError
+    false
+  end
   new_classes = after - before
 
   if new_classes.empty?
@@ -151,7 +159,7 @@ summary = {
     tick_limit: options[:tick_limit]
   },
   seed: options[:seed],
-  wins: wins,
+  wins:,
   avg_damage: total_damage.transform_values { |v| (v / options[:battles]).round(1) },
   avg_health: total_health.transform_values { |v| (v / options[:battles]).round(1) }
 }
@@ -160,7 +168,7 @@ summary = {
 case options[:format]
 when "json"
   output = {
-    summary: summary,
+    summary:,
     battles: results
   }
   puts JSON.pretty_generate(output)

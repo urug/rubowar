@@ -49,7 +49,7 @@ end
 | Method | Cost | Effect |
 |--------|------|--------|
 | `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
-| `turret(degrees)` | \|degrees\|/30 | Rotate turret |
+| `turret(degrees)` | ceil(\|degrees\|/24) | Rotate turret |
 | `fire(energy)` | energy | Damage = 1.5 x energy, bullet speed 18 |
 | `shield(energy)` | energy | Add to shield (max = HP cap, decays 12%/tick) |
 
@@ -147,7 +147,58 @@ pulse(distance: 100, owner: true) # 5 energy  -> [{x:, y:, type:, owner:}, ...]
 detect                   # 2 energy  -> { probed: 1, scanned: 0, pulsed: 2 }
 ```
 
-**Note:** All sensing methods (`probe()`, `scan()`, `pulse()`, `detect()`) return results from the PREVIOUS tick. Current results won't be available until the next tick.
+### Sensing Delay (Important!)
+
+**All sensing results are delayed by one tick.** Think of it like a radar ping: you send out a signal, it travels to the target and bounces back, and only then do you see the result. In Rubowar, the "travel time" is exactly one tick.
+
+When you call `probe()`, `scan()`, or `pulse()`, the action is queued and executed during the current tick's sense phase, but the results aren't available until your `tick` method runs on the *next* tick.
+
+```
+Tick N:
+  1. Your tick() reads probe_result    → contains results from Tick N-1's probe
+  2. You call probe(:position)          → queued for this tick's sense phase
+  3. Sense phase executes probe         → result stored internally
+
+Tick N+1:
+  1. Your tick() reads probe_result    → NOW contains Tick N's results
+```
+
+**Pattern for using sensing:**
+
+```ruby
+def tick
+  # FIRST: Read results from PREVIOUS tick's sensing
+  if probe_result && probe_result[:x]
+    # We have a target! Aim and fire
+    target_angle = angle_to(probe_result[:x], probe_result[:y])
+    turret_diff = normalize_angle(target_angle - turret_angle)
+    turret(turret_diff.clamp(-20, 20))
+    fire(10) if turret_diff.abs < 15
+  end
+
+  # THEN: Queue sensing for NEXT tick
+  probe(:position, :velocity)
+end
+```
+
+**Common mistake - checking results immediately (this won't work):**
+
+```ruby
+def tick
+  probe(:position)           # Queued for execution
+  if probe_result[:x]        # WRONG! This is LAST tick's result, not the probe we just queued
+    fire(10)
+  end
+end
+```
+
+**Why the delay?** Two reasons:
+
+1. **Realism**: Like a real radar ping, there's a round-trip time. You send the signal out, it hits the target, and the echo returns. In Rubowar, this takes one tick.
+
+2. **Fairness**: Sensing is processed in phases. All rubots queue their sensing actions, then all probes/scans/pulses execute simultaneously. This prevents spawn-order from affecting who "sees" first. Everyone's radar pings go out at the same time, and everyone gets their echoes back at the same time.
+
+**Special case - `detect()`:** Unlike other sensing, `detect()` reports counts from the *current* tick's sense phase. It runs last in the sense phase so it can count how many times other rubots probed/scanned/pulsed you this tick. The result is still read on the next tick, but it reflects current-tick sensing activity.
 
 ### Callbacks
 
@@ -179,7 +230,7 @@ def on_energon(amount)         # Collected energon
 - **Origin**: Bottom-left (0,0)
 - **Angles**: 0 = East, 90 = North, 180 = West, 270 = South
 - **Friction**: 0.95 default (velocity *= friction each tick)
-- **Max speed**: 20 u/tick
+- **Max speed**: 30 u/tick
 
 ## Physics
 
@@ -190,12 +241,12 @@ def on_energon(amount)         # Collected energon
 - Friction slows rubots each tick (velocity *= 0.95)
 
 ### Bullets
-- Travel 18 u/tick (slightly slower than max rubot speed of 20)
+- Travel 18 u/tick (slower than max rubot speed, but max speed requires burst energy)
 - Spawn at edge of rubot (position + rubot radius + bullet radius)
 - Self-damage is possible (your bullets can hit you if you're fast enough)
 
 ### Collision Damage
-- **Wall**: `2 + speed x 0.75` (at max speed: 17 damage)
+- **Wall**: `2 + speed x 0.75` (at max speed: 25 damage)
 - **Rubot**: `2 + attacker_mass x attacker_speed x 0.5` (momentum-based)
 
 Large rubots deal more collision damage due to higher mass.

@@ -1,7 +1,7 @@
-# Rubowar: Ruby Robot Battle Arena
+# Rubowar: Ruby Rubot Battle Arena
 
 ## Overview
-A competitive programming game where Ruby club members write Ruby classes to control robots ("Rubots") that battle in an arena. The engine is a standalone Ruby gem with a pluggable renderer interface - bring your own visualization (terminal, web, desktop app, etc.).
+A competitive programming game where Ruby club members write Ruby classes to control rubots that battle in an arena. The engine is a standalone Ruby gem with a pluggable renderer interface - bring your own visualization (terminal, web, desktop app, etc.).
 
 ---
 
@@ -86,7 +86,7 @@ end
 | Method | Cost | Description |
 |--------|------|-------------|
 | `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
-| `turret(degrees)` | \|degrees\|/30 energy | Rotate turret. Negative = left, positive = right. |
+| `turret(degrees)` | ceil(\|degrees\|/24) energy | Rotate turret. Negative = left, positive = right. |
 | `fire(energy)` | energy spent | Fire projectile. Damage = **1.5 x energy**. Bullets travel 18 u/tick. |
 | `shield(energy)` | energy spent | Pump energy into shield. Decays 12%/tick. Max = HP cap. |
 | `probe(*attributes)` | 1 + attribute costs | Line in turret direction. Returns target info or nil. |
@@ -100,7 +100,7 @@ end
 - Direction multiplier: 1.0 (same direction as current velocity) to 2.0 (opposite direction)
 - If insufficient energy for full thrust, you get partial thrust and energy drains to zero
 
-**Turret cost examples**: `turret(90)` costs 3 energy, `turret(-45)` costs 1.5 energy
+**Turret cost examples**: `turret(90)` costs 4 energy, `turret(-45)` costs 2 energy
 
 #### Sensing System
 
@@ -224,9 +224,9 @@ end
 
 - **Movement**: `thrust(speed:, angle:)` adds velocity in world direction. Cost = (speed/1.5)^2 x mass x direction_multiplier.
 - **Friction**: Velocity *= 0.95 each tick (configurable per tournament).
-- **Max speed**: Capped at 20 units/tick.
-- **Projectiles**: Travel at **18 units/tick** (slightly slower than max rubot speed). Spawn at edge of rubot (position + rubot radius + bullet radius). Can hit anyone including the shooter.
-- **Wall collision**: `2 + speed x 0.75` damage + momentum-absorbing bounce. At max speed: 17 damage. Bounce retains velocity x mass x 0.12 (small: 7%, medium: 12%, large: 19%).
+- **Max speed**: Capped at 30 units/tick (but sustained high speed is impractical due to energy cost).
+- **Projectiles**: Travel at **18 units/tick**. Spawn at edge of rubot (position + rubot radius + bullet radius). Can hit anyone including the shooter.
+- **Wall collision**: `2 + speed x 0.75` damage + momentum-absorbing bounce. At max speed: 25 damage. Bounce retains velocity x mass x 0.12 (small: 7%, medium: 12%, large: 19%).
 - **Rubot collision**: `2 + attacker_mass x attacker_speed x 0.5` damage + push apart. Momentum-based.
 
 #### Callbacks
@@ -414,10 +414,10 @@ battle.run(renderer: Rubowar::Renderers::Terminal)
 - Medium: 10 x 1.5 = 15 damage/tick
 - Large: 12 x 1.5 = 18 damage/tick
 
-### Collision Damage @ Max Speed (20)
-- Small hitting: 2 + 0.56 x 20 x 0.5 = 8 damage
-- Medium hitting: 2 + 1.0 x 20 x 0.5 = 12 damage
-- Large hitting: 2 + 1.56 x 20 x 0.5 = 18 damage
+### Collision Damage @ Max Speed (30)
+- Small hitting: 2 + 0.56 x 30 x 0.5 = 10 damage
+- Medium hitting: 2 + 1.0 x 30 x 0.5 = 17 damage
+- Large hitting: 2 + 1.56 x 30 x 0.5 = 25 damage
 
 ---
 

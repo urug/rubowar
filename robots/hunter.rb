@@ -11,17 +11,17 @@ class Hunter
   WALL_BUFFER = 80
   PULSE_DISTANCE = 300
   SCAN_ANGLE = 70
-  SCAN_ANGLE_WIDE = 100  # Used when losing target
+  SCAN_ANGLE_WIDE = 100 # Used when losing target
   SCAN_DISTANCE = 350
   PATROL_SPEED = 5
   CHASE_SPEED = 7
-  BULLET_SPEED = 15 # Approximate bullet speed for lead calculation
-  GIVE_UP_TICKS = 50  # More persistence before reverting to patrol
+  BULLET_SPEED = Rubowar::Config::Combat::BULLET_SPEED
+  GIVE_UP_TICKS = 50 # More persistence before reverting to patrol
   ENERGON_COLLECT_RANGE = 250
 
   def on_spawn
     @mode = :patrol
-    @target_x = nil  # Lead-adjusted for shooting
+    @target_x = nil # Lead-adjusted for shooting
     @target_y = nil
     @target_base_x = nil  # Raw position for movement
     @target_base_y = nil
@@ -62,8 +62,8 @@ class Hunter
     # Estimate attacker position based on bullet direction
     attacker_angle = (direction + 180) % 360
     estimated_dist = 200
-    @target_base_x = x + Math.cos(attacker_angle * Math::PI / 180) * estimated_dist
-    @target_base_y = y + Math.sin(attacker_angle * Math::PI / 180) * estimated_dist
+    @target_base_x = x + (Math.cos(attacker_angle * Math::PI / 180) * estimated_dist)
+    @target_base_y = y + (Math.sin(attacker_angle * Math::PI / 180) * estimated_dist)
     @target_x = @target_base_x
     @target_y = @target_base_y
     @mode = :chase
@@ -83,7 +83,7 @@ class Hunter
 
   def patrol_tick
     # SENSE: Pulse periodically to find targets
-    @pulse_cooldown -= 1 if @pulse_cooldown > 0
+    @pulse_cooldown -= 1 if @pulse_cooldown.positive?
     if @pulse_cooldown <= 0
       pulse(distance: PULSE_DISTANCE)
       @pulse_cooldown = 3
@@ -101,7 +101,7 @@ class Hunter
 
     # Check for energons when no combat target
     if energy < 80
-      energon = find_best_energon
+      energon = find_nearest_energon(max_distance: ENERGON_COLLECT_RANGE)
       if energon
         @target_energon = energon
         @mode = :collecting
@@ -139,7 +139,7 @@ class Hunter
     end
 
     # Try wider pulse when losing target
-    if @ticks_without_target > 10 && @ticks_without_target % 5 == 0
+    if @ticks_without_target > 10 && (@ticks_without_target % 5).zero?
       pulse(distance: PULSE_DISTANCE + 100)
       if pulse_result
         rubots = pulse_result.select { |t| t[:type] == :rubot }
@@ -163,7 +163,7 @@ class Hunter
     target_angle = angle_to(@target_x, @target_y)
     turret_diff = normalize_angle(target_angle - turret_angle)
 
-    @probe_cooldown -= 1 if @probe_cooldown > 0
+    @probe_cooldown -= 1 if @probe_cooldown.positive?
     if @probe_cooldown <= 0 && turret_diff.abs < 15 && energy > 15
       probe(:position, :velocity, :health)
       @probe_cooldown = 8
@@ -181,17 +181,15 @@ class Hunter
     base_y = @target_base_y || @target_y
     dist = distance_to(base_x, base_y)
 
-    target_speed = (@target_vx && @target_vy) ? Math.sqrt(@target_vx**2 + @target_vy**2) : 0
+    target_speed = @target_vx && @target_vy ? Math.sqrt((@target_vx**2) + (@target_vy**2)) : 0
 
-    move_angle = if target_speed < 2
-                   angle_to(base_x, base_y)
-                 elsif dist > 180
+    move_angle = if target_speed >= 2 && dist > 180
                    calculate_intercept_angle
                  else
                    angle_to(base_x, base_y)
                  end
 
-    move_speed = (target_speed < 2 && dist > 100) ? 6 : CHASE_SPEED
+    move_speed = target_speed < 2 && dist > 100 ? 6 : CHASE_SPEED
     thrust(speed: move_speed, angle: move_angle)
 
     # === COMBAT PHASE ===
@@ -226,8 +224,8 @@ class Hunter
       time_to_target = dist / BULLET_SPEED
       lead_ticks = [time_to_target, 15].min # Cap lead at 15 ticks
 
-      @target_x = @target_base_x + @target_vx * lead_ticks
-      @target_y = @target_base_y + @target_vy * lead_ticks
+      @target_x = @target_base_x + (@target_vx * lead_ticks)
+      @target_y = @target_base_y + (@target_vy * lead_ticks)
     else
       @target_x = @target_base_x
       @target_y = @target_base_y
@@ -242,7 +240,7 @@ class Hunter
     return angle_to(base_x, base_y) unless @target_vx && @target_vy
 
     # Calculate target speed
-    target_speed = Math.sqrt(@target_vx**2 + @target_vy**2)
+    target_speed = Math.sqrt((@target_vx**2) + (@target_vy**2))
     return angle_to(base_x, base_y) if target_speed < 1
 
     # Calculate intercept point - where target will be when we arrive
@@ -250,8 +248,8 @@ class Hunter
     time_to_intercept = dist / CHASE_SPEED
 
     # Predict where target will be
-    intercept_x = base_x + @target_vx * time_to_intercept * 0.7
-    intercept_y = base_y + @target_vy * time_to_intercept * 0.7
+    intercept_x = base_x + (@target_vx * time_to_intercept * 0.7)
+    intercept_y = base_y + (@target_vy * time_to_intercept * 0.7)
 
     # Clamp to arena bounds
     intercept_x = intercept_x.clamp(30, arena_width - 30)
@@ -292,34 +290,19 @@ class Hunter
 
   def avoid_walls
     if x < WALL_BUFFER
-      @patrol_angle = rand(60) - 30 # Roughly east
+      @patrol_angle = rand(-30..29) # Roughly east
     elsif x > arena_width - WALL_BUFFER
-      @patrol_angle = 180 + rand(60) - 30 # Roughly west
+      @patrol_angle = rand(150..209) # Roughly west
     elsif y < WALL_BUFFER
-      @patrol_angle = 90 + rand(60) - 30 # Roughly north
+      @patrol_angle = rand(60..119) # Roughly north
     elsif y > arena_height - WALL_BUFFER
-      @patrol_angle = 270 + rand(60) - 30 # Roughly south
+      @patrol_angle = rand(240..299) # Roughly south
     end
-  end
-
-  def distance_to(target_x, target_y)
-    Math.sqrt((target_x - x)**2 + (target_y - y)**2)
-  end
-
-  def angle_to(target_x, target_y)
-    Math.atan2(target_y - y, target_x - x) * 180 / Math::PI
-  end
-
-  def normalize_angle(angle)
-    angle = angle % 360
-    angle -= 360 if angle > 180
-    angle += 360 if angle < -180
-    angle
   end
 
   def collecting_tick
     # Pulse to check for enemies while collecting
-    @pulse_cooldown -= 1 if @pulse_cooldown > 0
+    @pulse_cooldown -= 1 if @pulse_cooldown.positive?
     if @pulse_cooldown <= 0
       pulse(distance: PULSE_DISTANCE)
       @pulse_cooldown = 3
@@ -349,20 +332,5 @@ class Hunter
 
     thrust(speed: collect_speed, angle: energon_angle)
     turret(8)
-  end
-
-  def find_best_energon
-    return nil if energons.empty?
-
-    nearby = energons.select { |e| distance_to(e[:x], e[:y]) < ENERGON_COLLECT_RANGE }
-    return nil if nearby.empty?
-
-    nearby.min_by { |e| distance_to(e[:x], e[:y]) }
-  end
-
-  def energon_still_exists?(target)
-    return false unless target
-
-    energons.any? { |e| e[:x] == target[:x] && e[:y] == target[:y] }
   end
 end

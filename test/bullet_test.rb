@@ -20,13 +20,13 @@ describe Rubowar::Bullet do
     it "sets radius to constant value" do
       bullet = Rubowar::Bullet.new(x: 0, y: 0, angle: 0, damage: 10, owner: nil)
 
-      _(bullet.radius).must_equal Rubowar::Bullet::RADIUS
+      _(bullet.radius).must_equal Rubowar::Config::Combat::BULLET_RADIUS
     end
 
     it "calculates velocity from angle 0 (east)" do
       bullet = Rubowar::Bullet.new(x: 0, y: 0, angle: 0, damage: 10, owner: nil)
 
-      _(bullet.velocity_x).must_equal Rubowar::Bullet::SPEED
+      _(bullet.velocity_x).must_equal Rubowar::Config::Combat::BULLET_SPEED
       _(bullet.velocity_y).must_be_close_to 0, 0.001
     end
 
@@ -34,13 +34,13 @@ describe Rubowar::Bullet do
       bullet = Rubowar::Bullet.new(x: 0, y: 0, angle: 90, damage: 10, owner: nil)
 
       _(bullet.velocity_x).must_be_close_to 0, 0.001
-      _(bullet.velocity_y).must_equal Rubowar::Bullet::SPEED
+      _(bullet.velocity_y).must_equal Rubowar::Config::Combat::BULLET_SPEED
     end
 
     it "calculates velocity from angle 180 (west)" do
       bullet = Rubowar::Bullet.new(x: 0, y: 0, angle: 180, damage: 10, owner: nil)
 
-      _(bullet.velocity_x).must_equal(-Rubowar::Bullet::SPEED)
+      _(bullet.velocity_x).must_equal(-Rubowar::Config::Combat::BULLET_SPEED)
       _(bullet.velocity_y).must_be_close_to 0, 0.001
     end
   end
@@ -51,7 +51,7 @@ describe Rubowar::Bullet do
 
       bullet.update
 
-      _(bullet.x).must_equal 100 + Rubowar::Bullet::SPEED
+      _(bullet.x).must_equal 100 + Rubowar::Config::Combat::BULLET_SPEED
       _(bullet.y).must_be_close_to 100, 0.001
     end
   end
