@@ -9,15 +9,24 @@ class Tracker
   size :large
 
   def tick
-    # Update target from last tick's sensors
-    acquire_target_from_probe || acquire_target_from_pulse
+    # Try sensors in order: probe (precise) → scan (arc) → pulse (360°)
+    self.target =
+      acquire_target_from_probe(probe_result) ||
+      acquire_target_from_scan(scan_result) ||
+      acquire_target_from_pulse(pulse_result)
 
-    if target?
-      aim_turret_at_target
-      fire(12) if turret_aligned? && energy > 25
-      probe(:position, :velocity) # Queue probe for next tick
+    if target
+      turret(aim_at_target(target))
+      fire(12) if turret_aligned?(target) && energy > 25
+      probe(:position, :velocity)
+      @tracked_target = target
+    elsif @tracked_target
+      @tracked_target = nil unless scan_result&.any? { |r| r[:type] == :rubot }
+      # Lost target - scan forward arc where we last saw them
+      scan(angle: 120, distance: arena_diagonal * 0.5, velocity: true)
     else
-      pulse(distance: 500) # Queue pulse for next tick
+      # No target - pulse to find one
+      pulse(distance: arena_diagonal * 0.6)
     end
 
     shield(5) if energy > 50 && shield_level < 40

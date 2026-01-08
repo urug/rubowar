@@ -36,84 +36,30 @@ def build_runner(x:, y:, turret_angle: 0, klass: ProbeTestBot)
 end
 
 describe Rubowar::Arena do
-  describe "#calculate_wall_damage" do
-    it "returns base damage when stationary" do
-      arena = build_arena
-      runner = build_runner(x: 100, y: 100)
-      runner.velocity_x = 0
-      runner.velocity_y = 0
-
-      damage = arena.calculate_wall_damage(runner)
-
-      _(damage).must_equal 2
-    end
-
-    it "increases damage with speed" do
-      arena = build_arena
-      runner = build_runner(x: 100, y: 100)
-      runner.velocity_x = 20
-      runner.velocity_y = 0
-
-      damage = arena.calculate_wall_damage(runner)
-
-      _(damage).must_equal 17 # 2 + 20 * 0.75
-    end
-
-    it "does not factor in mass" do
-      arena = build_arena
-      small_runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
-      large_runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
-      small_runner.velocity_x = 20
-      large_runner.velocity_x = 20
-
-      small_damage = arena.calculate_wall_damage(small_runner)
-      large_damage = arena.calculate_wall_damage(large_runner)
-
-      _(small_damage).must_equal large_damage
-    end
-  end
-
   describe "#check_wall_collision" do
-    it "absorbs most velocity on bounce for small rubot" do
+    it "bounces more for small bots and less for large bots" do
       arena = build_arena
-      runner = build_runner(x: 10, y: 100, klass: SmallProbeTestBot)
-      runner.velocity_x = -10.0
-      runner.velocity_y = 0.0
-      arena.runners = [runner]
+      small = build_runner(x: 10, y: 100, klass: SmallProbeTestBot)
+      medium = build_runner(x: 10, y: 200)
+      large = build_runner(x: 10, y: 300, klass: LargeProbeTestBot)
+      [small, medium, large].each do |runner|
+        runner.velocity_x = -10.0
+        runner.velocity_y = 0.0
+      end
+      arena.runners = [small, medium, large]
 
-      arena.check_wall_collision(runner)
+      [small, medium, large].each { |r| arena.check_wall_collision(r) }
 
-      # Small mass (0.5625) * 0.12 = 0.0675 retention
-      # Bounced velocity: 10 * 0.0675 = 0.675
-      _(runner.velocity_x).must_be_close_to 0.675, 0.01
-    end
-
-    it "retains more velocity on bounce for medium rubot" do
-      arena = build_arena
-      runner = build_runner(x: 10, y: 100)
-      runner.velocity_x = -10.0
-      runner.velocity_y = 0.0
-      arena.runners = [runner]
-
-      arena.check_wall_collision(runner)
-
-      # Medium mass (1.0) * 0.12 = 0.12 retention
-      # Bounced velocity: 10 * 0.12 = 1.2
-      _(runner.velocity_x).must_be_close_to 1.2, 0.01
-    end
-
-    it "retains most velocity on bounce for large rubot" do
-      arena = build_arena
-      runner = build_runner(x: 10, y: 100, klass: LargeProbeTestBot)
-      runner.velocity_x = -10.0
-      runner.velocity_y = 0.0
-      arena.runners = [runner]
-
-      arena.check_wall_collision(runner)
-
-      # Large mass (1.5625) * 0.12 = 0.1875 retention
-      # Bounced velocity: 10 * 0.1875 = 1.875
-      _(runner.velocity_x).must_be_close_to 1.875, 0.01
+      # Wall radius = 80 (4x medium bot), mass = 16, restitution = 0.5
+      # Small (0.64): bounces at 4.42
+      # Medium (1.0): bounces at 4.12
+      # Large (1.44): bounces at 3.76
+      _(small.velocity_x).must_be_close_to 4.42, 0.1
+      _(medium.velocity_x).must_be_close_to 4.12, 0.1
+      _(large.velocity_x).must_be_close_to 3.76, 0.1
+      # Small bounces most, large bounces least
+      _(small.velocity_x).must_be :>, medium.velocity_x
+      _(medium.velocity_x).must_be :>, large.velocity_x
     end
 
     it "reverses velocity direction on bounce" do
@@ -156,48 +102,88 @@ describe Rubowar::Arena do
   end
 
   describe "#calculate_collision_damage" do
-    it "returns base damage when stationary" do
+    it "returns base damage when no relative velocity" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100)
-      runner.velocity_x = 0
-      runner.velocity_y = 0
+      attacker = build_runner(x: 100, y: 100)
+      defender = build_runner(x: 140, y: 100)
+      attacker.velocity_x = 0
+      attacker.velocity_y = 0
+      defender.velocity_x = 0
+      defender.velocity_y = 0
 
-      damage = arena.calculate_collision_damage(runner)
+      damage = arena.calculate_collision_damage(attacker, defender)
 
       _(damage).must_equal 2
     end
 
-    it "increases damage with speed for medium rubot" do
+    it "increases damage with closing speed for medium rubot" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100)
-      runner.velocity_x = 20
-      runner.velocity_y = 0
+      attacker = build_runner(x: 100, y: 100)
+      defender = build_runner(x: 140, y: 100)
+      attacker.velocity_x = 20
+      attacker.velocity_y = 0
+      defender.velocity_x = 0
+      defender.velocity_y = 0
 
-      damage = arena.calculate_collision_damage(runner)
+      damage = arena.calculate_collision_damage(attacker, defender)
 
       _(damage).must_equal 12 # 2 + 1.0 * 20 * 0.5
     end
 
-    it "deals less damage for small rubot at same speed" do
+    it "deals less damage for small rubot at same closing speed" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
-      runner.velocity_x = 20
-      runner.velocity_y = 0
+      attacker = build_runner(x: 100, y: 100, klass: SmallProbeTestBot)
+      defender = build_runner(x: 132, y: 100)
+      attacker.velocity_x = 20
+      attacker.velocity_y = 0
+      defender.velocity_x = 0
+      defender.velocity_y = 0
 
-      damage = arena.calculate_collision_damage(runner)
+      damage = arena.calculate_collision_damage(attacker, defender)
 
-      _(damage).must_equal 8 # 2 + 0.5625 * 20 * 0.5 = 2 + 5.625 ≈ 8
+      _(damage).must_equal 8 # 2 + 0.64 * 20 * 0.5 = 2 + 6.4 ≈ 8
     end
 
-    it "deals more damage for large rubot at same speed" do
+    it "deals more damage for large rubot at same closing speed" do
       arena = build_arena
-      runner = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
-      runner.velocity_x = 20
-      runner.velocity_y = 0
+      attacker = build_runner(x: 100, y: 100, klass: LargeProbeTestBot)
+      defender = build_runner(x: 144, y: 100)
+      attacker.velocity_x = 20
+      attacker.velocity_y = 0
+      defender.velocity_x = 0
+      defender.velocity_y = 0
 
-      damage = arena.calculate_collision_damage(runner)
+      damage = arena.calculate_collision_damage(attacker, defender)
 
-      _(damage).must_equal 18 # 2 + 1.5625 * 20 * 0.5 = 2 + 15.625 ≈ 18
+      _(damage).must_equal 16 # 2 + 1.44 * 20 * 0.5 = 2 + 14.4 ≈ 16
+    end
+
+    it "reduces damage when defender flees" do
+      arena = build_arena
+      attacker = build_runner(x: 100, y: 100)
+      defender = build_runner(x: 140, y: 100)
+      attacker.velocity_x = 20
+      attacker.velocity_y = 0
+      defender.velocity_x = 15 # Fleeing at 15, closing speed = 5
+      defender.velocity_y = 0
+
+      damage = arena.calculate_collision_damage(attacker, defender)
+
+      _(damage).must_equal 5 # 2 + 1.0 * 5 * 0.5 = 4.5 ≈ 5
+    end
+
+    it "increases damage on head-on collision" do
+      arena = build_arena
+      attacker = build_runner(x: 100, y: 100)
+      defender = build_runner(x: 140, y: 100)
+      attacker.velocity_x = 15
+      attacker.velocity_y = 0
+      defender.velocity_x = -15 # Charging toward attacker, closing speed = 30
+      defender.velocity_y = 0
+
+      damage = arena.calculate_collision_damage(attacker, defender)
+
+      _(damage).must_equal 17 # 2 + 1.0 * 30 * 0.5 = 17
     end
   end
 
@@ -217,7 +203,7 @@ describe Rubowar::Arena do
 
       mass = arena.mass_factor(runner)
 
-      _(mass).must_equal 0.5625 # (15/20)^2
+      _(mass).must_be_close_to 0.64, 0.001 # (16/20)^2
     end
 
     it "returns area ratio for large rubot" do
@@ -226,7 +212,7 @@ describe Rubowar::Arena do
 
       mass = arena.mass_factor(runner)
 
-      _(mass).must_equal 1.5625 # (25/20)^2
+      _(mass).must_be_close_to 1.44, 0.001 # (24/20)^2
     end
   end
 
@@ -477,7 +463,7 @@ describe Rubowar::Arena do
     it "misses small rubot outside its radius" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      small_target = build_runner(x: 200, y: 116, klass: SmallProbeTestBot) # Offset 16, outside radius 15
+      small_target = build_runner(x: 200, y: 117, klass: SmallProbeTestBot) # Offset 17, outside radius 16
       arena.runners = [shooter, small_target]
 
       result = arena.find_probe_target(shooter)
@@ -485,10 +471,10 @@ describe Rubowar::Arena do
       _(result).must_be_nil
     end
 
-    it "detects large rubot with radius 25" do
+    it "detects large rubot with radius 24" do
       arena = build_arena
       shooter = build_runner(x: 100, y: 100, turret_angle: 0)
-      large_target = build_runner(x: 200, y: 124, klass: LargeProbeTestBot) # Offset 24, inside radius 25
+      large_target = build_runner(x: 200, y: 123, klass: LargeProbeTestBot) # Offset 23, inside radius 24
       arena.runners = [shooter, large_target]
 
       result = arena.find_probe_target(shooter)

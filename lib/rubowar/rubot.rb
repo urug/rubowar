@@ -32,7 +32,7 @@
 #
 # [utilities]
 # geometry = ["distance_to", "angle_to", "normalize_angle", "lead_position", "lead_angle"]
-# awareness = ["near_wall?", "nearest_wall_distance", "find_nearest_energon", "energon_still_exists?"]
+# awareness = ["near_wall?", "nearest_wall_distance", "arena_diagonal", "find_nearest_energon", "energon_still_exists?"]
 #
 # [callbacks]
 # lifecycle = ["on_spawn", "on_death", "on_hit(damage, direction)", "on_wall", "on_collision(other)", "on_energon(amount)"]
@@ -319,6 +319,11 @@ module Rubowar
     # Check if position is near any wall
     def near_wall?(buffer = 50)
       nearest_wall_distance < buffer
+    end
+
+    # Get arena diagonal (useful for scaling distances to arena size)
+    def arena_diagonal
+      Math.sqrt((arena_width**2) + (arena_height**2))
     end
 
     private

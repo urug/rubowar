@@ -75,7 +75,7 @@ module Rubowar
     def call_on_spawn
       @arena.runners.each do |runner|
         setup_rubot_for_tick(runner)
-        runner.instance.on_spawn
+        runner.safe_callback(:on_spawn)
       end
     end
 
@@ -114,7 +114,7 @@ module Rubowar
       @arena.runners.each do |runner|
         next unless runner.dead?
 
-        runner.instance.on_death
+        runner.safe_callback(:on_death)
         emit(:death, { runner: })
       end
     end

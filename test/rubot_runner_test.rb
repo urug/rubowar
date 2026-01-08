@@ -34,7 +34,7 @@ describe Rubowar::RubotRunner do
     it "starts with full energy" do
       runner = Rubowar::RubotRunner.new(DummyBot)
 
-      _(runner.energy).must_equal Rubowar::Config::Rubot::MAX_ENERGY
+      _(runner.energy).must_equal runner.max_energy
     end
 
     it "starts with zero shield" do
@@ -71,10 +71,10 @@ describe Rubowar::RubotRunner do
   end
 
   describe "#radius" do
-    it "returns 15 for small rubots" do
+    it "returns 16 for small rubots" do
       runner = Rubowar::RubotRunner.new(SmallDummyBot)
 
-      _(runner.radius).must_equal 15
+      _(runner.radius).must_equal 16
     end
 
     it "returns 20 for medium rubots" do
@@ -83,10 +83,10 @@ describe Rubowar::RubotRunner do
       _(runner.radius).must_equal 20
     end
 
-    it "returns 25 for large rubots" do
+    it "returns 24 for large rubots" do
       runner = Rubowar::RubotRunner.new(LargeDummyBot)
 
-      _(runner.radius).must_equal 25
+      _(runner.radius).must_equal 24
     end
   end
 
@@ -247,11 +247,11 @@ describe Rubowar::RubotRunner do
 
     it "caps energy at max" do
       runner = Rubowar::RubotRunner.new(DummyBot)
-      runner.energy = 95
+      runner.energy = runner.max_energy - 5
 
       runner.regenerate_energy
 
-      _(runner.energy).must_equal Rubowar::Config::Rubot::MAX_ENERGY
+      _(runner.energy).must_equal runner.max_energy
     end
   end
 
@@ -298,8 +298,8 @@ describe Rubowar::RubotRunner do
 
     it "scales velocity to max speed when over" do
       runner = Rubowar::RubotRunner.new(DummyBot)
-      runner.velocity_x = 30.0
-      runner.velocity_y = 40.0
+      runner.velocity_x = 600.0
+      runner.velocity_y = 800.0  # speed = 1000, over cap
 
       runner.clamp_speed
 

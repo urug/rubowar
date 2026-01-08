@@ -20,26 +20,26 @@ module Rubowar
     module Arena
       DEFAULT_WIDTH = 800
       DEFAULT_HEIGHT = 600
-      DEFAULT_FRICTION = 0.95
+      DEFAULT_FRICTION = 0.92
 
       # Spawn distance ratios (relative to arena dimensions)
-      SPAWN_WALL_BUFFER_RATIO = 0.08        # 8% of smaller dimension
-      SPAWN_MIN_DISTANCE_RATIO = 0.12       # 12% of diagonal
-      SPAWN_MAX_DISTANCE_RATIO = 0.50       # 50% of diagonal
+      SPAWN_WALL_BUFFER_RATIO = 0.08   # 8% of smaller dimension
+      SPAWN_MIN_DISTANCE_RATIO = 0.12  # 12% of diagonal
+      SPAWN_MAX_DISTANCE_RATIO = 0.50  # 50% of diagonal
 
       # Energon spawn settings
-      ENERGON_WALL_BUFFER_RATIO = 0.15      # 15% of smaller dimension
+      ENERGON_WALL_BUFFER_RATIO = 0.15 # 15% of smaller dimension
       ENERGON_SPAWN_INTERVAL = 80
     end
 
     module Physics
       COLLISION_BASE_DAMAGE = 2
       COLLISION_VELOCITY_MULTIPLIER = 0.5
-      WALL_VELOCITY_MULTIPLIER = 0.75
-      WALL_BOUNCE_COEFFICIENT = 0.12
+      COLLISION_RESTITUTION = 0.5       # Bounce elasticity (0=inelastic, 1=elastic)
+      WALL_RADIUS = 80                  # Wall collision mass (4x medium bot radius)
       THRUST_MULTIPLIER = 1.5
       STATIONARY_SPEED_THRESHOLD = 0.1
-      MAX_SPEED = 30
+      MAX_SPEED = 999  # Effectively uncapped - physics handles limits
     end
 
     module Combat
@@ -50,13 +50,14 @@ module Rubowar
     end
 
     module Rubot
-      MAX_ENERGY = 100
       SHIELD_DECAY_RATE = 0.12
 
+      # Small: low HP/regen but high energy cap (save for big hits/evasion)
+      # Large: high HP/regen but low energy cap (steady pressure)
       SIZES = {
-        small: { radius: 15, energy_regen: 8, max_health: 80 },
-        medium: { radius: 20, energy_regen: 10, max_health: 100 },
-        large: { radius: 25, energy_regen: 12, max_health: 120 }
+        small: { radius: 16, energy_regen: 8, max_health: 80, max_energy: 120 },
+        medium: { radius: 20, energy_regen: 10, max_health: 100, max_energy: 100 },
+        large: { radius: 24, energy_regen: 12, max_health: 120, max_energy: 80 }
       }.freeze
     end
 

@@ -83,16 +83,16 @@ class IntegrationCollectorBot
   end
 
   def on_energon(amount)
-    @energon_collections << { tick: tick_number, amount: amount }
+    @energon_collections << { tick: tick_number, amount: }
   end
 
   def tick
     # Move toward nearest energon if available
     nearest = find_nearest_energon
-    if nearest
-      angle = angle_to(nearest[:x], nearest[:y])
-      thrust(speed: 6, angle: angle)
-    end
+    return unless nearest
+
+    angle = angle_to(nearest[:x], nearest[:y])
+    thrust(speed: 6, angle:)
   end
 end
 
@@ -195,9 +195,7 @@ describe "Integration Tests" do
       # Shooter should eventually kill stationary bot
       stationary = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationStationaryBot) }
 
-      if stationary.dead?
-        _(battle.winner.instance).must_be_instance_of IntegrationShooterBot
-      end
+      _(battle.winner.instance).must_be_instance_of IntegrationShooterBot if stationary.dead?
     end
 
     it "uses damage dealt as tiebreaker when timeout" do
@@ -320,9 +318,7 @@ describe "Integration Tests" do
       positions = mover.instance.positions_when_fired
 
       # Position at tick 2 should be greater than tick 1 (moved east)
-      if positions.length >= 2
-        _(positions[1][:x]).must_be :>, positions[0][:x]
-      end
+      _(positions[1][:x]).must_be :>, positions[0][:x] if positions.length >= 2
 
       # Bullets should spawn from post-movement position
       bullet_spawns = battle.events.select { |e| e[:type] == :tick }.map do |e|
@@ -552,12 +548,12 @@ describe "Integration Tests" do
       battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 5)
 
       bot = battle.arena.runners.first
-      bot.energy = 95
+      bot.energy = bot.max_energy - 5
 
       battle.send(:call_on_spawn)
       battle.send(:run_tick)
 
-      _(bot.energy).must_equal Rubowar::Config::Rubot::MAX_ENERGY
+      _(bot.energy).must_equal bot.max_energy
     end
   end
 end

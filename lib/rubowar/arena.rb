@@ -15,8 +15,8 @@
 # physics = [
 #   "COLLISION_BASE_DAMAGE - Base damage for any collision (2)",
 #   "COLLISION_VELOCITY_MULTIPLIER - Damage scaling with speed (0.5)",
-#   "WALL_BOUNCE_COEFFICIENT - Energy retained on wall bounce (0.12)",
-#   "DEFAULT_FRICTION - Velocity decay per tick (0.95)"
+#   "COLLISION_RESTITUTION - Bounce elasticity (0.5)",
+#   "DEFAULT_FRICTION - Velocity decay per tick (0.92)"
 # ]
 # sensing = [
 #   "Probe - Check turret line for target, returns attributes",
@@ -189,34 +189,72 @@ module Rubowar
     end
 
     def check_wall_collision(runner)
-      hit_wall = false
-      bounce_factor = mass_factor(runner) * Config::Physics::WALL_BOUNCE_COEFFICIENT
+      hit_x = false
+      hit_y = false
+      total_damage = 0
 
+      # Check X walls
       if (runner.x - runner.radius).negative?
         runner.x = runner.radius
-        runner.velocity_x = -runner.velocity_x * bounce_factor
-        hit_wall = true
+        hit_x = true
+        total_damage += handle_wall_bounce_x(runner, 0)
       elsif runner.x + runner.radius > @width
         runner.x = @width - runner.radius
-        runner.velocity_x = -runner.velocity_x * bounce_factor
-        hit_wall = true
+        hit_x = true
+        total_damage += handle_wall_bounce_x(runner, @width)
       end
 
+      # Check Y walls
       if (runner.y - runner.radius).negative?
         runner.y = runner.radius
-        runner.velocity_y = -runner.velocity_y * bounce_factor
-        hit_wall = true
+        hit_y = true
+        total_damage += handle_wall_bounce_y(runner, 0)
       elsif runner.y + runner.radius > @height
         runner.y = @height - runner.radius
-        runner.velocity_y = -runner.velocity_y * bounce_factor
-        hit_wall = true
+        hit_y = true
+        total_damage += handle_wall_bounce_y(runner, @height)
       end
 
-      return unless hit_wall
+      return unless hit_x || hit_y
 
-      runner.apply_collision_damage(calculate_wall_damage(runner))
-      runner.instance.on_wall
+      runner.apply_collision_damage(total_damage)
+      runner.safe_callback(:on_wall)
     end
+
+    def handle_wall_bounce_x(runner, wall_x)
+      wall = build_wall_collider
+      wall.x = wall_x
+      wall.y = runner.y
+      apply_collision_bounce(runner, wall, (runner.x - wall_x).abs)
+      # Bot hits wall, so bot is attacker (bot's momentum determines damage)
+      calculate_collision_damage(runner, wall)
+    end
+
+    def handle_wall_bounce_y(runner, wall_y)
+      wall = build_wall_collider
+      wall.x = runner.x
+      wall.y = wall_y
+      apply_collision_bounce(runner, wall, (runner.y - wall_y).abs)
+      # Bot hits wall, so bot is attacker (bot's momentum determines damage)
+      calculate_collision_damage(runner, wall)
+    end
+
+    def build_wall_collider
+      # Wall is just a very large stationary robot
+      # Radius determines mass via mass_factor, same elasticity as robot-robot
+      WallCollider.new(
+        radius: wall_radius,
+        velocity_x: 0.0,
+        velocity_y: 0.0
+      )
+    end
+
+    def wall_radius
+      Config::Physics::WALL_RADIUS
+    end
+
+    # Lightweight struct for wall collision - wall is just a big robot
+    WallCollider = Struct.new(:radius, :velocity_x, :velocity_y, :x, :y, keyword_init: true)
 
     def check_rubot_collisions
       @runners.combination(2).each do |runner_a, runner_b|
@@ -238,25 +276,65 @@ module Rubowar
           runner_b.y -= dy * overlap / 2
         end
 
+        # Apply momentum-based bounce
+        apply_collision_bounce(runner_a, runner_b, distance)
+
         # Apply momentum-based damage (bypasses shields - physical impact)
-        damage_to_a = calculate_collision_damage(runner_b)
-        damage_to_b = calculate_collision_damage(runner_a)
+        # Uses relative velocity - rewards dodging away, punishes head-on
+        damage_to_a = calculate_collision_damage(runner_b, runner_a)
+        damage_to_b = calculate_collision_damage(runner_a, runner_b)
 
         runner_a.apply_collision_damage(damage_to_a)
         runner_b.apply_collision_damage(damage_to_b)
 
-        runner_a.instance.on_collision(runner_b.to_state)
-        runner_b.instance.on_collision(runner_a.to_state)
+        runner_a.safe_callback(:on_collision, runner_b.to_state)
+        runner_b.safe_callback(:on_collision, runner_a.to_state)
       end
     end
 
-    def calculate_wall_damage(runner)
-      (Config::Physics::COLLISION_BASE_DAMAGE + (runner.speed * Config::Physics::WALL_VELOCITY_MULTIPLIER)).round
+    def apply_collision_bounce(runner_a, runner_b, distance)
+      return if distance <= 0
+
+      # Collision normal (from A to B)
+      nx = (runner_b.x - runner_a.x) / distance
+      ny = (runner_b.y - runner_a.y) / distance
+
+      # Relative velocity of A with respect to B
+      dvx = runner_a.velocity_x - runner_b.velocity_x
+      dvy = runner_a.velocity_y - runner_b.velocity_y
+
+      # Relative velocity along collision normal
+      dvn = (dvx * nx) + (dvy * ny)
+
+      # Don't bounce if already separating
+      return if dvn.negative?
+
+      # Same restitution for all collisions (robot-robot and robot-wall)
+      restitution = Config::Physics::COLLISION_RESTITUTION
+
+      # Masses based on radius squared (or direct mass for wall)
+      mass_a = mass_factor(runner_a)
+      mass_b = mass_factor(runner_b)
+
+      # Impulse scalar (conservation of momentum with restitution)
+      impulse = -(1 + restitution) * dvn / ((1 / mass_a) + (1 / mass_b))
+
+      # Apply impulse (smaller mass = bigger velocity change)
+      runner_a.velocity_x += (impulse / mass_a) * nx
+      runner_a.velocity_y += (impulse / mass_a) * ny
+      runner_b.velocity_x -= (impulse / mass_b) * nx
+      runner_b.velocity_y -= (impulse / mass_b) * ny
     end
 
-    def calculate_collision_damage(attacker)
+    def calculate_collision_damage(attacker, defender)
+      # Use relative velocity (closing speed) for more realistic physics
+      # Rewards dodging away, punishes head-on collisions
+      rel_vx = attacker.velocity_x - defender.velocity_x
+      rel_vy = attacker.velocity_y - defender.velocity_y
+      closing_speed = Math.sqrt((rel_vx**2) + (rel_vy**2))
+
       mass = mass_factor(attacker)
-      momentum_damage = mass * attacker.speed * Config::Physics::COLLISION_VELOCITY_MULTIPLIER
+      momentum_damage = mass * closing_speed * Config::Physics::COLLISION_VELOCITY_MULTIPLIER
       (Config::Physics::COLLISION_BASE_DAMAGE + momentum_damage).round
     end
 
@@ -285,7 +363,7 @@ module Rubowar
         bullet.owner.damage_dealt += bullet.damage unless runner == bullet.owner
 
         direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
-        runner.instance.on_hit(bullet.damage, direction)
+        runner.safe_callback(:on_hit, bullet.damage, direction)
 
         return true
       end
@@ -315,8 +393,10 @@ module Rubowar
       end
 
       radians = angle * Math::PI / 180
-      runner.velocity_x += Math.cos(radians) * actual_speed
-      runner.velocity_y += Math.sin(radians) * actual_speed
+      # Inertia: heavier bots accelerate slower (a = F/m)
+      acceleration = actual_speed / mass
+      runner.velocity_x += Math.cos(radians) * acceleration
+      runner.velocity_y += Math.sin(radians) * acceleration
       true
     end
 
@@ -572,8 +652,8 @@ module Rubowar
         collector = find_energon_collector(energon)
         if collector
           amount = energon.value_int(tick_number)
-          collector.energy = [collector.energy + amount, Config::Rubot::MAX_ENERGY].min
-          collector.instance.on_energon(amount)
+          collector.energy = [collector.energy + amount, collector.max_energy].min
+          collector.safe_callback(:on_energon, amount)
           collections << { runner: collector, energon:, amount: }
           true # Remove this energon
         else

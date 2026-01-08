@@ -9,8 +9,6 @@ class Coroner
 
   CORNER_BUFFER = 60
   DANGER_DISTANCE = 150
-  SCAN_ANGLE = 60
-  FIRE_TOLERANCE = 10
   BULLET_SPEED = Rubowar::Config::Combat::BULLET_SPEED
 
   def on_spawn
@@ -74,14 +72,11 @@ class Coroner
   def check_for_danger
     return if @mode == :fleeing
 
-    # SENSE: Queue danger pulse for next tick
+    # SENSE: Pulse for nearby threats
     pulse(distance: DANGER_DISTANCE)
-
-    # Process previous pulse results for nearby threats
     return unless pulse_result
 
     rubots = pulse_result.select { |t| t[:type] == :rubot }
-
     return if rubots.empty?
 
     # Something is too close - flee!
@@ -115,15 +110,12 @@ class Coroner
   end
 
   def sweeping_tick
-    # SENSE: Queue new scan for next tick
+    # SENSE: Scan for targets
     scan(angle: 70, distance: scan_distance) if energy > 20
 
-    # Process previous scan results for targets
     if scan_result
       rubots = scan_result.select { |t| t[:type] == :rubot }
-
       if rubots.any?
-        # Found target! Switch to tracking mode
         closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
         @last_target = closest
         @last_target_tick = tick_number
@@ -132,7 +124,7 @@ class Coroner
       end
     end
 
-    # MOVE: Sweep turret to find targets
+    # Sweep turret toward center
     center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
     turret_offset = normalize_angle(turret_angle - center_angle)
 
@@ -149,32 +141,26 @@ class Coroner
   end
 
   def tracking_tick
-    # SENSE: Queue probe to check alignment
+    # SENSE: Probe for position/velocity (7 energy)
     probe(:position, :velocity) if energy > 20
 
-    # Process previous probe result
     if probe_result&.any?
-      # Probe hit! Update target info
       @last_target = probe_result
       @last_target_tick = tick_number
       @ticks_without_probe_hit = 0
     else
-      # No probe hit - increment miss counter
       @ticks_without_probe_hit = (@ticks_without_probe_hit || 0) + 1
-
-      # Give up tracking after too many misses
       if @ticks_without_probe_hit > 20
         @tracking = false
         return
       end
     end
 
-    # MOVE: Aim at predicted target position
+    # Aim with lead prediction
     if @last_target
       target_x = @last_target[:x]
       target_y = @last_target[:y]
 
-      # Lead moving targets
       if @last_target[:velocity_x] && @last_target[:velocity_y]
         dist = distance_to(target_x, target_y)
         lead_time = dist / BULLET_SPEED
@@ -184,13 +170,14 @@ class Coroner
 
       target_angle = angle_to(target_x, target_y)
       turret_diff = normalize_angle(target_angle - turret_angle)
-
-      # Only adjust turret if significantly off - otherwise hold steady for probe
       turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
     end
 
-    # COMBAT: Fire if probe detected a target
-    fire(15) if probe_result&.any? && energy > 25
+    # Fire on probe hit - bigger shot if flush with energy
+    if probe_result&.any? && energy > 25
+      shot = energy > 60 ? 25 : 15
+      fire(shot)
+    end
   end
 
   def fleeing_tick
@@ -210,7 +197,6 @@ class Coroner
   end
 
   def scan_distance
-    # Scale scan distance to arena size
-    @scan_distance ||= (Math.sqrt((arena_width**2) + (arena_height**2)) * 0.6).round.clamp(300, 700)
+    @scan_distance ||= (arena_diagonal * 0.6).round.clamp(300, 700)
   end
 end
