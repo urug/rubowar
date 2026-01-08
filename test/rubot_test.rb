@@ -5,21 +5,21 @@ require "test_helper"
 class TestBot
   include Rubowar::Rubot
 
-  def tick; end
+  def act; end
 end
 
 class SmallBot
   include Rubowar::Rubot
 
   size :small
-  def tick; end
+  def act; end
 end
 
 class LargeBot
   include Rubowar::Rubot
 
   size :large
-  def tick; end
+  def act; end
 end
 
 def build_bot(energy: 50, health: 100)

@@ -6,8 +6,8 @@ class Spinner
 
   size :medium
 
-  def tick
-    # SENSE: Queue probe for next tick
+  def act
+    # SENSE: Queue probe for next chronon
     probe
 
     # MOVE: Spin turret

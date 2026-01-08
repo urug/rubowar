@@ -8,7 +8,7 @@ class Tracker
 
   size :large
 
-  def tick
+  def act
     # Try sensors in order: probe (precise) → scan (arc) → pulse (360°)
     self.target =
       acquire_target_from_probe(probe_result) ||

@@ -11,7 +11,7 @@
 # Config::Combat = "Fire damage, turret turning, bullet properties"
 # Config::Rubot = "Size definitions, energy, shields"
 # Config::Energon = "Pickup radius, value growth"
-# Config::Battle = "Game loop settings, tick timeout"
+# Config::Battle = "Game loop settings, chronon timeout"
 # Config::Sensing = "Probe, scan, pulse, detect costs"
 # Config::Targeting = "SimpleTargeting defaults"
 
@@ -29,17 +29,18 @@ module Rubowar
 
       # Energon spawn settings
       ENERGON_WALL_BUFFER_RATIO = 0.15 # 15% of smaller dimension
-      ENERGON_SPAWN_INTERVAL = 80
+      ENERGON_SPAWN_INTERVAL = 60
     end
 
     module Physics
       COLLISION_BASE_DAMAGE = 2
       COLLISION_VELOCITY_MULTIPLIER = 0.5
-      COLLISION_RESTITUTION = 0.5       # Bounce elasticity (0=inelastic, 1=elastic)
-      WALL_RADIUS = 80                  # Wall collision mass (4x medium bot radius)
+      COLLISION_ELASTICITY = 0.5       # Bot-bot bounce elasticity (0=inelastic, 1=elastic)
+      WALL_ELASTICITY = 0.2            # Wall bounce elasticity (lower = stickier walls)
+      WALL_MASS = 24.0 # Effective mass of walls (heavy = bots bounce more)
       THRUST_MULTIPLIER = 1.5
       STATIONARY_SPEED_THRESHOLD = 0.1
-      MAX_SPEED = 999  # Effectively uncapped - physics handles limits
+      MAX_SPEED = 999 # Effectively uncapped - physics handles limits
     end
 
     module Combat
@@ -68,10 +69,10 @@ module Rubowar
     end
 
     module Battle
-      DEFAULT_TICK_LIMIT = 10_000
+      DEFAULT_CHRONON_LIMIT = 10_000
       ERROR_DAMAGE = 10
-      TICK_TIMEOUT = 0.1          # 100ms max per tick
-      TIMEOUT_DAMAGE = 50         # Severe penalty for timeouts
+      CHRONON_TIMEOUT = 0.1          # 100ms max per chronon
+      TIMEOUT_DAMAGE = 50            # Severe penalty for timeouts
     end
 
     module Sensing
@@ -105,10 +106,10 @@ module Rubowar
 
     module Targeting
       BULLET_SPEED = 18
-      MAX_LEAD_TICKS = 15
+      MAX_LEAD_CHRONONS = 15
       ALIGNMENT_TOLERANCE = 15    # degrees
-      MAX_TURRET_TURN = 20        # degrees per tick
-      TARGET_TIMEOUT = 30         # ticks before target goes stale
+      MAX_TURRET_TURN = 20        # degrees per chronon
+      TARGET_TIMEOUT = 30         # chronons before target goes stale
     end
   end
 end

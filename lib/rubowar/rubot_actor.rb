@@ -5,7 +5,7 @@
 # responsibility = "Track position, health, energy, and stats for each rubot"
 # pattern = "State Container"
 #
-# [class.RubotRunner]
+# [class.RubotActor]
 # purpose = "Wraps a Rubot instance with mutable game state"
 # note = "Players never interact with this directly - they get immutable RubotState snapshots"
 # collaborators = ["Arena", "Battle", "RubotState"]
@@ -21,7 +21,7 @@
 # apply_collision_damage = "Physical impact, bypasses shields"
 
 module Rubowar
-  class RubotRunner
+  class RubotActor
     attr_accessor :x, :y, :velocity_x, :velocity_y, :turret_angle, :health, :energy, :shield_level, :damage_dealt,
                   :damage_taken, :times_probed, :times_scanned, :times_pulsed
     attr_reader :size, :rubot_class, :instance
@@ -146,6 +146,91 @@ module Rubowar
       scale = Config::Physics::MAX_SPEED / current_speed
       @velocity_x *= scale
       @velocity_y *= scale
+    end
+
+    def apply_friction(friction)
+      @velocity_x *= friction
+      @velocity_y *= friction
+    end
+
+    def move
+      @x += @velocity_x
+      @y += @velocity_y
+    end
+
+    def set_position(x, y)
+      @x = x
+      @y = y
+    end
+
+    def set_velocity(vx, vy)
+      @velocity_x = vx
+      @velocity_y = vy
+    end
+
+    def adjust_velocity(dvx, dvy)
+      @velocity_x += dvx
+      @velocity_y += dvy
+    end
+
+    def adjust_position(dx, dy)
+      @x += dx
+      @y += dy
+    end
+
+    def add_shield(amount)
+      @shield_level = [@shield_level + amount, max_shield].min
+    end
+
+    def process_detect
+      return false unless spend_energy(SensorCalculations.detect_cost)
+
+      @instance.detect_result = {
+        probed: @times_probed,
+        scanned: @times_scanned,
+        pulsed: @times_pulsed
+      }
+      true
+    end
+
+    def turn_turret(degrees)
+      cost = (degrees.abs / Config::Combat::TURRET_TURN_DIVISOR).ceil
+      return false unless spend_energy(cost)
+
+      @turret_angle = (@turret_angle + degrees) % 360
+      true
+    end
+
+    def increase_shielding(energy)
+      return false unless spend_energy(energy)
+
+      add_shield(energy)
+      true
+    end
+
+    def thrust(speed:, angle:)
+      return false if @energy <= 0
+
+      mass = Physics.mass_factor(radius)
+      direction_multiplier = Physics.thrust_direction_multiplier(
+        vx: @velocity_x, vy: @velocity_y,
+        thrust_angle: angle, speed: self.speed
+      )
+      required_energy = Physics.thrust_cost(speed: speed, mass: mass, direction_multiplier: direction_multiplier)
+
+      if @energy >= required_energy
+        @energy -= required_energy
+        actual_speed = speed
+      else
+        actual_speed = Physics.thrust_speed_from_energy(
+          energy: @energy, mass: mass, direction_multiplier: direction_multiplier
+        )
+        @energy = 0
+      end
+
+      velocity = Physics.thrust_velocity(speed: actual_speed, angle: angle, mass: mass)
+      adjust_velocity(velocity[:vx], velocity[:vy])
+      true
     end
 
     # Safely call a method on the rubot instance, penalizing errors with damage

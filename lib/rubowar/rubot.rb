@@ -7,7 +7,7 @@
 #
 # [module.Rubot]
 # purpose = "Base module for all player-created rubots"
-# usage = "class MyBot; include Rubowar::Rubot; def tick; ...; end; end"
+# usage = "class MyBot; include Rubowar::Rubot; def act; ...; end; end"
 #
 # [actions]
 # movement = [
@@ -16,23 +16,24 @@
 # ]
 # combat = [
 #   "fire(energy) - Fire bullet, damage = energy * 1.5",
-#   "shield(energy) - Add to shield, absorbs damage, decays 12%/tick"
+#   "shield(energy) - Add to shield, absorbs damage, decays 12%/chronon"
 # ]
 # sensing = [
 #   "probe(*attributes) - Check turret line for target (1-16 energy)",
 #   "scan(angle:, distance:) - Arc scan from turret direction",
 #   "pulse(distance:) - 360° radar ping around self",
-#   "detect - Counter-intel: who scanned you this tick"
+#   "detect - Counter-intel: who scanned you this chronon"
 # ]
 #
 # [state_access]
 # self = ["x", "y", "velocity_x", "velocity_y", "speed", "health", "energy", "shield_level", "turret_angle"]
-# arena = ["arena_width", "arena_height", "tick_number", "energons", "live_rubot_count"]
+# arena = ["arena_width", "arena_height", "chronons", "energons", "live_rubot_count"]
 # results = ["probe_result", "scan_result", "pulse_result", "detect_result"]
 #
 # [utilities]
 # geometry = ["distance_to", "angle_to", "normalize_angle", "lead_position", "lead_angle"]
-# awareness = ["near_wall?", "nearest_wall_distance", "arena_diagonal", "find_nearest_energon", "energon_still_exists?"]
+# awareness = ["near_wall?", "nearest_wall_distance", "nearest_wall", "wall_distance", "approaching_wall?", "arena_diagonal", "find_nearest_energon", "energon_still_exists?"]
+# momentum = ["velocity_angle", "momentum_aligned?"]
 #
 # [callbacks]
 # lifecycle = ["on_spawn", "on_death", "on_hit(damage, direction)", "on_wall", "on_collision(other)", "on_energon(amount)"]
@@ -44,15 +45,14 @@ module Rubowar
     def self.included(klass)
       klass.extend(ClassMethods)
       klass.extend(Forwardable)
-      klass.include(SensingCosts)
 
       # State accessors for game to set, rubots to read
       klass.attr_accessor :rubot_state, :arena_state, :actions
 
-      # Sensing results from previous tick (set by engine, read by rubot)
+      # Sensing results from previous chronon (set by engine, read by rubot)
       klass.attr_accessor :probe_result, :scan_result, :pulse_result, :detect_result
 
-      # Tracks energy committed to actions this tick (reset by engine each tick)
+      # Tracks energy committed to actions this chronon (reset by engine each chronon)
       klass.attr_accessor :_pending_energy_spend
 
       # Delegate rubot state accessors
@@ -64,7 +64,7 @@ module Rubowar
 
       # Delegate arena state accessors
       klass.def_delegators :arena_state,
-                           :arena_width, :arena_height, :friction, :tick_number, :energons, :live_rubot_count,
+                           :arena_width, :arena_height, :friction, :chronons, :energons, :live_rubot_count,
                            :energon_spawn_interval, :energon_growth_rate
     end
 
@@ -80,7 +80,7 @@ module Rubowar
       end
     end
 
-    # Action methods (queue for execution after tick)
+    # Action methods (queue for execution after act)
 
     # Thrust in the specified direction (world coordinates, 0° = east, 90° = north).
     # Energy cost is calculated based on desired speed and momentum change:
@@ -116,7 +116,7 @@ module Rubowar
     PROBE_ATTRIBUTES = %i[size position velocity turret_angle shield health energy].freeze
 
     # Queues a probe action. Returns true if enough energy, false otherwise.
-    # Results from the previous tick's probe are available via probe_result.
+    # Results from the previous chronon's probe are available via probe_result.
     #
     # Probe with no arguments defaults to :size (1 energy) - a detection ping that
     # tells you something is there and its size, but not where.
@@ -142,7 +142,7 @@ module Rubowar
       invalid = attributes - PROBE_ATTRIBUTES
       raise ArgumentError, "Invalid probe attributes: #{invalid.join(", ")}" if invalid.any?
 
-      cost = probe_cost(attributes)
+      cost = SensorCalculations.probe_cost(attributes)
       return false unless can_afford?(cost)
 
       commit_energy(cost)
@@ -151,7 +151,7 @@ module Rubowar
     end
 
     # Queues a scan action. Returns true if enough energy, false otherwise.
-    # Results from the previous tick's scan are available via scan_result.
+    # Results from the previous chronon's scan are available via scan_result.
     #
     # Scan performs an arc scan centered on the turret direction.
     #
@@ -167,7 +167,7 @@ module Rubowar
       raise ArgumentError, "angle must be positive" if angle <= 0
       raise ArgumentError, "distance must be positive" if distance <= 0
 
-      cost = scan_cost(angle:, distance:, velocity:, owner:)
+      cost = SensorCalculations.scan_cost(angle:, distance:, velocity:, owner:)
       return false unless can_afford?(cost)
 
       commit_energy(cost)
@@ -176,7 +176,7 @@ module Rubowar
     end
 
     # Queues a pulse action. Returns true if enough energy, false otherwise.
-    # Results from the previous tick's pulse are available via pulse_result.
+    # Results from the previous chronon's pulse are available via pulse_result.
     #
     # Pulse performs an omnidirectional radar ping centered on the rubot.
     #
@@ -189,7 +189,7 @@ module Rubowar
     def pulse(distance:, owner: false)
       raise ArgumentError, "distance must be positive" if distance <= 0
 
-      cost = pulse_cost(distance:, owner:)
+      cost = SensorCalculations.pulse_cost(distance:, owner:)
       return false unless can_afford?(cost)
 
       commit_energy(cost)
@@ -201,13 +201,13 @@ module Rubowar
     # Results are available via detect_result after the sense phase completes.
     #
     # Detect performs counter-intelligence: reports how many times you were
-    # probed, scanned, and pulsed in the current tick's sense phase.
+    # probed, scanned, and pulsed in the current chronon's sense phase.
     #
     # Energy cost: 2
     #
     # Check detect_result for data: { probed: N, scanned: N, pulsed: N }
     def detect
-      cost = detect_cost
+      cost = SensorCalculations.detect_cost
       return false unless can_afford?(cost)
 
       commit_energy(cost)
@@ -224,8 +224,8 @@ module Rubowar
     def on_energon(amount); end
 
     # Required method for rubots to implement
-    def tick
-      raise NotImplementedError, "Rubot must implement #tick method"
+    def act
+      raise NotImplementedError, "Rubot must implement #act method"
     end
 
     # === Utility methods (available to all rubots) ===
@@ -272,15 +272,15 @@ module Rubowar
     # @param target_x, target_y - current target position
     # @param velocity_x, velocity_y - target velocity (nil if unknown)
     # @param projectile_speed - speed of bullet (default: 18, the game's bullet speed)
-    # @param max_lead_ticks - cap on prediction distance (default: 15)
-    def lead_position(target_x, target_y, velocity_x, velocity_y, projectile_speed: 18, max_lead_ticks: 15)
+    # @param max_lead_chronons - cap on prediction distance (default: 15)
+    def lead_position(target_x, target_y, velocity_x, velocity_y, projectile_speed: 18, max_lead_chronons: 15)
       return [target_x, target_y] unless velocity_x && velocity_y
 
       dist = distance_to(target_x, target_y)
-      lead_ticks = [dist / projectile_speed, max_lead_ticks].min
+      lead_chronons = [dist / projectile_speed, max_lead_chronons].min
 
-      lead_x = target_x + (velocity_x * lead_ticks)
-      lead_y = target_y + (velocity_y * lead_ticks)
+      lead_x = target_x + (velocity_x * lead_chronons)
+      lead_y = target_y + (velocity_y * lead_chronons)
 
       # Clamp to arena bounds
       [
@@ -321,6 +321,64 @@ module Rubowar
       nearest_wall_distance < buffer
     end
 
+    # Get which wall is nearest (:left, :right, :bottom, :top)
+    def nearest_wall
+      distances = { left: x, right: arena_width - x, bottom: y, top: arena_height - y }
+      distances.min_by { |_, d| d }.first
+    end
+
+    # Get distance to wall in a specific direction (RoboWar WALL style)
+    # @param angle - direction in degrees (0=east, 90=north, 180=west, 270=south)
+    # Returns distance to wall if traveling in that direction
+    def wall_distance(angle)
+      radians = angle * Math::PI / 180
+      dx = Math.cos(radians)
+      dy = Math.sin(radians)
+
+      # Calculate distance to each wall in this direction
+      distances = []
+      distances << ((arena_width - x) / dx) if dx.positive?   # right wall
+      distances << (-x / dx) if dx.negative?                  # left wall
+      distances << ((arena_height - y) / dy) if dy.positive?  # top wall
+      distances << (-y / dy) if dy.negative?                  # bottom wall
+
+      distances.min || Float::INFINITY
+    end
+
+    # Check if current velocity is carrying us toward a wall
+    # @param buffer - distance from wall to consider "approaching"
+    # Returns true if momentum will hit a wall within buffer distance
+    def approaching_wall?(buffer = 60)
+      return false if speed < 0.5 # Stationary
+
+      (x < buffer && velocity_x.negative?) ||
+        (x > arena_width - buffer && velocity_x.positive?) ||
+        (y < buffer && velocity_y.negative?) ||
+        (y > arena_height - buffer && velocity_y.positive?)
+    end
+
+    # Get current movement direction in degrees (from velocity)
+    # Returns nil if stationary
+    def velocity_angle
+      return nil if speed < 0.1
+
+      Math.atan2(velocity_y, velocity_x) * 180 / Math::PI
+    end
+
+    # Check if current momentum is aligned with desired direction
+    # @param desired_angle - direction we want to go (degrees)
+    # @param tolerance - how many degrees off is acceptable (default 45)
+    # Returns true if velocity is within tolerance of desired angle
+    def momentum_aligned?(desired_angle, tolerance: 45)
+      return true if speed < 0.5 # Stationary counts as aligned
+
+      current = velocity_angle
+      return true unless current
+
+      diff = normalize_angle(desired_angle - current).abs
+      diff <= tolerance
+    end
+
     # Get arena diagonal (useful for scaling distances to arena size)
     def arena_diagonal
       Math.sqrt((arena_width**2) + (arena_height**2))
@@ -328,7 +386,7 @@ module Rubowar
 
     private
 
-    # Returns energy available for actions this tick
+    # Returns energy available for actions this chronon
     def available_energy
       energy - (@_pending_energy_spend || 0)
     end

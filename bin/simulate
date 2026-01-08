@@ -10,7 +10,7 @@ options = {
   width: 800,
   height: 600,
   friction: 0.95,
-  tick_limit: 1000,
+  chronon_limit: 1000,
   battles: 1,
   format: "text",
   seed: nil
@@ -34,8 +34,8 @@ OptionParser.new do |opts|
     options[:friction] = f
   end
 
-  opts.on("-t", "--ticks LIMIT", Integer, "Tick limit per battle (default: 1000)") do |t|
-    options[:tick_limit] = t
+  opts.on("-t", "--chronons LIMIT", Integer, "Chronon limit per battle (default: 1000)") do |t|
+    options[:chronon_limit] = t
   end
 
   opts.separator ""
@@ -114,14 +114,14 @@ options[:battles].times do |i|
     width: options[:width],
     height: options[:height],
     friction: options[:friction],
-    tick_limit: options[:tick_limit]
+    chronon_limit: options[:chronon_limit]
   )
 
   battle.run
 
   battle_result = {
     battle_number: i + 1,
-    ticks: battle.tick_number,
+    chronons: battle.chronons,
     winner: battle.winner&.rubot_class&.name,
     rubots: battle.arena.runners.map do |r|
       {
@@ -156,7 +156,7 @@ summary = {
     width: options[:width],
     height: options[:height],
     friction: options[:friction],
-    tick_limit: options[:tick_limit]
+    chronon_limit: options[:chronon_limit]
   },
   seed: options[:seed],
   wins:,
@@ -179,7 +179,7 @@ when "csv"
 
   # Data rows
   results.each do |r|
-    row = [r[:battle_number], r[:ticks], r[:winner] || "draw"]
+    row = [r[:battle_number], r[:chronons], r[:winner] || "draw"]
     robot_classes.each do |klass|
       bot = r[:rubots].find { |b| b[:name] == klass.name }
       row << (bot ? bot[:health] : 0)
@@ -190,13 +190,13 @@ when "csv"
 
 when "text"
   puts "Simulation: #{options[:battles]} battle(s)"
-  puts "Arena: #{options[:width]}x#{options[:height]}, friction=#{options[:friction]}, tick_limit=#{options[:tick_limit]}"
+  puts "Arena: #{options[:width]}x#{options[:height]}, friction=#{options[:friction]}, chronon_limit=#{options[:chronon_limit]}"
   puts "Rubots: #{robot_classes.map { |c| "#{c.name} (#{c.size})" }.join(", ")}"
   puts
 
   if options[:battles] == 1
     r = results.first
-    puts "Result: #{r[:winner] || "Draw"} wins at tick #{r[:ticks]}"
+    puts "Result: #{r[:winner] || "Draw"} wins at chronon #{r[:chronons]}"
     puts
     puts "Final standings:"
     r[:rubots].sort_by { |b| [-b[:health], -b[:damage_dealt]] }.each_with_index do |bot, i|

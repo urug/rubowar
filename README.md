@@ -13,7 +13,7 @@ class MyRubot
     @heading = rand(360)
   end
 
-  def tick
+  def act
     turret(10)                              # Rotate turret
     fire(5) if probe                        # Fire when we see someone
     thrust(speed: 3, angle: @heading)       # Move in heading direction
@@ -33,16 +33,16 @@ end
 | `turret_angle` | Turret direction (0-360, world coordinates) |
 | `health` | Current HP (varies by size) |
 | `energy` | Current energy (max 100) |
-| `shield_level` | Shield strength (0 to max_health, decays 12%/tick) |
+| `shield_level` | Shield strength (0 to max_health, decays 12%/chronon) |
 | `arena_width`, `arena_height` | Arena dimensions |
 | `friction` | Arena friction (default 0.95) |
-| `tick_number` | Current game tick |
+| `chronons` | Current game tick |
 | `damage_dealt`, `damage_taken` | Match stats |
 | `energons` | All energon positions `[{x:, y:}]` (free) |
 | `size` | Rubot size (:small, :medium, :large) |
 | `live_rubot_count` | Number of rubots still alive |
 | `energon_spawn_interval` | Ticks between energon spawns (default 80) |
-| `energon_growth_rate` | Energy growth per tick (default 1.0) |
+| `energon_growth_rate` | Energy growth per chronon (default 1.0) |
 
 ### Actions
 
@@ -51,7 +51,7 @@ end
 | `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
 | `turret(degrees)` | ceil(\|degrees\|/24) | Rotate turret |
 | `fire(energy)` | energy | Damage = 1.5 x energy, bullet speed 18 |
-| `shield(energy)` | energy | Add to shield (max = HP cap, decays 12%/tick) |
+| `shield(energy)` | energy | Add to shield (max = HP cap, decays 12%/chronon) |
 
 ### Action Processing Order
 
@@ -66,7 +66,7 @@ Phase 3: COMBAT  → All fire(), shield() for all rubots → bullet physics
 **Energy is deducted in phase order.** If you call `fire(10)` before `pulse(distance: 100)` in your code, the pulse still executes first and uses its energy first:
 
 ```ruby
-def tick
+def act
   fire(10)                  # Queued, but processed LAST (combat phase)
   pulse(distance: 100)      # Queued second, but processed FIRST (sense phase)
   thrust(speed: 5, angle: 0) # Processed in middle (move phase)
@@ -140,7 +140,7 @@ pulse(distance: 100, owner: true) # 5 energy  -> [{x:, y:, type:, owner:}, ...]
 
 **detect() - Counter-intelligence:**
 - Cost: 2 energy
-- Returns: `{ probed: N, scanned: N, pulsed: N }` - how many times you were sensed this tick
+- Returns: `{ probed: N, scanned: N, pulsed: N }` - how many times you were sensed this chronon
 - Use to detect if enemies are tracking you
 
 ```ruby
@@ -149,24 +149,24 @@ detect                   # 2 energy  -> { probed: 1, scanned: 0, pulsed: 2 }
 
 ### Sensing Delay (Important!)
 
-**All sensing results are delayed by one tick.** Think of it like a radar ping: you send out a signal, it travels to the target and bounces back, and only then do you see the result. In Rubowar, the "travel time" is exactly one tick.
+**All sensing results are delayed by one chronon.** Think of it like a radar ping: you send out a signal, it travels to the target and bounces back, and only then do you see the result. In Rubowar, the "travel time" is exactly one chronon.
 
-When you call `probe()`, `scan()`, or `pulse()`, the action is queued and executed during the current tick's sense phase, but the results aren't available until your `tick` method runs on the *next* tick.
+When you call `probe()`, `scan()`, or `pulse()`, the action is queued and executed during the current chronon's sense phase, but the results aren't available until your `tick` method runs on the *next* tick.
 
 ```
-Tick N:
-  1. Your tick() reads probe_result    → contains results from Tick N-1's probe
-  2. You call probe(:position)          → queued for this tick's sense phase
+Chronon N:
+  1. Your act() reads probe_result    → contains results from Chronon N-1's probe
+  2. You call probe(:position)          → queued for this chronon's sense phase
   3. Sense phase executes probe         → result stored internally
 
-Tick N+1:
-  1. Your tick() reads probe_result    → NOW contains Tick N's results
+Chronon N+1:
+  1. Your act() reads probe_result    → NOW contains Chronon N's results
 ```
 
 **Pattern for using sensing:**
 
 ```ruby
-def tick
+def act
   # FIRST: Read results from PREVIOUS tick's sensing
   if probe_result && probe_result[:x]
     # We have a target! Aim and fire
@@ -184,7 +184,7 @@ end
 **Common mistake - checking results immediately (this won't work):**
 
 ```ruby
-def tick
+def act
   probe(:position)           # Queued for execution
   if probe_result[:x]        # WRONG! This is LAST tick's result, not the probe we just queued
     fire(10)
@@ -194,11 +194,11 @@ end
 
 **Why the delay?** Two reasons:
 
-1. **Realism**: Like a real radar ping, there's a round-trip time. You send the signal out, it hits the target, and the echo returns. In Rubowar, this takes one tick.
+1. **Realism**: Like a real radar ping, there's a round-trip time. You send the signal out, it hits the target, and the echo returns. In Rubowar, this takes one chronon.
 
 2. **Fairness**: Sensing is processed in phases. All rubots queue their sensing actions, then all probes/scans/pulses execute simultaneously. This prevents spawn-order from affecting who "sees" first. Everyone's radar pings go out at the same time, and everyone gets their echoes back at the same time.
 
-**Special case - `detect()`:** Unlike other sensing, `detect()` reports counts from the *current* tick's sense phase. It runs last in the sense phase so it can count how many times other rubots probed/scanned/pulsed you this tick. The result is still read on the next tick, but it reflects current-tick sensing activity.
+**Special case - `detect()`:** Unlike other sensing, `detect()` reports counts from the *current* tick's sense phase. It runs last in the sense phase so it can count how many times other rubots probed/scanned/pulsed you this chronon. The result is still read on the next chronon, but it reflects current-chronon sensing activity.
 
 ### Callbacks
 
@@ -215,9 +215,9 @@ def on_energon(amount)         # Collected energon
 
 | Size | Radius | HP | Energy Regen | Mass |
 |------|--------|-----|--------------|------|
-| `:small` | 15 | 80 | +8/tick | 0.56 |
-| `:medium` | 20 | 100 | +10/tick | 1.0 |
-| `:large` | 25 | 120 | +12/tick | 1.56 |
+| `:small` | 15 | 80 | +8/chronon | 0.56 |
+| `:medium` | 20 | 100 | +10/chronon | 1.0 |
+| `:large` | 25 | 120 | +12/chronon | 1.56 |
 
 **Tradeoffs:**
 - **Small**: Harder to hit, cheapest thrust, but least HP
@@ -229,8 +229,8 @@ def on_energon(amount)         # Collected energon
 - **Dimensions**: Variable (default 800x600)
 - **Origin**: Bottom-left (0,0)
 - **Angles**: 0 = East, 90 = North, 180 = West, 270 = South
-- **Friction**: 0.95 default (velocity *= friction each tick)
-- **Max speed**: 30 u/tick
+- **Friction**: 0.95 default (velocity *= friction each chronon)
+- **Max speed**: 30 u/chronon
 
 ## Physics
 
@@ -238,10 +238,10 @@ def on_energon(amount)         # Collected energon
 - `thrust(speed:, angle:)` adds velocity in the specified world direction
 - Cost: `(speed/1.5)^2 x mass x direction_multiplier`
 - Direction multiplier: 1.0 (same direction) to 2.0 (opposite direction)
-- Friction slows rubots each tick (velocity *= 0.95)
+- Friction slows rubots each chronon (velocity *= 0.95)
 
 ### Bullets
-- Travel 18 u/tick (slower than max rubot speed, but max speed requires burst energy)
+- Travel 18 u/chronon (slower than max rubot speed, but max speed requires burst energy)
 - Spawn at edge of rubot (position + rubot radius + bullet radius)
 - Self-damage is possible (your bullets can hit you if you're fast enough)
 
@@ -265,9 +265,9 @@ Walls can't be used for free direction changes - you'll lose most of your speed.
 Energy power-ups that spawn periodically and grow in value over time.
 
 ### Mechanics
-- **Spawn rate**: Every 80 ticks (configurable)
+- **Spawn rate**: Every 80 chronons (configurable)
 - **Starting value**: 1 energy
-- **Growth**: +1 energy per tick alive
+- **Growth**: +1 energy per chronon alive
 - **Collection**: Touch to collect (8 unit radius)
 - **Spawn position**: Maximizes minimum distance from all bots, avoids walls (15% buffer)
 
@@ -289,7 +289,7 @@ The engine emits events for any renderer:
 battle = Rubowar::Battle.new(rubots: [Spinner, Tracker])
 
 # Block-based (real-time)
-battle.on(:tick) { |state| render_frame(state) }
+battle.on(:chronon) { |state| render_frame(state) }
 battle.on(:hit) { |event| play_sound(:hit) }
 battle.run
 
@@ -301,17 +301,17 @@ save_replay(events)
 battle.run(renderer: Rubowar::Renderers::Terminal)
 ```
 
-**Event types**: `:tick`, `:fire`, `:hit`, `:death`, `:wall_collision`, `:rubot_collision`, `:energon_spawn`, `:energon_collect`, `:battle_end`
+**Event types**: `:chronon`, `:fire`, `:hit`, `:death`, `:wall_collision`, `:rubot_collision`, `:energon_spawn`, `:energon_collect`, `:battle_end`
 
 ## Victory
 
 - Last rubot standing wins
-- Tick limit (5000) prevents stalemates
+- Chronon limit (5000 chronons) prevents stalemates
 - Tiebreaker: highest HP, then most damage dealt
 
 ## Error Handling
 
-If rubot code crashes or times out: **10 damage** + skip tick.
+If rubot code crashes or times out: **10 damage** + skip chronon.
 
 ## Project Structure
 
@@ -322,12 +322,12 @@ rubowar/
 │   │   ├── rubot.rb           # Module participants include
 │   │   ├── arena.rb           # Physics, collisions
 │   │   ├── battle.rb          # Game loop
-│   │   ├── rubot_runner.rb    # Mutable state tracking
+│   │   ├── rubot_actor.rb    # Mutable state tracking
 │   │   ├── rubot_state.rb     # Immutable state snapshots
 │   │   ├── arena_state.rb     # Arena state snapshots
 │   │   ├── bullet.rb          # Projectile tracking
 │   │   ├── energon.rb         # Energy power-ups
-│   │   ├── sensing_costs.rb   # Sensing cost calculations
+│   │   ├── physics.rb         # Physics calculations
 │   │   └── renderers/
 │   │       └── terminal.rb    # ASCII visualization
 │   └── rubowar.rb

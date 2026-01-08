@@ -1,22 +1,18 @@
 # frozen_string_literal: true
 
 # [file]
-# purpose = "Shared cost calculations for sensing actions"
-# responsibility = "Calculate energy costs for probe, scan, pulse, detect"
-# pattern = "Mixin Module"
+# purpose = "Shared sensor cost calculations"
+# responsibility = "Single source of truth for probe, scan, and pulse energy costs"
+# pattern = "Module Functions (stateless calculations)"
 #
-# [module.SensingCosts]
-# purpose = "DRY cost calculations used by both Rubot and Arena"
-# usage = "Rubot checks upfront if it can afford; Arena deducts when processing"
-#
-# [costs]
-# probe = "0 base + 1-4 per attribute (size=1, position=4, velocity=3, health=3, etc.)"
-# scan = "3 base + ceil(angle/20) + ceil(distance/100) [+2 velocity] [+1 owner]"
-# pulse = "2 base + ceil(distance/75) [+1 owner]"
-# detect = "2 flat"
+# [module.SensorCalculations]
+# purpose = "Provides cost calculations used by both Rubot (upfront checks) and Arena (execution)"
+# usage = "SensorCalculations.probe_cost(attributes), SensorCalculations.scan_cost(...), etc."
 
 module Rubowar
-  module SensingCosts
+  module SensorCalculations
+    module_function
+
     def probe_cost(attributes)
       Config::Sensing::PROBE_BASE_COST + attributes.sum { |attr| Config::Sensing::PROBE_ATTRIBUTE_COSTS[attr] || 0 }
     end

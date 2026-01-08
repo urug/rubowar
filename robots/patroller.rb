@@ -1,8 +1,10 @@
 # frozen_string_literal: true
 
 # A small wall-hugging kiter that patrols the arena perimeter.
-# Stays on walls to limit scan area (only looks inward).
+# Stays near walls to limit scan area (only looks inward).
 # Kites along wall: retreats when enemies close, advances when far.
+#
+# Momentum-aware: Uses inertia helpers for smooth wall patrol.
 class Patroller
   include Rubowar::Rubot
 
@@ -13,6 +15,9 @@ class Patroller
   TOO_FAR = 300          # Move closer along wall
   WALL_DIST = 50         # Target distance from wall
   SCAN_INWARD = 60       # Scan angle toward center
+  WALL_BUFFER = 60       # Emergency brake distance
+  PATROL_THRUST = 3      # Normal patrol speed
+  EVADE_THRUST = 4       # Evading speed
 
   def on_spawn
     @target = nil
@@ -20,7 +25,13 @@ class Patroller
     @evading = 0
   end
 
-  def tick
+  def act
+    # Priority 1: Don't crash into walls
+    if approaching_wall?(WALL_BUFFER)
+      brake_from_wall
+      return
+    end
+
     check_threats
     scan_inward
     kite_along_wall
@@ -34,28 +45,29 @@ class Patroller
   end
 
   def on_wall
-    # We want to be on the wall - just reverse if stuck
-    @direction *= -1 if rand < 0.3
+    # Hit a wall - reverse direction and brake
+    @direction *= -1
+    @evading = 5
   end
 
   private
 
   def check_threats
-    detect if tick_number % 3 == 0
+    detect if (chronons % 3).zero?
     return unless detect_result
 
     # Evade if being probed
-    if (detect_result[:probed] || 0).positive?
-      @evading = 10
-      @direction *= -1
-    end
+    return unless (detect_result[:probed] || 0).positive?
+
+    @evading = 10
+    @direction *= -1
   end
 
   def scan_inward
-    # Only scan every other tick, and only toward arena center
-    return unless tick_number.odd? && energy > 12
+    # Only scan every other chronon, and only toward arena center
+    return unless chronons.odd? && energy > 12
 
-    scan(angle: SCAN_INWARD, distance: 350)
+    scan(angle: SCAN_INWARD, distance: 350, velocity: true)
     return unless scan_result
 
     rubots = scan_result.select { |t| t[:type] == :rubot }
@@ -63,10 +75,7 @@ class Patroller
   end
 
   def kite_along_wall
-    # Priority: brake if about to hit wall
-    if wall_emergency?
-      brake_from_wall
-    elsif @evading.positive?
+    if @evading.positive?
       @evading -= 1
       evade_along_wall
     elsif @target
@@ -76,54 +85,76 @@ class Patroller
     end
   end
 
-  def wall_emergency?
-    # Emergency if close with any momentum toward wall
-    (x < WALL_DIST && velocity_x.negative?) ||
-      (x > arena_width - WALL_DIST && velocity_x.positive?) ||
-      (y < WALL_DIST && velocity_y.negative?) ||
-      (y > arena_height - WALL_DIST && velocity_y.positive?)
-  end
-
   def brake_from_wall
     # Thrust toward center to kill momentum
     center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
-    thrust(speed: 3, angle: center_angle)
+    thrust(speed: PATROL_THRUST, angle: center_angle)
   end
 
   def evade_along_wall
-    # Run along wall in current direction (lower speed for inertia)
-    thrust(speed: 4, angle: adjusted_wall_angle)
+    move_angle = adjusted_wall_angle
+    # If already moving this way, less thrust needed
+    if momentum_aligned?(move_angle, tolerance: 45)
+      thrust(speed: EVADE_THRUST, angle: move_angle) if speed < 10
+    elsif speed > 5
+      # Moving wrong way - brake first
+      brake_thrust
+    else
+      thrust(speed: EVADE_THRUST, angle: move_angle)
+    end
   end
 
   def kite_target
     dist = distance_to(@target[:x], @target[:y])
+    move_angle = adjusted_wall_angle
 
     # Determine whether to flee, advance, or hold along wall
     if dist < TOO_CLOSE
       # Too close - run away along wall
       @direction = away_direction
-      thrust(speed: 3, angle: adjusted_wall_angle)
+      move_angle = adjusted_wall_angle
+      move_along_wall(move_angle, PATROL_THRUST)
     elsif dist > TOO_FAR
       # Too far - move closer along wall
       @direction = toward_direction
-      thrust(speed: 3, angle: adjusted_wall_angle)
+      move_angle = adjusted_wall_angle
+      move_along_wall(move_angle, PATROL_THRUST)
     else
-      # Optimal range - strafe along wall
-      thrust(speed: 2, angle: adjusted_wall_angle)
+      # Optimal range - gentle strafe along wall
+      move_along_wall(move_angle, 2)
     end
   end
 
   def patrol_wall
-    # Move along nearest wall toward center-ish
-    thrust(speed: 2, angle: adjusted_wall_angle)
-    # Point turret inward
+    move_angle = adjusted_wall_angle
+    move_along_wall(move_angle, 2)
     turret_toward_center
+  end
+
+  def move_along_wall(move_angle, thrust_speed)
+    # Momentum-aware movement along wall
+    if momentum_aligned?(move_angle, tolerance: 50)
+      # Already moving roughly right direction
+      thrust(speed: thrust_speed, angle: move_angle) if speed < 8
+    elsif speed > 4
+      # Need to change direction - brake first
+      brake_thrust
+    else
+      thrust(speed: thrust_speed, angle: move_angle)
+    end
+  end
+
+  def brake_thrust
+    return unless velocity_angle
+
+    brake_angle = (velocity_angle + 180) % 360
+    thrust(speed: PATROL_THRUST, angle: brake_angle)
   end
 
   # Adjust movement angle to maintain wall distance
   def adjusted_wall_angle
     base = wall_parallel_angle
-    wall_d = wall_distance
+    wall_d = current_wall_distance
 
     # If too close to wall, angle slightly away
     if wall_d < WALL_DIST * 0.5
@@ -146,35 +177,41 @@ class Patroller
     end
   end
 
-  def wall_distance
+  def current_wall_distance
     [x, y, arena_width - x, arena_height - y].min
   end
 
   def aim_and_fire
     if @target
       # Aim with lead prediction if we have velocity
-      target_x = @target[:x]
-      target_y = @target[:y]
+      lead_x, lead_y = calculate_lead_position
 
-      if @target[:velocity_x] && @target[:velocity_y]
-        dist = distance_to(target_x, target_y)
-        bullet_speed = Rubowar::Config::Combat::BULLET_SPEED
-        lead = dist / bullet_speed
-        target_x += @target[:velocity_x] * lead
-        target_y += @target[:velocity_y] * lead
-      end
-
-      target_angle = angle_to(target_x, target_y)
+      target_angle = angle_to(lead_x, lead_y)
       diff = normalize_angle(target_angle - turret_angle)
       turret(diff.clamp(-15, 15))
 
       # Fire when aligned
-      if diff.abs < 18 && energy > 18
-        fire(15)
+      dist = distance_to(@target[:x], @target[:y])
+      if diff.abs < 18 && energy > 18 && dist < 350
+        fire_power = dist < 150 ? 15 : 10
+        fire(fire_power)
       end
     else
       turret_toward_center
     end
+
+    # Light shields when not evading
+    shield(3) if energy > 40 && shield_level < 20 && @evading.zero?
+  end
+
+  def calculate_lead_position
+    return [@target[:x], @target[:y]] unless @target[:velocity_x] && @target[:velocity_y]
+
+    lead_position(
+      @target[:x], @target[:y],
+      @target[:velocity_x], @target[:velocity_y],
+      projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+    )
   end
 
   def turret_toward_center
@@ -186,9 +223,9 @@ class Patroller
   # Returns angle to move parallel to nearest wall
   def wall_parallel_angle
     case nearest_wall
-    when :bottom then @direction.positive? ? 0 : 180    # Move left/right
+    when :bottom then @direction.positive? ? 0 : 180 # Move left/right
     when :top then @direction.positive? ? 180 : 0
-    when :left then @direction.positive? ? 90 : 270    # Move up/down
+    when :left then @direction.positive? ? 90 : 270 # Move up/down
     when :right then @direction.positive? ? 270 : 90
     end
   end
@@ -206,22 +243,12 @@ class Patroller
       target_angle < 180 ? -1 : 1
     when :left, :right
       # On vertical wall - check if target is above or below
-      (target_angle > 90 && target_angle < 270) ? 1 : -1
+      target_angle > 90 && target_angle < 270 ? 1 : -1
     end
   end
 
   # Which direction along wall moves toward target?
   def toward_direction
     -away_direction
-  end
-
-  def nearest_wall
-    distances = {
-      bottom: y,
-      top: arena_height - y,
-      left: x,
-      right: arena_width - x
-    }
-    distances.min_by { |_, d| d }.first
   end
 end

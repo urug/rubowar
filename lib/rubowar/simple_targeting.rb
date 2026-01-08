@@ -24,12 +24,12 @@
 # [methods]
 # acquisition = ["acquire_target_from_pulse(result)", "acquire_target_from_scan(result)", "acquire_target_from_probe(result)"]
 # aiming = ["aim_at_target(target)", "turret_aligned?(target)", "lead_angle_to(target)", "lead_position_for(target)"]
-# state = ["target (attr_accessor)", "target_tick (attr_accessor)", "target_stale?", "target_age"]
+# state = ["target (attr_accessor)", "target_chronon (attr_accessor)", "target_stale?", "target_age"]
 
 module Rubowar
   module SimpleTargeting
     def self.included(klass)
-      klass.attr_accessor :target, :target_tick
+      klass.attr_accessor :target, :target_chronon
     end
 
     # === Target Acquisition (pure functions) ===
@@ -117,7 +117,7 @@ module Rubowar
         target[:velocity_x],
         target[:velocity_y],
         projectile_speed: targeting_config(:bullet_speed),
-        max_lead_ticks: targeting_config(:max_lead_ticks)
+        max_lead_chronons: targeting_config(:max_lead_chronons)
       )
     end
 
@@ -132,20 +132,20 @@ module Rubowar
 
     # === State Helpers ===
 
-    # Check if current target is stale (requires target_tick to be set)
+    # Check if current target is stale (requires target_chronon to be set)
     # @return [Boolean]
     def target_stale?
-      return true unless @target_tick
+      return true unless @target_chronon
 
-      (tick_number - @target_tick) > targeting_config(:target_timeout)
+      (chronons - @target_chronon) > targeting_config(:target_timeout)
     end
 
-    # Get age of current target in ticks
+    # Get age of current target in chronons
     # @return [Integer, nil]
     def target_age
-      return nil unless @target_tick
+      return nil unless @target_chronon
 
-      tick_number - @target_tick
+      chronons - @target_chronon
     end
 
     # === Configuration ===
@@ -159,7 +159,7 @@ module Rubowar
       else
         case key
         when :bullet_speed then Config::Targeting::BULLET_SPEED
-        when :max_lead_ticks then Config::Targeting::MAX_LEAD_TICKS
+        when :max_lead_chronons then Config::Targeting::MAX_LEAD_CHRONONS
         when :alignment_tolerance then Config::Targeting::ALIGNMENT_TOLERANCE
         when :max_turret_turn then Config::Targeting::MAX_TURRET_TURN
         when :target_timeout then Config::Targeting::TARGET_TIMEOUT

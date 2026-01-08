@@ -19,16 +19,16 @@ class Coroner
     @tracking = false
   end
 
-  def tick
+  def act
     check_for_danger
 
     case @mode
     when :moving_to_corner
-      move_to_corner_tick
+      move_to_corner_action
     when :scanning
-      scanning_tick
+      scanning_action
     when :fleeing
-      fleeing_tick
+      fleeing_action
     end
   end
 
@@ -86,7 +86,7 @@ class Coroner
     @mode = :fleeing
   end
 
-  def move_to_corner_tick
+  def move_to_corner_action
     dist = distance_to(@corner[:x], @corner[:y])
 
     if dist < CORNER_BUFFER / 2
@@ -98,18 +98,18 @@ class Coroner
     thrust(speed: 5, angle:) if speed < 5
   end
 
-  def scanning_tick
+  def scanning_action
     if @tracking
-      tracking_tick
+      tracking_action
     else
-      sweeping_tick
+      sweeping_action
     end
 
     # Build shields while camping
     shield(3) if energy > 70 && shield_level < 25
   end
 
-  def sweeping_tick
+  def sweeping_action
     # SENSE: Scan for targets
     scan(angle: 70, distance: scan_distance) if energy > 20
 
@@ -118,9 +118,9 @@ class Coroner
       if rubots.any?
         closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
         @last_target = closest
-        @last_target_tick = tick_number
+        @last_target_chronon = chronons
         @tracking = true
-        @ticks_without_probe_hit = 0
+        @chronons_without_probe_hit = 0
       end
     end
 
@@ -140,17 +140,17 @@ class Coroner
     end
   end
 
-  def tracking_tick
+  def tracking_action
     # SENSE: Probe for position/velocity (7 energy)
     probe(:position, :velocity) if energy > 20
 
     if probe_result&.any?
       @last_target = probe_result
-      @last_target_tick = tick_number
-      @ticks_without_probe_hit = 0
+      @last_target_chronon = chronons
+      @chronons_without_probe_hit = 0
     else
-      @ticks_without_probe_hit = (@ticks_without_probe_hit || 0) + 1
-      if @ticks_without_probe_hit > 20
+      @chronons_without_probe_hit = (@chronons_without_probe_hit || 0) + 1
+      if @chronons_without_probe_hit > 20
         @tracking = false
         return
       end
@@ -174,13 +174,13 @@ class Coroner
     end
 
     # Fire on probe hit - bigger shot if flush with energy
-    if probe_result&.any? && energy > 25
-      shot = energy > 60 ? 25 : 15
-      fire(shot)
-    end
+    return unless probe_result&.any? && energy > 25
+
+    shot = energy > 60 ? 25 : 15
+    fire(shot)
   end
 
-  def fleeing_tick
+  def fleeing_action
     dist = distance_to(@corner[:x], @corner[:y])
 
     if dist < CORNER_BUFFER / 2

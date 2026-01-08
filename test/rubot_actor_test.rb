@@ -6,65 +6,65 @@ class DummyBot
   include Rubowar::Rubot
 
   size :medium
-  def tick; end
+  def act; end
 end
 
 class SmallDummyBot
   include Rubowar::Rubot
 
   size :small
-  def tick; end
+  def act; end
 end
 
 class LargeDummyBot
   include Rubowar::Rubot
 
   size :large
-  def tick; end
+  def act; end
 end
 
-describe Rubowar::RubotRunner do
+describe Rubowar::RubotActor do
   describe "initialization" do
     it "starts with full health for its size" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.health).must_equal runner.max_health
     end
 
     it "starts with full energy" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.energy).must_equal runner.max_energy
     end
 
     it "starts with zero shield" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.shield_level).must_equal 0
     end
 
     it "starts at origin" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.x).must_equal 0.0
       _(runner.y).must_equal 0.0
     end
 
     it "starts with zero velocity" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.velocity_x).must_equal 0.0
       _(runner.velocity_y).must_equal 0.0
     end
 
     it "creates an instance of the rubot class" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.instance).must_be_instance_of DummyBot
     end
 
     it "uses size from rubot class" do
-      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+      runner = Rubowar::RubotActor.new(SmallDummyBot)
 
       _(runner.size).must_equal :small
     end
@@ -72,19 +72,19 @@ describe Rubowar::RubotRunner do
 
   describe "#radius" do
     it "returns 16 for small rubots" do
-      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+      runner = Rubowar::RubotActor.new(SmallDummyBot)
 
       _(runner.radius).must_equal 16
     end
 
     it "returns 20 for medium rubots" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.radius).must_equal 20
     end
 
     it "returns 24 for large rubots" do
-      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+      runner = Rubowar::RubotActor.new(LargeDummyBot)
 
       _(runner.radius).must_equal 24
     end
@@ -92,19 +92,19 @@ describe Rubowar::RubotRunner do
 
   describe "#energy_regen" do
     it "returns 8 for small rubots" do
-      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+      runner = Rubowar::RubotActor.new(SmallDummyBot)
 
       _(runner.energy_regen).must_equal 8
     end
 
     it "returns 10 for medium rubots" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.energy_regen).must_equal 10
     end
 
     it "returns 12 for large rubots" do
-      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+      runner = Rubowar::RubotActor.new(LargeDummyBot)
 
       _(runner.energy_regen).must_equal 12
     end
@@ -112,19 +112,19 @@ describe Rubowar::RubotRunner do
 
   describe "#max_health" do
     it "returns 80 for small rubots" do
-      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+      runner = Rubowar::RubotActor.new(SmallDummyBot)
 
       _(runner.max_health).must_equal 80
     end
 
     it "returns 100 for medium rubots" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.max_health).must_equal 100
     end
 
     it "returns 120 for large rubots" do
-      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+      runner = Rubowar::RubotActor.new(LargeDummyBot)
 
       _(runner.max_health).must_equal 120
     end
@@ -132,19 +132,19 @@ describe Rubowar::RubotRunner do
 
   describe "#max_shield" do
     it "equals max_health for small rubots" do
-      runner = Rubowar::RubotRunner.new(SmallDummyBot)
+      runner = Rubowar::RubotActor.new(SmallDummyBot)
 
       _(runner.max_shield).must_equal 80
     end
 
     it "equals max_health for medium rubots" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       _(runner.max_shield).must_equal 100
     end
 
     it "equals max_health for large rubots" do
-      runner = Rubowar::RubotRunner.new(LargeDummyBot)
+      runner = Rubowar::RubotActor.new(LargeDummyBot)
 
       _(runner.max_shield).must_equal 120
     end
@@ -152,7 +152,7 @@ describe Rubowar::RubotRunner do
 
   describe "#speed" do
     it "calculates speed from velocity" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.velocity_x = 3.0
       runner.velocity_y = 4.0
 
@@ -162,7 +162,7 @@ describe Rubowar::RubotRunner do
 
   describe "#alive? and #dead?" do
     it "is alive when health is positive" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.health = 1
 
       _(runner.alive?).must_equal true
@@ -170,7 +170,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "is dead when health is zero" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.health = 0
 
       _(runner.alive?).must_equal false
@@ -180,7 +180,7 @@ describe Rubowar::RubotRunner do
 
   describe "#apply_damage" do
     it "reduces health by damage amount" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       runner.apply_damage(30)
 
@@ -188,7 +188,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "tracks damage taken" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       runner.apply_damage(30)
 
@@ -196,7 +196,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "absorbs damage with shield first" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.shield_level = 20
 
       runner.apply_damage(30)
@@ -206,7 +206,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "does not reduce health below zero" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       runner.apply_damage(150)
 
@@ -216,7 +216,7 @@ describe Rubowar::RubotRunner do
 
   describe "#spend_energy" do
     it "returns true and reduces energy when sufficient" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
 
       result = runner.spend_energy(30)
 
@@ -225,7 +225,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "returns false and drains to zero when insufficient" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.energy = 20
 
       result = runner.spend_energy(50)
@@ -237,7 +237,7 @@ describe Rubowar::RubotRunner do
 
   describe "#regenerate_energy" do
     it "adds energy regen amount" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.energy = 50
 
       runner.regenerate_energy
@@ -246,7 +246,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "caps energy at max" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.energy = runner.max_energy - 5
 
       runner.regenerate_energy
@@ -257,7 +257,7 @@ describe Rubowar::RubotRunner do
 
   describe "#degrade_shield" do
     it "reduces shield by 12% (proportional decay)" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.shield_level = 100
 
       runner.degrade_shield
@@ -266,7 +266,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "floors the result" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.shield_level = 20
 
       runner.degrade_shield
@@ -275,7 +275,7 @@ describe Rubowar::RubotRunner do
     end
 
     it "decays to zero from low values" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.shield_level = 1
 
       runner.degrade_shield
@@ -286,7 +286,7 @@ describe Rubowar::RubotRunner do
 
   describe "#clamp_speed" do
     it "does nothing when under max speed" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.velocity_x = 10.0
       runner.velocity_y = 10.0
 
@@ -297,9 +297,9 @@ describe Rubowar::RubotRunner do
     end
 
     it "scales velocity to max speed when over" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.velocity_x = 600.0
-      runner.velocity_y = 800.0  # speed = 1000, over cap
+      runner.velocity_y = 800.0 # speed = 1000, over cap
 
       runner.clamp_speed
 
@@ -309,7 +309,7 @@ describe Rubowar::RubotRunner do
 
   describe "#to_state" do
     it "returns a RubotState with current values" do
-      runner = Rubowar::RubotRunner.new(DummyBot)
+      runner = Rubowar::RubotActor.new(DummyBot)
       runner.x = 100.0
       runner.y = 200.0
       runner.health = 80

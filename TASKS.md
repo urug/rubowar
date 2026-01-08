@@ -16,7 +16,7 @@
 - [x] State accessors: `turret_angle`
 - [x] State accessors: `health`, `energy`, `shield_level`
 - [x] State accessors: `arena_width`, `arena_height`, `friction`
-- [x] State accessors: `tick_number`, `damage_dealt`, `damage_taken`
+- [x] State accessors: `chronons`, `damage_dealt`, `damage_taken`
 - [x] State accessors: `energons`, `size`
 - [x] Action method: `thrust(speed:, angle:)` - world coordinates, mass-based cost
 - [x] Action method: `turret(degrees)`
@@ -29,14 +29,14 @@
 - [x] Initialize with configurable width/height (default 800x600)
 - [x] Rubot spawning (random positions, min distances)
 - [x] Position/velocity tracking for all rubots
-- [x] Friction application each tick (0.95 default)
+- [x] Friction application each chronon (0.95 default)
 - [x] Wall collision detection + bounce + momentum damage (2 + speed x 0.75)
 - [x] Rubot collision detection + push apart + momentum damage (2 + mass x speed x 0.5)
-- [x] Max speed enforcement (20 u/tick)
+- [x] Max speed enforcement (20 u/chronon)
 - [x] Thrust processing with mass and direction multiplier
 - [x] Probe processing with attribute-based costs
 
-### RubotRunner (`lib/rubowar/rubot_runner.rb`)
+### RubotActor (`lib/rubowar/rubot_actor.rb`)
 - [x] Size-based stats: radius, energy_regen, max_health
 - [x] Position, velocity, turret_angle tracking
 - [x] Health, energy, shield_level tracking
@@ -52,7 +52,7 @@
 
 ### Bullet (`lib/rubowar/bullet.rb`)
 - [x] Position, velocity, owner, damage tracking
-- [x] Movement (18 u/tick)
+- [x] Movement (18 u/chronon)
 - [x] Collision detection with rubots
 - [x] Out-of-bounds removal
 - [x] Spawn at edge of rubot (position + rubot radius + bullet radius)
@@ -60,12 +60,12 @@
 ### Battle (`lib/rubowar/battle.rb`)
 - [x] Initialize with rubot classes and arena config
 - [x] Game loop structure
-- [x] Call rubot `tick` methods
+- [x] Call rubot `act` methods
 - [x] Process queued actions
 - [x] Apply physics (movement, collisions)
 - [x] Update bullets
 - [x] Event emission system (`on` method for callbacks)
-- [x] Victory detection (last standing, tick limit, tiebreakers)
+- [x] Victory detection (last standing, chronon limit, tiebreakers)
 
 ### Terminal Renderer (`lib/rubowar/renderers/terminal.rb`)
 - [x] ASCII arena display
@@ -86,7 +86,7 @@
 - [x] Rubot module tests
 - [x] Arena physics tests
 - [x] Bullet tests
-- [x] RubotRunner tests
+- [x] RubotActor tests
 
 ---
 
@@ -117,21 +117,21 @@
 - [x] `:shield`: +2 energy
 - [x] `:health`: +3 energy
 - [x] `:energy`: +3 energy
-- [x] Probe returns previous tick's result (1-tick delay)
+- [x] Probe returns previous tick's result (1-chronon delay)
 
 ### Scan System
 - [x] `scan(angle:, distance:, velocity:)` arc scan method
 - [x] Cost: `3 + ceil(angle/20) + ceil(distance/100)` [+2 for velocity]
 - [x] Returns all rubots and bullets in arc
 - [x] Base result: `{x:, y:, type:}`, with velocity: adds `velocity_x`, `velocity_y`
-- [x] Scan returns previous tick's result (1-tick delay)
+- [x] Scan returns previous tick's result (1-chronon delay)
 
 ### Pulse System
 - [x] `pulse(distance:)` omnidirectional radar method
 - [x] Cost: `2 + ceil(distance/75)`
 - [x] Returns all rubots and bullets within radius
 - [x] Result: `{x:, y:, type:}` (position only, no velocity)
-- [x] Pulse returns previous tick's result (1-tick delay)
+- [x] Pulse returns previous tick's result (1-chronon delay)
 
 ### Callbacks
 - [x] `on_hit(damage, direction)`
@@ -146,8 +146,8 @@
 ## Phase 3: Energons & CLI - PARTIAL
 
 ### Energons (`lib/rubowar/energon.rb`) - COMPLETE
-- [x] Spawn logic (every 80 ticks, configurable via ENERGON_SPAWN_INTERVAL)
-- [x] Time-based value: starts at 1, grows +1/tick (configurable via GROWTH_RATE)
+- [x] Spawn logic (every 80 chronons, configurable via ENERGON_SPAWN_INTERVAL)
+- [x] Time-based value: starts at 1, grows +1/chronon (configurable via GROWTH_RATE)
 - [x] Collection detection (8 unit radius, touch to collect)
 - [x] `on_energon(amount)` callback triggering
 - [x] `energons` accessor (always visible, free) - returns `[{x:, y:}]`
@@ -162,7 +162,7 @@
 
 ### CLI (`bin/rubowar`) - NOT STARTED
 - [ ] Load rubot files
-- [ ] Run battle with options (arena size, tick limit)
+- [ ] Run battle with options (arena size, chronon limit)
 - [ ] Output results
 
 ### Replay System - NOT STARTED
@@ -173,16 +173,16 @@
 
 ## Phase 4: Sandboxing & Safety - NOT STARTED
 
-### Process Isolation (`lib/rubowar/rubot_runner.rb`)
+### Process Isolation (`lib/rubowar/rubot_actor.rb`)
 - [ ] Subprocess spawning for rubot code
 - [ ] JSON state serialization
 - [ ] JSON action deserialization
-- [ ] Timeout enforcement (10ms/tick)
+- [ ] Timeout enforcement (10ms/chronon)
 - [ ] Dangerous method removal
 
 ### Error Handling
-- [ ] Crash detection → 10 damage + skip tick
-- [ ] Timeout detection → 10 damage + skip tick
+- [ ] Crash detection → 10 damage + skip chronon
+- [ ] Timeout detection → 10 damage + skip chronon
 
 ---
 
@@ -198,7 +198,7 @@
 ### Combat
 - `FIRE_DAMAGE_MULTIPLIER = 1.5`
 - `MAX_SHIELD = max_health` (80/100/120 by size)
-- `SHIELD_DECAY_RATE = 0.12` (12% per tick)
+- `SHIELD_DECAY_RATE = 0.12` (12% per chronon)
 
 ### Movement
 - `MAX_SPEED = 30`

@@ -3,75 +3,86 @@
 # A rubot that patrols the arena looking for targets, then chases them down.
 # Uses pulse for wide-area detection and scan for precision targeting.
 # Small size for better mobility and survivability.
+#
+# Inertia-aware: Uses momentum helpers to avoid walls and efficiently pursue.
 class Hunter
   include Rubowar::Rubot
 
-  size :small # Small = faster, harder to hit, cheaper movement
+  size :small # Small = faster acceleration, harder to hit, cheaper movement
 
   WALL_BUFFER = 80
   PULSE_DISTANCE = 300
   SCAN_ANGLE = 70
-  SCAN_ANGLE_WIDE = 100 # Used when losing target
+  SCAN_ANGLE_WIDE = 100
   SCAN_DISTANCE = 350
-  PATROL_SPEED = 5
-  CHASE_SPEED = 7
+  PATROL_THRUST = 3       # Lower thrust for efficient patrol
+  CHASE_THRUST = 4        # Moderate thrust for pursuit
+  BRAKE_THRUST = 3        # Thrust for braking/direction changes
   BULLET_SPEED = Rubowar::Config::Combat::BULLET_SPEED
-  GIVE_UP_TICKS = 50 # More persistence before reverting to patrol
+  GIVE_UP_CHRONONS = 50
   ENERGON_COLLECT_RANGE = 250
 
   def on_spawn
     @mode = :patrol
-    @target_x = nil # Lead-adjusted for shooting
-    @target_y = nil
-    @target_base_x = nil  # Raw position for movement
-    @target_base_y = nil
-    @target_vx = nil
-    @target_vy = nil
-    @target_health = nil  # Track target health for "finish them" logic
+    @target = nil # Combined target data
     @patrol_angle = rand(360)
-    @ticks_without_target = 0
+    @chronons_without_target = 0
     @pulse_cooldown = 0
-    @dodge_direction = 1  # Alternate dodge direction for on_hit
+    @dodge_direction = 1
     @probe_cooldown = 0
     @target_energon = nil
   end
 
-  def tick
+  def act
+    # Priority 1: Don't hit walls
+    if approaching_wall?(WALL_BUFFER)
+      brake_from_wall
+      return
+    end
+
     case @mode
     when :patrol
-      patrol_tick
+      patrol_action
     when :chase
-      chase_tick
+      chase_action
     when :collecting
-      collecting_tick
+      collecting_action
     end
   end
 
   def on_hit(_damage, direction)
-    # Reactive dodge - move perpendicular to incoming fire
     @dodge_direction *= -1
-    dodge_angle = direction + (90 * @dodge_direction)
-    thrust(speed: CHASE_SPEED, angle: dodge_angle)
+    # Brake first if moving fast, then dodge
+    if speed > 3
+      # Thrust against current velocity to slow down
+      brake_thrust
+    else
+      # Dodge perpendicular to incoming fire
+      dodge_angle = direction + (90 * @dodge_direction)
+      thrust(speed: BRAKE_THRUST, angle: dodge_angle)
+    end
 
-    # Boost shields when under fire
     shield(6) if energy > 25 && shield_level < 40
 
-    # If not already chasing, acquire attacker's direction
     return unless @mode == :patrol
 
-    # Estimate attacker position based on bullet direction
+    # Estimate attacker position
     attacker_angle = (direction + 180) % 360
     estimated_dist = 200
-    @target_base_x = x + (Math.cos(attacker_angle * Math::PI / 180) * estimated_dist)
-    @target_base_y = y + (Math.sin(attacker_angle * Math::PI / 180) * estimated_dist)
-    @target_x = @target_base_x
-    @target_y = @target_base_y
+    @target = {
+      x: x + (Math.cos(attacker_angle * Math::PI / 180) * estimated_dist),
+      y: y + (Math.sin(attacker_angle * Math::PI / 180) * estimated_dist),
+      velocity_x: nil,
+      velocity_y: nil
+    }
     @mode = :chase
-    @ticks_without_target = 0
+    @chronons_without_target = 0
   end
 
   def on_wall
-    @patrol_angle = (@patrol_angle + 120 + rand(60)) % 360
+    # Bounce recovery - reverse patrol direction
+    @patrol_angle = (velocity_angle || @patrol_angle) + 180 + rand(-30..30)
+    @patrol_angle %= 360
   end
 
   def on_energon(_amount)
@@ -81,19 +92,33 @@ class Hunter
 
   private
 
-  def patrol_tick
+  def brake_from_wall
+    # Thrust toward center to kill momentum
+    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    thrust(speed: BRAKE_THRUST, angle: center_angle)
+    turret(5) # Keep scanning while braking
+  end
+
+  def brake_thrust
+    # Thrust opposite to current velocity
+    return unless velocity_angle
+
+    brake_angle = (velocity_angle + 180) % 360
+    thrust(speed: BRAKE_THRUST, angle: brake_angle)
+  end
+
+  def patrol_action
     # SENSE: Pulse periodically to find targets
     @pulse_cooldown -= 1 if @pulse_cooldown.positive?
     if @pulse_cooldown <= 0
       pulse(distance: PULSE_DISTANCE)
       @pulse_cooldown = 3
 
-      # Process previous pulse results
       if pulse_result
         rubots = pulse_result.select { |t| t[:type] == :rubot }
         if rubots.any?
           closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
-          acquire_target(closest[:x], closest[:y])
+          acquire_target(closest)
           return
         end
       end
@@ -105,62 +130,69 @@ class Hunter
       if energon
         @target_energon = energon
         @mode = :collecting
-        return collecting_tick
+        return collecting_action
       end
     end
 
-    # MOVE: Patrol and rotate turret
-    avoid_walls
+    # MOVE: Patrol with inertia awareness
+    adjust_patrol_for_walls
     turret(8)
-    thrust(speed: PATROL_SPEED, angle: @patrol_angle) if speed < PATROL_SPEED
+
+    # Only thrust if we need to change direction or speed up
+    patrol_angle_safe = safe_angle(@patrol_angle)
+    if momentum_aligned?(patrol_angle_safe, tolerance: 60)
+      # Aligned - gentle thrust to maintain/increase speed
+      thrust(speed: PATROL_THRUST, angle: patrol_angle_safe) if speed < 8
+    elsif speed > 5
+      # Moving wrong direction at speed - brake first
+      brake_thrust
+    else
+      # Need to change direction - thrust toward desired angle
+      thrust(speed: PATROL_THRUST, angle: patrol_angle_safe)
+    end
+
+    # Light shields during patrol
+    shield(3) if energy > 50 && shield_level < 20
   end
 
-  def chase_tick
-    return revert_to_patrol if @target_x.nil?
+  def chase_action
+    return revert_to_patrol unless @target
 
     # === SENSE PHASE ===
-    current_scan_angle = @ticks_without_target > 5 ? SCAN_ANGLE_WIDE : SCAN_ANGLE
-
-    # Queue scan for next tick
+    current_scan_angle = @chronons_without_target > 5 ? SCAN_ANGLE_WIDE : SCAN_ANGLE
     scan(angle: current_scan_angle, distance: SCAN_DISTANCE, velocity: true)
 
-    # Process previous scan results
     if scan_result
       rubots = scan_result.select { |t| t[:type] == :rubot }
       if rubots.any?
         closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
-        update_target_with_lead(closest)
-        @ticks_without_target = 0
+        update_target(closest)
+        @chronons_without_target = 0
       else
-        @ticks_without_target += 1
+        @chronons_without_target += 1
       end
     else
-      @ticks_without_target += 1
+      @chronons_without_target += 1
     end
 
-    # Try wider pulse when losing target
-    if @ticks_without_target > 10 && (@ticks_without_target % 5).zero?
+    # Wider pulse when losing target
+    if @chronons_without_target > 10 && (@chronons_without_target % 5).zero?
       pulse(distance: PULSE_DISTANCE + 100)
       if pulse_result
         rubots = pulse_result.select { |t| t[:type] == :rubot }
         if rubots.any?
           closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
-          @target_base_x = closest[:x]
-          @target_base_y = closest[:y]
-          @target_x = closest[:x]
-          @target_y = closest[:y]
-          @target_vx = closest[:velocity_x]
-          @target_vy = closest[:velocity_y]
-          @target_health = nil
-          @ticks_without_target = 5
+          update_target(closest)
+          @chronons_without_target = 5
         end
       end
     end
 
-    return revert_to_patrol if @ticks_without_target > GIVE_UP_TICKS
+    return revert_to_patrol if @chronons_without_target > GIVE_UP_CHRONONS
 
-    # Probe for health when aligned
-    target_angle = angle_to(@target_x, @target_y)
+    # Probe for detailed info when aligned
+    lead_x, lead_y = calculate_lead_position
+    target_angle = angle_to(lead_x, lead_y)
     turret_diff = normalize_angle(target_angle - turret_angle)
 
     @probe_cooldown -= 1 if @probe_cooldown.positive?
@@ -168,33 +200,21 @@ class Hunter
       probe(:position, :velocity, :health)
       @probe_cooldown = 8
       if probe_result&.any?
-        update_target_with_lead(probe_result)
-        @target_health = probe_result[:health]
-        @ticks_without_target = 0
+        update_target(probe_result)
+        @chronons_without_target = 0
       end
     end
 
     # === MOVE PHASE ===
     turret(turret_diff.clamp(-25, 25))
 
-    base_x = @target_base_x || @target_x
-    base_y = @target_base_y || @target_y
-    dist = distance_to(base_x, base_y)
-
-    target_speed = @target_vx && @target_vy ? Math.sqrt((@target_vx**2) + (@target_vy**2)) : 0
-
-    move_angle = if target_speed >= 2 && dist > 180
-                   calculate_intercept_angle
-                 else
-                   angle_to(base_x, base_y)
-                 end
-
-    move_speed = target_speed < 2 && dist > 100 ? 6 : CHASE_SPEED
-    thrust(speed: move_speed, angle: move_angle)
+    # Inertia-aware pursuit
+    pursue_target
 
     # === COMBAT PHASE ===
     if turret_diff.abs < 30
-      target_weak = @target_health && @target_health < 40
+      dist = distance_to(@target[:x], @target[:y])
+      target_weak = @target[:health] && @target[:health] < 40
       fire_power = if (dist < 80 && turret_diff.abs < 10) || target_weak
                      15
                    elsif dist < 120 && turret_diff.abs < 12
@@ -209,47 +229,61 @@ class Hunter
     shield(5) if energy > 35 && shield_level < 25
   end
 
-  def update_target_with_lead(target_data)
-    # Store raw position for movement
-    @target_base_x = target_data[:x]
-    @target_base_y = target_data[:y]
+  def pursue_target
+    return unless @target
 
-    # Store velocity for intercept calculation
-    @target_vx = target_data[:velocity_x]
-    @target_vy = target_data[:velocity_y]
+    base_x = @target[:x]
+    base_y = @target[:y]
+    dist = distance_to(base_x, base_y)
 
-    if @target_vx && @target_vy
-      # Calculate lead based on distance and bullet speed
-      dist = distance_to(@target_base_x, @target_base_y)
-      time_to_target = dist / BULLET_SPEED
-      lead_ticks = [time_to_target, 15].min # Cap lead at 15 ticks
+    # Calculate pursuit angle with intercept prediction
+    pursuit_angle = calculate_pursuit_angle
+    pursuit_angle = safe_angle(pursuit_angle)
 
-      @target_x = @target_base_x + (@target_vx * lead_ticks)
-      @target_y = @target_base_y + (@target_vy * lead_ticks)
+    # Inertia-aware thrust decision
+    if dist < 60
+      # Very close - match target movement or hold position
+      thrust(speed: 2, angle: pursuit_angle) if speed < 5
+    elsif momentum_aligned?(pursuit_angle, tolerance: 45)
+      # Good alignment - accelerate toward target
+      thrust_speed = dist > 200 ? CHASE_THRUST : 3
+      thrust(speed: thrust_speed, angle: pursuit_angle) if speed < 12
+    elsif speed > 6
+      # Need direction change - brake then redirect
+      brake_thrust
     else
-      @target_x = @target_base_x
-      @target_y = @target_base_y
+      thrust(speed: CHASE_THRUST, angle: pursuit_angle)
     end
   end
 
-  def calculate_intercept_angle
-    # Use base position for movement calculations
-    base_x = @target_base_x || @target_x
-    base_y = @target_base_y || @target_y
+  def calculate_pursuit_angle
+    return angle_to(@target[:x], @target[:y]) unless @target[:velocity_x] && @target[:velocity_y]
 
-    return angle_to(base_x, base_y) unless @target_vx && @target_vy
+    target_speed = speed_from_velocity(@target[:velocity_x], @target[:velocity_y])
+    return angle_to(@target[:x], @target[:y]) if target_speed < 1
 
-    # Calculate target speed
-    target_speed = Math.sqrt((@target_vx**2) + (@target_vy**2))
-    return angle_to(base_x, base_y) if target_speed < 1
+    # Intercept calculation accounting for our acceleration time
+    dist = distance_to(@target[:x], @target[:y])
 
-    # Calculate intercept point - where target will be when we arrive
-    dist = distance_to(base_x, base_y)
-    time_to_intercept = dist / CHASE_SPEED
+    # With inertia, we can't instantly reach max speed
+    # Estimate time to intercept more conservatively
+    avg_chase_speed = [speed, 6].max # Assume we'll average at least 6
+    time_to_intercept = dist / avg_chase_speed
 
-    # Predict where target will be
-    intercept_x = base_x + (@target_vx * time_to_intercept * 0.7)
-    intercept_y = base_y + (@target_vy * time_to_intercept * 0.7)
+    # Predict where target will be, with friction decay
+    friction = 0.92
+    intercept_x = @target[:x]
+    intercept_y = @target[:y]
+    vx = @target[:velocity_x]
+    vy = @target[:velocity_y]
+
+    # Simulate target movement with friction
+    time_to_intercept.clamp(1, 20).to_i.times do
+      intercept_x += vx
+      intercept_y += vy
+      vx *= friction
+      vy *= friction
+    end
 
     # Clamp to arena bounds
     intercept_x = intercept_x.clamp(30, arena_width - 30)
@@ -258,50 +292,67 @@ class Hunter
     angle_to(intercept_x, intercept_y)
   end
 
-  def acquire_target(target_x, target_y)
+  def calculate_lead_position
+    return [@target[:x], @target[:y]] unless @target[:velocity_x] && @target[:velocity_y]
+
+    lead_position(
+      @target[:x], @target[:y],
+      @target[:velocity_x], @target[:velocity_y],
+      projectile_speed: BULLET_SPEED
+    )
+  end
+
+  def update_target(data)
+    @target = {
+      x: data[:x],
+      y: data[:y],
+      velocity_x: data[:velocity_x],
+      velocity_y: data[:velocity_y],
+      health: data[:health] || @target&.dig(:health)
+    }
+  end
+
+  def acquire_target(data)
     @mode = :chase
-    @target_base_x = target_x
-    @target_base_y = target_y
-    @target_x = target_x
-    @target_y = target_y
-    @target_vx = nil
-    @target_vy = nil
-    @ticks_without_target = 0
+    update_target(data)
+    @chronons_without_target = 0
 
     # Turn turret toward target
-    target_angle = angle_to(target_x, target_y)
+    target_angle = angle_to(@target[:x], @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle)
     turret(turret_diff.clamp(-25, 25))
   end
 
   def revert_to_patrol
     @mode = :patrol
-    @target_x = nil
-    @target_y = nil
-    @target_base_x = nil
-    @target_base_y = nil
-    @target_vx = nil
-    @target_vy = nil
-    @target_health = nil
-    @ticks_without_target = 0
+    @target = nil
+    @chronons_without_target = 0
     @pulse_cooldown = 0
     @probe_cooldown = 0
   end
 
-  def avoid_walls
-    if x < WALL_BUFFER
-      @patrol_angle = rand(-30..29) # Roughly east
-    elsif x > arena_width - WALL_BUFFER
-      @patrol_angle = rand(150..209) # Roughly west
-    elsif y < WALL_BUFFER
-      @patrol_angle = rand(60..119) # Roughly north
-    elsif y > arena_height - WALL_BUFFER
-      @patrol_angle = rand(240..299) # Roughly south
-    end
+  def adjust_patrol_for_walls
+    # Proactively adjust patrol angle to avoid walls
+    return unless wall_distance(@patrol_angle) < WALL_BUFFER * 2
+
+    # Current patrol angle leads to wall - pick a better direction
+    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    @patrol_angle = center_angle + rand(-45..45)
+    @patrol_angle %= 360
   end
 
-  def collecting_tick
-    # Pulse to check for enemies while collecting
+  # Adjust angle to avoid walls (returns safe angle)
+  def safe_angle(angle)
+    return angle if wall_distance(angle) > WALL_BUFFER * 1.5
+
+    # Angle leads too close to wall - deflect toward center
+    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    # Blend toward center
+    diff = normalize_angle(center_angle - angle)
+    (angle + (diff * 0.5)) % 360
+  end
+
+  def collecting_action
     @pulse_cooldown -= 1 if @pulse_cooldown.positive?
     if @pulse_cooldown <= 0
       pulse(distance: PULSE_DISTANCE)
@@ -312,25 +363,30 @@ class Hunter
         if rubots.any?
           closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
           @target_energon = nil
-          acquire_target(closest[:x], closest[:y])
+          acquire_target(closest)
           return
         end
       end
     end
 
-    # Check if energon still exists
     unless energon_still_exists?(@target_energon)
       @target_energon = nil
       @mode = :patrol
       return
     end
 
-    # Move toward energon
+    # Move toward energon with inertia awareness
     energon_angle = angle_to(@target_energon[:x], @target_energon[:y])
     energon_dist = distance_to(@target_energon[:x], @target_energon[:y])
-    collect_speed = energon_dist < 50 ? PATROL_SPEED : CHASE_SPEED
+    safe_energon_angle = safe_angle(energon_angle)
 
-    thrust(speed: collect_speed, angle: energon_angle)
+    collect_thrust = energon_dist < 50 ? 2 : 3
+    if momentum_aligned?(safe_energon_angle, tolerance: 60)
+      thrust(speed: collect_thrust, angle: safe_energon_angle) if speed < 8
+    else
+      thrust(speed: collect_thrust, angle: safe_energon_angle)
+    end
+
     turret(8)
   end
 end

@@ -17,10 +17,10 @@ class Destructo
     @heading = rand(360)
   end
 
-  def tick
+  def act
     # Access state via methods: energy, health, x, y, turret_angle, etc.
     # Call action methods directly: thrust, fire, turret, probe, shield
-    # Actions are queued internally and executed after tick returns
+    # Actions are queued internally and executed after act returns
   end
 
   # Optional callbacks
@@ -35,7 +35,7 @@ class Destructo
 end
 ```
 
-**Error Handling**: If a rubot's code crashes or times out, it takes **10 damage** and skips that tick. This encourages robust code without instant disqualification.
+**Error Handling**: If a rubot's code crashes or times out, it takes **10 damage** and skips that chronon. This encourages robust code without instant disqualification.
 
 ### Rubot Module - Complete API
 
@@ -50,9 +50,9 @@ end
 
 | Size | Radius | HP | Energy Regen | Mass |
 |------|--------|-----|--------------|------|
-| `:small` | 15 units | 80 | +8/tick | 0.56 |
-| `:medium` | 20 units | 100 | +10/tick | 1.0 |
-| `:large` | 25 units | 120 | +12/tick | 1.56 |
+| `:small` | 15 units | 80 | +8/chronon | 0.56 |
+| `:medium` | 20 units | 100 | +10/chronon | 1.0 |
+| `:large` | 25 units | 120 | +12/chronon | 1.56 |
 
 **Mass** is derived from radius: `(radius / 20)^2` where 20 is the medium radius.
 
@@ -70,25 +70,25 @@ end
 | `turret_angle` | Float | Direction turret points (0-360°, world coordinates) |
 | `health` | Integer | Current HP (varies by size: 80/100/120) |
 | `energy` | Integer | Current energy (max 100, regen varies by size) |
-| `shield_level` | Integer | Current shield level (0 = no shield, decays 12%/tick, max = HP cap) |
+| `shield_level` | Integer | Current shield level (0 = no shield, decays 12%/chronon, max = HP cap) |
 | `arena_width`, `arena_height` | Integer | Arena dimensions |
 | `friction` | Float | Arena friction coefficient (default 0.95) |
-| `tick_number` | Integer | Current game tick |
+| `chronons` | Integer | Current game tick |
 | `damage_dealt` | Integer | Total damage dealt this match |
 | `damage_taken` | Integer | Total damage received this match |
 | `energons` | Array | All energon positions `[{x:, y:}]` (always visible, free) |
 | `size` | Symbol | Rubot's size (`:small`, `:medium`, `:large`) |
 | `live_rubot_count` | Integer | Number of rubots still alive in battle |
 | `energon_spawn_interval` | Integer | Ticks between energon spawns (default 80) |
-| `energon_growth_rate` | Float | Energy growth per tick (default 1.0) |
+| `energon_growth_rate` | Float | Energy growth per chronon (default 1.0) |
 
 #### Action Methods
 | Method | Cost | Description |
 |--------|------|-------------|
 | `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
 | `turret(degrees)` | ceil(\|degrees\|/24) energy | Rotate turret. Negative = left, positive = right. |
-| `fire(energy)` | energy spent | Fire projectile. Damage = **1.5 x energy**. Bullets travel 18 u/tick. |
-| `shield(energy)` | energy spent | Pump energy into shield. Decays 12%/tick. Max = HP cap. |
+| `fire(energy)` | energy spent | Fire projectile. Damage = **1.5 x energy**. Bullets travel 18 u/chronon. |
+| `shield(energy)` | energy spent | Pump energy into shield. Decays 12%/chronon. Max = HP cap. |
 | `probe(*attributes)` | 1 + attribute costs | Line in turret direction. Returns target info or nil. |
 | `scan(angle:, distance:, velocity:, owner:)` | 3 + area cost [+2] [+1] | Arc scan for multiple targets. |
 | `pulse(distance:, owner:)` | 2 + ceil(distance/75) [+1] | Omnidirectional radar ping. |
@@ -123,7 +123,7 @@ probe(:position, :velocity)  # 8 energy  -> {size:, x:, y:, velocity_x:, velocit
 probe(:position, :velocity, :shield, :health, :energy)  # 16 energy -> everything
 ```
 
-**Important:** `probe()` returns the result from the PREVIOUS tick's probe. Since actions are processed after tick(), the current probe result won't be available until the next tick.
+**Important:** `probe()` returns the result from the PREVIOUS chronon's probe. Since actions are processed after act(), the current probe result won't be available until the next chronon.
 
 **`scan(angle:, distance:, velocity: false)`** - Arc scan centered on turret direction
 
@@ -146,7 +146,7 @@ scan(angle: 90, distance: 300)                 # 11 energy -> wide area scan
 scan(angle: 180, distance: 400)                # 16 energy -> hemisphere scan
 ```
 
-**Design rationale:** `scan()` provides broad situational awareness (where are things moving?). Use `probe()` for detailed info (health, shield, energy) on a specific target. Like `probe()`, results are from the PREVIOUS tick.
+**Design rationale:** `scan()` provides broad situational awareness (where are things moving?). Use `probe()` for detailed info (health, shield, energy) on a specific target. Like `probe()`, results are from the PREVIOUS chronon.
 
 **`pulse(distance:)`** - Omnidirectional radar ping
 
@@ -166,11 +166,11 @@ pulse(distance: 100)  # 4 energy
 pulse(distance: 200)  # 5 energy
 ```
 
-**Design rationale:** `pulse()` is the cheapest way to detect nearby threats. Use it for quick awareness checks. No velocity data available - if you need that, use `scan()`. Like other sensing methods, results are from the PREVIOUS tick.
+**Design rationale:** `pulse()` is the cheapest way to detect nearby threats. Use it for quick awareness checks. No velocity data available - if you need that, use `scan()`. Like other sensing methods, results are from the PREVIOUS chronon.
 
 **`detect`** - Counter-intelligence
 
-Reports how many times you were probed, scanned, or pulsed in the current tick's sense phase.
+Reports how many times you were probed, scanned, or pulsed in the current chronon's sense phase.
 
 **Cost:** 2 energy
 
@@ -191,16 +191,16 @@ Shields absorb damage before health. They use proportional decay, making high sh
 
 **Mechanics**:
 - `shield(energy)` - Add energy to shield strength
-- Shield decays **12% per tick** (proportional decay)
+- Shield decays **12% per chronon** (proportional decay)
 - Damage hits shield first, then health when shield = 0
 - Shield absorbs damage 1:1 (10 damage removes 10 shield)
 - Max shield = max HP (80/100/120 by size)
 
 **Decay Examples**:
 - 100 shield → 88 → 77 → 68 → 60 → 53 → 47 → 41...
-- To maintain 100 shield: costs 12 energy/tick
-- To maintain 50 shield: costs 6 energy/tick
-- To maintain 20 shield: costs ~2.4 energy/tick
+- To maintain 100 shield: costs 12 energy/chronon
+- To maintain 50 shield: costs 6 energy/chronon
+- To maintain 20 shield: costs ~2.4 energy/chronon
 
 **Max Sustainable Shield** (all regen to shields):
 - Small (8 regen): 67 shield
@@ -209,11 +209,11 @@ Shields absorb damage before health. They use proportional decay, making high sh
 
 **Example**:
 ```ruby
-def tick
+def act
   # Burst shield when under attack (decays quickly but absorbs hits)
   shield(30) if under_fire?
 
-  # Light sustained shield (costs ~2.4 energy/tick to maintain ~20)
+  # Light sustained shield (costs ~2.4 energy/chronon to maintain ~20)
   shield(3) if shield_level < 20 && !under_fire?
 end
 ```
@@ -223,9 +223,9 @@ end
 #### Physics
 
 - **Movement**: `thrust(speed:, angle:)` adds velocity in world direction. Cost = (speed/1.5)^2 x mass x direction_multiplier.
-- **Friction**: Velocity *= 0.95 each tick (configurable per tournament).
-- **Max speed**: Capped at 30 units/tick (but sustained high speed is impractical due to energy cost).
-- **Projectiles**: Travel at **18 units/tick**. Spawn at edge of rubot (position + rubot radius + bullet radius). Can hit anyone including the shooter.
+- **Friction**: Velocity *= 0.95 each chronon (configurable per tournament).
+- **Max speed**: Capped at 30 units/chronon (but sustained high speed is impractical due to energy cost).
+- **Projectiles**: Travel at **18 units/chronon**. Spawn at edge of rubot (position + rubot radius + bullet radius). Can hit anyone including the shooter.
 - **Wall collision**: `2 + speed x 0.75` damage + momentum-absorbing bounce. At max speed: 25 damage. Bounce retains velocity x mass x 0.12 (small: 7%, medium: 12%, large: 19%).
 - **Rubot collision**: `2 + attacker_mass x attacker_speed x 0.5` damage + push apart. Momentum-based.
 
@@ -264,14 +264,14 @@ def on_energon(amount)           # Called when collecting energon (20-80 energy)
 Energy power-ups that spawn periodically and grow in value over time. No healing - damage is permanent.
 
 **Spawn mechanics:**
-- Spawn every 80 ticks (configurable via `ENERGON_SPAWN_INTERVAL`)
+- Spawn every 80 chronons (configurable via `ENERGON_SPAWN_INTERVAL`)
 - Position maximizes minimum distance from all alive rubots
 - Wall buffer: 15% of smaller arena dimension (spawns away from edges/corners)
 - No limit on number of energons on field
 
 **Value mechanics:**
 - Starting value: 1 energy
-- Growth: +1 energy per tick alive (configurable via `GROWTH_RATE`)
+- Growth: +1 energy per chronon alive (configurable via `GROWTH_RATE`)
 - Older energons are more valuable but may have more competition
 
 **Collection:**
@@ -292,7 +292,7 @@ Energy power-ups that spawn periodically and grow in value over time. No healing
 
 ### Victory Condition
 - Last rubot standing wins
-- Matches have a tick limit (e.g., 5000 ticks) to prevent stalemates
+- Matches have a chronon limit (e.g., 5000 chronons) to prevent stalemates
 - If time expires: highest HP wins, then most damage dealt
 
 ---
@@ -307,12 +307,12 @@ rubowar/
 │   │   ├── rubot.rb           # The module participants include
 │   │   ├── arena.rb           # Game world, physics, collision
 │   │   ├── battle.rb          # Runs a single battle
-│   │   ├── rubot_runner.rb    # Mutable state tracking
+│   │   ├── rubot_actor.rb    # Mutable state tracking
 │   │   ├── rubot_state.rb     # Immutable state snapshots (Data.define)
 │   │   ├── arena_state.rb     # Arena state snapshots (Data.define)
 │   │   ├── bullet.rb          # Projectile tracking
 │   │   ├── energon.rb         # Energy power-ups
-│   │   ├── sensing_costs.rb   # Sensing cost calculations
+│   │   ├── physics.rb         # Physics calculations
 │   │   └── renderers/
 │   │       └── terminal.rb    # ASCII visualization
 │   └── rubowar.rb
@@ -339,7 +339,7 @@ The engine is renderer-agnostic. It emits events that any renderer can consume:
 battle = Rubowar::Battle.new(rubots: [Spinner, Tracker], width: 800, height: 600)
 
 # Option 1: Block-based (for real-time renderers)
-battle.on(:tick) { |state| render_frame(state) }
+battle.on(:chronon) { |state| render_frame(state) }
 battle.on(:hit) { |event| play_sound(:hit) }
 battle.on(:death) { |event| show_explosion(event) }
 battle.run
@@ -353,7 +353,7 @@ battle.run(renderer: Rubowar::Renderers::Terminal)
 ```
 
 **Event Types**:
-- `:tick` - Full game state each tick
+- `:chronon` - Full game state each chronon
 - `:fire` - Rubot fired a projectile
 - `:hit` - Projectile hit a rubot
 - `:death` - Rubot destroyed
@@ -370,7 +370,7 @@ battle.run(renderer: Rubowar::Renderers::Terminal)
 - Provides `size` class method for choosing rubot size
 - Delegates state accessors to RubotState and ArenaState
 - Provides action methods: `thrust`, `turret`, `fire`, `shield`, `probe`
-- Actions are queued and processed after tick returns
+- Actions are queued and processed after act returns
 
 #### 2. Arena (`lib/rubowar/arena.rb`)
 - Manages physics: movement, friction, collisions
@@ -383,14 +383,14 @@ battle.run(renderer: Rubowar::Renderers::Terminal)
 - Emits events via callbacks (renderer-agnostic)
 - Determines winner
 
-#### 4. RubotRunner (`lib/rubowar/rubot_runner.rb`)
+#### 4. RubotActor (`lib/rubowar/rubot_actor.rb`)
 - Mutable state tracker for game engine
 - Tracks position, velocity, health, energy, shield, damage stats
 - Provides methods: `apply_damage`, `spend_energy`, `regenerate_energy`, etc.
 
 #### 5. State Objects (`rubot_state.rb`, `arena_state.rb`)
 - Immutable snapshots using `Data.define`
-- Passed to rubot instances each tick
+- Passed to rubot instances each chronon
 - Prevents rubots from cheating by modifying state directly
 
 ---
@@ -404,15 +404,15 @@ battle.run(renderer: Rubowar::Renderers::Terminal)
 | HP | 80 | 100 | 120 |
 | Radius | 15 | 20 | 25 |
 | Mass | 0.56 | 1.0 | 1.56 |
-| Regen | 8/tick | 10/tick | 12/tick |
+| Regen | 8/chronon | 10/chronon | 12/chronon |
 | Thrust @ speed 5 | 6.2 energy | 11.1 energy | 17.4 energy |
 | Sustainable speed | 5.7 | 4.7 | 4.2 |
 | Hit area ratio | 1.0x | 1.8x | 2.8x |
 
 ### Damage Output (stationary, all energy to fire)
-- Small: 8 x 1.5 = 12 damage/tick
-- Medium: 10 x 1.5 = 15 damage/tick
-- Large: 12 x 1.5 = 18 damage/tick
+- Small: 8 x 1.5 = 12 damage/chronon
+- Medium: 10 x 1.5 = 15 damage/chronon
+- Large: 12 x 1.5 = 18 damage/chronon
 
 ### Collision Damage @ Max Speed (30)
 - Small hitting: 2 + 0.56 x 30 x 0.5 = 10 damage
@@ -442,7 +442,7 @@ class Spinner
   include Rubowar::Rubot
   size :medium
 
-  def tick
+  def act
     turret(7)
     target = probe
     fire(10) if target && energy > 20
@@ -452,13 +452,13 @@ end
 
 **Why it works**: Zero movement cost means all energy goes to offense. Probe is cheap (4-7 energy). Only fires when target confirmed - no wasted shots. Exploits aggressive bots that come to it.
 
-**Key insight**: Turret rotation speed of 7°/tick is optimal. Slower = more shots per target pass. Faster = might skip targets between ticks.
+**Key insight**: Turret rotation speed of 7°/chronon is optimal. Slower = more shots per target pass. Faster = might skip targets between ticks.
 
 | Turret Speed | Performance |
 |--------------|-------------|
-| 3°/tick | Best avg points, slow coverage |
-| 7°/tick | Best balance (chosen) |
-| 15°/tick | Fast coverage, fewer hits |
+| 3°/chronon | Best avg points, slow coverage |
+| 7°/chronon | Best balance (chosen) |
+| 15°/chronon | Fast coverage, fewer hits |
 
 ### Coroner (Dominant - Corner Sniper)
 
@@ -527,10 +527,10 @@ end
 **Strategy**: Small size for mobility, patrol until target found, chase relentlessly, probe for health, finish weak targets.
 
 **Key behaviors**:
-1. Patrol with pulse detection (300 radius, every 3 ticks)
+1. Patrol with pulse detection (300 radius, every 3 chronons)
 2. Chase with scan tracking (70° arc, velocity data)
 3. Intercept moving targets (predict where they'll be)
-4. Probe for health every 8 ticks
+4. Probe for health every 8 chronons
 5. "Finish them" mode when target < 40 HP (max fire power)
 6. Reactive dodge on hit (perpendicular to bullet direction)
 
@@ -549,7 +549,7 @@ move_angle = if target_speed < 2
 - Strafing: 76 wins in 1v1 test
 - Direct: 91 wins in 1v1 test
 
-Strafing hurts because turret rotation is limited (15°/tick) and bullets are fast (18/tick). DPS beats evasion.
+Strafing hurts because turret rotation is limited (15°/chronon) and bullets are fast (18/chronon). DPS beats evasion.
 
 **Design decision - Chase speed 7 not 8+**: Lower speed conserves energy for shields and firing. Speed 6-7 optimal, 9+ hurts performance.
 
@@ -593,12 +593,12 @@ end
 
 Energy is the core resource. Every action costs energy, and regeneration is fixed by size. Winning strategies maximize damage output per energy spent.
 
-**Energy budget per tick (by size)**:
+**Energy budget per chronon (by size)**:
 | Size | Regen | Max Sustainable Actions |
 |------|-------|------------------------|
-| Small | 8 | ~8 energy of actions/tick |
-| Medium | 10 | ~10 energy of actions/tick |
-| Large | 12 | ~12 energy of actions/tick |
+| Small | 8 | ~8 energy of actions/chronon |
+| Medium | 10 | ~10 energy of actions/chronon |
+| Large | 12 | ~12 energy of actions/chronon |
 
 **Action cost comparison**:
 | Action | Cost | Damage/Utility |
@@ -606,10 +606,10 @@ Energy is the core resource. Every action costs energy, and regeneration is fixe
 | probe() | 4-7 | Confirms target |
 | fire(10) | 10 | 15 damage |
 | thrust(speed: 5) | 6-17 (by mass) | Movement |
-| shield(5) | 5 | 5 shield (decays 12%/tick) |
+| shield(5) | 5 | 5 shield (decays 12%/chronon) |
 | scan(60°, 300) | 9 | Area awareness |
 
-**Key insight**: Stationary bots win because movement is expensive. A small bot moving at speed 5 spends ~6 energy/tick on thrust alone, leaving only 2 for everything else. A stationary bot has all 8-12 energy for offense.
+**Key insight**: Stationary bots win because movement is expensive. A small bot moving at speed 5 spends ~6 energy/chronon on thrust alone, leaving only 2 for everything else. A stationary bot has all 8-12 energy for offense.
 
 ### Mobility vs Firepower Tradeoff
 
@@ -634,7 +634,7 @@ Three sensing options with different cost/benefit:
 | scan() | 5-16 | Arc (configurable) | Medium (position, velocity) | Finding targets |
 | pulse() | 3-5 | 360° | Low (position only) | Quick awareness check |
 
-**Design decision**: Sensing has 1-tick delay. You call `probe()` this tick, get results next tick. This prevents perfect reaction and rewards prediction.
+**Design decision**: Sensing has 1-chronon delay. You call `probe()` this tick, get results next chronon. This prevents perfect reaction and rewards prediction.
 
 **Optimal sensing pattern**:
 1. `pulse()` to detect presence (cheap, 360°)
@@ -643,13 +643,13 @@ Three sensing options with different cost/benefit:
 
 ### Shield System Analysis
 
-Shields use proportional decay (12%/tick), making high shields expensive:
+Shields use proportional decay (12%/chronon), making high shields expensive:
 
-| Shield Level | Decay/tick | Cost to Maintain |
+| Shield Level | Decay/chronon | Cost to Maintain |
 |--------------|------------|------------------|
-| 20 | 2.4 | 2.4 energy/tick |
-| 50 | 6 | 6 energy/tick |
-| 100 | 12 | 12 energy/tick (all large bot regen) |
+| 20 | 2.4 | 2.4 energy/chronon |
+| 50 | 6 | 6 energy/chronon |
+| 100 | 12 | 12 energy/chronon (all large bot regen) |
 
 **Implication**: Sustained high shields are impossible while fighting. Shields are for burst protection:
 
@@ -660,7 +660,7 @@ def on_hit(damage, direction)
 end
 
 # Bad: Constant high shield
-def tick
+def act
   shield(12) if shield_level < 100  # Drains all energy, can't fight
 end
 ```
@@ -686,8 +686,8 @@ end
 ### Combat Insights from Testing
 
 **1. Turret rotation matters**
-- Max rotation: 15°/tick
-- Optimal spinner speed: 7°/tick (balances coverage vs hits-per-pass)
+- Max rotation: 15°/chronon
+- Optimal spinner speed: 7°/chronon (balances coverage vs hits-per-pass)
 - Fast rotation (15+°) can skip targets between ticks
 
 **2. Chase speed optimization**
@@ -701,7 +701,7 @@ end
 - Reason: Turret lag + fast bullets = missed shots while moving sideways
 
 **4. Lead calculation is essential**
-- Bullets travel 18 units/tick
+- Bullets travel 18 units/chronon
 - Moving targets need prediction: `target_x + velocity_x * (distance / 18)`
 - Bots without lead calculation lose to mobile opponents
 

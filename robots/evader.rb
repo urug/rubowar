@@ -8,7 +8,7 @@ class Evader
   size :small # Agile, harder to hit, 8 energy regen
 
   PULSE_RANGE = 300       # Long range to find targets (6 energy)
-  EVASION_TICKS = 12
+  EVASION_CHRONONS = 12
   WALL_BUFFER = 80        # Large buffer for momentum
   MIN_SHOT_ENERGY = 10    # Don't bother with tiny shots
   ENERGON_RANGE = 150     # How far to go for energon
@@ -20,11 +20,11 @@ class Evader
     @juke_timer = 0
   end
 
-  def tick
+  def act
     check_if_targeted
 
-    # SENSE: Pulse every other tick (6 energy)
-    update_target if tick_number.odd?
+    # SENSE: Pulse every other chronon (6 energy)
+    update_target if chronons.odd?
 
     move
 
@@ -41,7 +41,7 @@ class Evader
   end
 
   def on_hit(_damage, _direction)
-    @evading = EVASION_TICKS
+    @evading = EVASION_CHRONONS
     @direction *= -1
   end
 
@@ -52,7 +52,7 @@ class Evader
   private
 
   def check_if_targeted
-    # Proactive juking: change direction every 8-15 ticks when near enemy
+    # Proactive juking: change direction every 8-15 chronons when near enemy
     @juke_timer -= 1
     if @juke_timer <= 0 && @target
       dist = distance_to(@target[:x], @target[:y])
@@ -66,7 +66,7 @@ class Evader
 
     if (detect_result[:probed] || 0).positive?
       # Being probed = enemy aiming at us, dodge NOW
-      @evading = EVASION_TICKS
+      @evading = EVASION_CHRONONS
       @direction *= -1
       @juke_timer = rand(5..10)
     elsif (detect_result[:scanned] || 0).positive?

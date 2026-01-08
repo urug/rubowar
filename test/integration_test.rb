@@ -9,7 +9,7 @@ class IntegrationStationaryBot
   include Rubowar::Rubot
 
   size :medium
-  def tick; end
+  def act; end
 end
 
 # Bot that fires every tick at high energy
@@ -18,7 +18,7 @@ class IntegrationShooterBot
 
   size :medium
 
-  def tick
+  def act
     turret(5)
     fire(15) if energy > 20
   end
@@ -38,11 +38,11 @@ class IntegrationSensingBot
     @ticks_with_scan_result = []
   end
 
-  def tick
+  def act
     # Record which ticks have results
-    @ticks_with_pulse_result << tick_number if pulse_result&.any?
-    @ticks_with_probe_result << tick_number if probe_result&.any?
-    @ticks_with_scan_result << tick_number if scan_result&.any?
+    @ticks_with_pulse_result << chronons if pulse_result&.any?
+    @ticks_with_probe_result << chronons if probe_result&.any?
+    @ticks_with_scan_result << chronons if scan_result&.any?
 
     # Queue sensing for next tick
     pulse(distance: 500)
@@ -63,7 +63,7 @@ class IntegrationMoveFireBot
     @positions_when_fired = []
   end
 
-  def tick
+  def act
     @positions_when_fired << { x: x.round(1), y: y.round(1) }
     thrust(speed: 5, angle: 0) # Move east
     fire(10)
@@ -83,10 +83,10 @@ class IntegrationCollectorBot
   end
 
   def on_energon(amount)
-    @energon_collections << { tick: tick_number, amount: }
+    @energon_collections << { tick: chronons, amount: }
   end
 
-  def tick
+  def act
     # Move toward nearest energon if available
     nearest = find_nearest_energon
     return unless nearest
@@ -108,7 +108,7 @@ class IntegrationCrashingBot
     @should_crash = false
   end
 
-  def tick
+  def act
     raise "Intentional crash!" if @should_crash
   end
 end
@@ -119,7 +119,7 @@ class IntegrationShieldBot
 
   size :medium
 
-  def tick
+  def act
     shield(20) if energy > 30 && shield_level < 50
   end
 end
@@ -140,7 +140,7 @@ class IntegrationWallRamBot
     @wall_hits += 1
   end
 
-  def tick
+  def act
     thrust(speed: 8, angle: 0) # Ram east wall
   end
 end
@@ -157,8 +157,8 @@ class IntegrationDetectBot
     @detect_results_by_tick = {}
   end
 
-  def tick
-    @detect_results_by_tick[tick_number] = detect_result.dup if detect_result
+  def act
+    @detect_results_by_tick[chronons] = detect_result.dup if detect_result
     detect
   end
 end
@@ -169,7 +169,7 @@ class IntegrationScannerBot
 
   size :medium
 
-  def tick
+  def act
     pulse(distance: 500)
     scan(angle: 360, distance: 500)
     probe(:position)
@@ -179,17 +179,17 @@ end
 describe "Integration Tests" do
   describe "full battle simulation" do
     it "runs a complete battle to conclusion" do
-      battle = Rubowar::Battle.new([IntegrationShooterBot, IntegrationStationaryBot], tick_limit: 500)
+      battle = Rubowar::Battle.new([IntegrationShooterBot, IntegrationStationaryBot], chronon_limit: 500)
 
       events = battle.run
 
       _(battle.winner).wont_be_nil
-      _(battle.tick_number).must_be :>=, 1
+      _(battle.chronons).must_be :>=, 1
       _(events).wont_be_empty
     end
 
     it "determines winner as last rubot standing" do
-      battle = Rubowar::Battle.new([IntegrationShooterBot, IntegrationStationaryBot], tick_limit: 1000)
+      battle = Rubowar::Battle.new([IntegrationShooterBot, IntegrationStationaryBot], chronon_limit: 1000)
       battle.run
 
       # Shooter should eventually kill stationary bot
@@ -199,7 +199,7 @@ describe "Integration Tests" do
     end
 
     it "uses damage dealt as tiebreaker when timeout" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 10)
       battle.run
 
       # Manually set damage to test tiebreaker
@@ -211,7 +211,7 @@ describe "Integration Tests" do
     end
 
     it "uses health as secondary tiebreaker" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 10)
       battle.run
 
       # Same damage, different health
@@ -225,7 +225,7 @@ describe "Integration Tests" do
     end
 
     it "handles draw when all rubots die simultaneously" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 5)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 5)
 
       # Kill both before battle runs
       battle.arena.runners.each { |r| r.health = 0 }
@@ -238,7 +238,7 @@ describe "Integration Tests" do
 
   describe "sensing delay" do
     it "pulse results arrive one tick after queuing" do
-      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], chronon_limit: 10)
       battle.run
 
       sensor = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationSensingBot) }
@@ -251,7 +251,7 @@ describe "Integration Tests" do
     end
 
     it "probe results arrive one tick after queuing" do
-      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], chronon_limit: 10)
 
       # Position them so probe can hit
       sensor = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationSensingBot) }
@@ -271,7 +271,7 @@ describe "Integration Tests" do
     end
 
     it "scan results arrive one tick after queuing" do
-      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationSensingBot, IntegrationStationaryBot], chronon_limit: 10)
       battle.run
 
       sensor = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationSensingBot) }
@@ -283,7 +283,7 @@ describe "Integration Tests" do
     end
 
     it "detect reports current tick sensing activity" do
-      battle = Rubowar::Battle.new([IntegrationDetectBot, IntegrationScannerBot], tick_limit: 5)
+      battle = Rubowar::Battle.new([IntegrationDetectBot, IntegrationScannerBot], chronon_limit: 5)
 
       # Position them close
       detector = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationDetectBot) }
@@ -306,7 +306,7 @@ describe "Integration Tests" do
 
   describe "phased action processing" do
     it "moves rubot before firing bullet" do
-      battle = Rubowar::Battle.new([IntegrationMoveFireBot, IntegrationStationaryBot], tick_limit: 3)
+      battle = Rubowar::Battle.new([IntegrationMoveFireBot, IntegrationStationaryBot], chronon_limit: 3)
 
       mover = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationMoveFireBot) }
       mover.x = 100.0
@@ -331,7 +331,7 @@ describe "Integration Tests" do
     end
 
     it "processes all rubots movement before any firing" do
-      battle = Rubowar::Battle.new([IntegrationMoveFireBot, IntegrationMoveFireBot], tick_limit: 2)
+      battle = Rubowar::Battle.new([IntegrationMoveFireBot, IntegrationMoveFireBot], chronon_limit: 2)
 
       bot1 = battle.arena.runners[0]
       bot2 = battle.arena.runners[1]
@@ -353,7 +353,7 @@ describe "Integration Tests" do
 
   describe "energon mechanics" do
     it "spawns energon at configured interval" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 200)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 200)
       battle.run
 
       spawn_events = battle.events.select { |e| e[:type] == :energon_spawn }
@@ -363,7 +363,7 @@ describe "Integration Tests" do
     end
 
     it "energon value increases over time" do
-      battle = Rubowar::Battle.new([IntegrationCollectorBot, IntegrationStationaryBot], tick_limit: 200)
+      battle = Rubowar::Battle.new([IntegrationCollectorBot, IntegrationStationaryBot], chronon_limit: 200)
 
       # Force spawn an energon early
       battle.arena.spawn_energon(1)
@@ -380,7 +380,7 @@ describe "Integration Tests" do
     end
 
     it "triggers on_energon callback when collected" do
-      battle = Rubowar::Battle.new([IntegrationCollectorBot, IntegrationStationaryBot], tick_limit: 200)
+      battle = Rubowar::Battle.new([IntegrationCollectorBot, IntegrationStationaryBot], chronon_limit: 200)
 
       # Spawn energon near collector
       collector = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationCollectorBot) }
@@ -401,7 +401,7 @@ describe "Integration Tests" do
 
   describe "error handling" do
     it "applies damage when rubot crashes" do
-      battle = Rubowar::Battle.new([IntegrationCrashingBot, IntegrationStationaryBot], tick_limit: 10)
+      battle = Rubowar::Battle.new([IntegrationCrashingBot, IntegrationStationaryBot], chronon_limit: 10)
 
       crasher = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationCrashingBot) }
       initial_health = crasher.health
@@ -409,14 +409,14 @@ describe "Integration Tests" do
       # Make it crash after first tick
       battle.send(:call_on_spawn)
       crasher.instance.should_crash = true
-      battle.send(:run_tick)
+      battle.send(:run_chronon)
 
       # Should have taken error damage (10)
       _(crasher.health).must_equal initial_health - Rubowar::Config::Battle::ERROR_DAMAGE
     end
 
     it "emits error event when rubot crashes" do
-      battle = Rubowar::Battle.new([IntegrationCrashingBot, IntegrationStationaryBot], tick_limit: 5)
+      battle = Rubowar::Battle.new([IntegrationCrashingBot, IntegrationStationaryBot], chronon_limit: 5)
 
       crasher = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationCrashingBot) }
 
@@ -425,7 +425,7 @@ describe "Integration Tests" do
       crasher.instance.should_crash = true
 
       # Run ticks manually so crash happens
-      3.times { battle.send(:run_tick) }
+      3.times { battle.send(:run_chronon) }
 
       error_events = battle.events.select { |e| e[:type] == :error }
 
@@ -436,7 +436,7 @@ describe "Integration Tests" do
 
   describe "shield mechanics" do
     it "shields absorb bullet damage" do
-      battle = Rubowar::Battle.new([IntegrationShieldBot, IntegrationShooterBot], tick_limit: 50)
+      battle = Rubowar::Battle.new([IntegrationShieldBot, IntegrationShooterBot], chronon_limit: 50)
 
       shield_bot = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationShieldBot) }
       shooter = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationShooterBot) }
@@ -456,18 +456,18 @@ describe "Integration Tests" do
     end
 
     it "shields decay each tick" do
-      battle = Rubowar::Battle.new([IntegrationShieldBot, IntegrationStationaryBot], tick_limit: 20)
+      battle = Rubowar::Battle.new([IntegrationShieldBot, IntegrationStationaryBot], chronon_limit: 20)
 
       shield_bot = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationShieldBot) }
 
       # Run a few ticks to build shields
-      5.times { battle.send(:run_tick) }
+      5.times { battle.send(:run_chronon) }
 
       shield_after_build = shield_bot.shield_level
 
       # Run more ticks without adding shields (low energy)
       shield_bot.energy = 0
-      5.times { battle.send(:run_tick) }
+      5.times { battle.send(:run_chronon) }
 
       # Shields should have decayed
       _(shield_bot.shield_level).must_be :<, shield_after_build
@@ -476,7 +476,7 @@ describe "Integration Tests" do
 
   describe "collision mechanics" do
     it "applies wall damage on collision" do
-      battle = Rubowar::Battle.new([IntegrationWallRamBot, IntegrationStationaryBot], tick_limit: 20)
+      battle = Rubowar::Battle.new([IntegrationWallRamBot, IntegrationStationaryBot], chronon_limit: 20)
 
       rammer = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationWallRamBot) }
       rammer.x = 750 # Near east wall
@@ -490,7 +490,7 @@ describe "Integration Tests" do
     end
 
     it "triggers on_wall callback" do
-      battle = Rubowar::Battle.new([IntegrationWallRamBot, IntegrationStationaryBot], tick_limit: 20)
+      battle = Rubowar::Battle.new([IntegrationWallRamBot, IntegrationStationaryBot], chronon_limit: 20)
 
       rammer = battle.arena.runners.find { |r| r.instance.is_a?(IntegrationWallRamBot) }
       rammer.x = 750
@@ -506,7 +506,7 @@ describe "Integration Tests" do
     it "handles 3+ rubots" do
       battle = Rubowar::Battle.new(
         [IntegrationShooterBot, IntegrationStationaryBot, IntegrationShieldBot],
-        tick_limit: 200
+        chronon_limit: 200
       )
 
       events = battle.run
@@ -518,7 +518,7 @@ describe "Integration Tests" do
     it "continues until one survivor or timeout" do
       battle = Rubowar::Battle.new(
         [IntegrationShooterBot, IntegrationShooterBot, IntegrationShooterBot],
-        tick_limit: 500
+        chronon_limit: 500
       )
 
       battle.run
@@ -532,26 +532,26 @@ describe "Integration Tests" do
 
   describe "energy regeneration" do
     it "regenerates energy each tick" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 5)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 5)
 
       bot = battle.arena.runners.first
       bot.energy = 50
 
       battle.send(:call_on_spawn)
-      battle.send(:run_tick)
+      battle.send(:run_chronon)
 
       # Should have regenerated (medium = 10/tick)
       _(bot.energy).must_equal 60
     end
 
     it "caps energy at max" do
-      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], tick_limit: 5)
+      battle = Rubowar::Battle.new([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 5)
 
       bot = battle.arena.runners.first
       bot.energy = bot.max_energy - 5
 
       battle.send(:call_on_spawn)
-      battle.send(:run_tick)
+      battle.send(:run_chronon)
 
       _(bot.energy).must_equal bot.max_energy
     end
