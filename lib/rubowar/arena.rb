@@ -63,7 +63,7 @@ module Rubowar
       @runners.each do |runner|
         position = find_spawn_position(runner.radius)
         runner.set_position(position[:x], position[:y])
-        runner.turret_angle = rand(360)
+        runner.set_turret_angle(rand(360))
       end
     end
 
@@ -109,7 +109,7 @@ module Rubowar
       case action[:type]
       when :thrust
         runner.thrust(speed: action[:speed], angle: action[:angle])
-      when :turret
+      when :rotate_turret
         runner.turn_turret(action[:degrees])
       when :fire
         process_fire(runner:, energy: action[:energy])
@@ -181,22 +181,22 @@ module Rubowar
 
       # Check X walls
       if (runner.x - runner.radius).negative?
-        runner.x = runner.radius
+        runner.clamp_x(runner.radius, @width - runner.radius)
         hit_x = true
         total_damage += handle_wall_bounce_x(runner, 0)
       elsif runner.x + runner.radius > @width
-        runner.x = @width - runner.radius
+        runner.clamp_x(runner.radius, @width - runner.radius)
         hit_x = true
         total_damage += handle_wall_bounce_x(runner, @width)
       end
 
       # Check Y walls
       if (runner.y - runner.radius).negative?
-        runner.y = runner.radius
+        runner.clamp_y(runner.radius, @height - runner.radius)
         hit_y = true
         total_damage += handle_wall_bounce_y(runner, 0)
       elsif runner.y + runner.radius > @height
-        runner.y = @height - runner.radius
+        runner.clamp_y(runner.radius, @height - runner.radius)
         hit_y = true
         total_damage += handle_wall_bounce_y(runner, @height)
       end
@@ -348,7 +348,7 @@ module Rubowar
 
         runner.apply_damage(bullet.damage)
         # Self-damage doesn't count toward damage_dealt (for tiebreaker fairness)
-        bullet.owner.damage_dealt += bullet.damage unless runner == bullet.owner
+        bullet.owner.add_damage_dealt(bullet.damage) unless runner == bullet.owner
 
         direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
         runner.safe_callback(:on_hit, bullet.damage, direction)
@@ -384,7 +384,7 @@ module Rubowar
       result = target ? build_probe_result(target:, attributes:) : {}
 
       # Track that this target was probed
-      target.times_probed += 1 if target
+      target.increment_detection(:probed) if target
 
       runner.instance.probe_result = result
       true
@@ -464,7 +464,7 @@ module Rubowar
         next unless in_arc?(runner:, angle:, distance:, x: other.x, y: other.y)
 
         # Track that this rubot was scanned
-        other.times_scanned += 1
+        other.increment_detection(:scanned)
 
         result = { x: other.x, y: other.y, type: :rubot }
         if velocity
@@ -525,7 +525,7 @@ module Rubowar
         next unless within_distance?(runner:, distance:, x: other.x, y: other.y)
 
         # Track that this rubot was pulsed
-        other.times_pulsed += 1
+        other.increment_detection(:pulsed)
 
         result = { x: other.x, y: other.y, type: :rubot }
         result[:owner] = nil if owner
@@ -567,7 +567,7 @@ module Rubowar
         collector = find_energon_collector(energon)
         if collector
           amount = energon.value_int(chronons)
-          collector.energy = [collector.energy + amount, collector.max_energy].min
+          collector.add_energy(amount)
           collector.safe_callback(:on_energon, amount)
           collections << { runner: collector, energon:, amount: }
           true # Remove this energon

@@ -11,7 +11,7 @@ class Spinner
     probe
 
     # MOVE: Spin turret
-    turret(7)
+    rotate_turret(7)
 
     # COMBAT: Fire if previous probe detected a target
     fire(10) if probe_result&.any? && energy > 20

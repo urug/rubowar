@@ -10,19 +10,22 @@
 # usage = "class MyBot; include Rubowar::Rubot; def act; ...; end; end"
 #
 # [actions]
-# movement = [
-#   "thrust(speed:, angle:) - Apply thrust in direction (0°=east, 90°=north)",
-#   "turret(degrees) - Rotate turret relative to current angle"
-# ]
-# combat = [
-#   "fire(energy) - Fire bullet, damage = energy * 1.5",
-#   "shield(energy) - Add to shield, absorbs damage, decays 12%/chronon"
-# ]
-# sensing = [
+# structure = "Actions are queued by phase: { sense: [], move: [], combat: [] }"
+# processing = "All rubots queue actions in act(), then Battle processes phases simultaneously"
+#
+# sense_phase = [
 #   "probe(*attributes) - Check turret line for target (1-16 energy)",
 #   "scan(angle:, distance:) - Arc scan from turret direction",
 #   "pulse(distance:) - 360° radar ping around self",
-#   "detect - Counter-intel: who scanned you this chronon"
+#   "detect - Counter-intel: who scanned you this chronon (processed last)"
+# ]
+# move_phase = [
+#   "thrust(speed:, angle:) - Apply thrust in direction (0°=east, 90°=north)",
+#   "rotate_turret(degrees) - Rotate turret relative to current angle"
+# ]
+# combat_phase = [
+#   "fire(energy) - Fire bullet, damage = energy * 1.5",
+#   "shield(energy) - Add to shield, absorbs damage, decays 12%/chronon"
 # ]
 #
 # [state_access]
@@ -91,26 +94,26 @@ module Rubowar
     def thrust(speed:, angle:)
       return if speed <= 0
 
-      actions << { type: :thrust, speed:, angle: angle % 360 }
+      actions[:move] << { type: :thrust, speed:, angle: angle % 360 }
     end
 
-    def turret(degrees)
+    def rotate_turret(degrees)
       degrees = normalize_degrees(degrees)
       return if degrees.zero?
 
-      actions << { type: :turret, degrees: }
+      actions[:move] << { type: :rotate_turret, degrees: }
     end
 
     def fire(energy_amount)
       return if energy_amount <= 0
 
-      actions << { type: :fire, energy: energy_amount }
+      actions[:combat] << { type: :fire, energy: energy_amount }
     end
 
     def shield(energy_amount)
       return if energy_amount <= 0
 
-      actions << { type: :shield, energy: energy_amount }
+      actions[:combat] << { type: :shield, energy: energy_amount }
     end
 
     PROBE_ATTRIBUTES = %i[size position velocity turret_angle shield health energy].freeze
@@ -146,7 +149,7 @@ module Rubowar
       return false unless can_afford?(cost)
 
       commit_energy(cost)
-      actions << { type: :probe, attributes: }
+      actions[:sense] << { type: :probe, attributes: }
       true
     end
 
@@ -171,7 +174,7 @@ module Rubowar
       return false unless can_afford?(cost)
 
       commit_energy(cost)
-      actions << { type: :scan, angle:, distance:, velocity:, owner: }
+      actions[:sense] << { type: :scan, angle:, distance:, velocity:, owner: }
       true
     end
 
@@ -193,7 +196,7 @@ module Rubowar
       return false unless can_afford?(cost)
 
       commit_energy(cost)
-      actions << { type: :pulse, distance:, owner: }
+      actions[:sense] << { type: :pulse, distance:, owner: }
       true
     end
 
@@ -211,7 +214,7 @@ module Rubowar
       return false unless can_afford?(cost)
 
       commit_energy(cost)
-      actions << { type: :detect }
+      actions[:sense] << { type: :detect }
       true
     end
 

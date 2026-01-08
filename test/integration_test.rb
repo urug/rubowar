@@ -19,7 +19,7 @@ class IntegrationShooterBot
   size :medium
 
   def act
-    turret(5)
+    rotate_turret(5)
     fire(15) if energy > 20
   end
 end

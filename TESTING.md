@@ -14,13 +14,13 @@ Every test should clearly separate three phases:
 it "describes the expected behavior" do
   # Arrange - set up test data
   bot = TestBot.new
-  bot.actions = []
+  bot.actions = { sense: [], move: [], combat: [] }
 
   # Act - perform the action being tested
-  bot.thrust(10)
+  bot.thrust(speed: 5, angle: 90)
 
   # Assert - verify the result
-  _(bot.actions).must_equal [{ type: :thrust, energy: 10 }]
+  _(bot.actions[:move]).must_equal [{ type: :thrust, speed: 5, angle: 90 }]
 end
 ```
 
@@ -43,12 +43,12 @@ def build_bot(energy: 50, health: 100)
     x: 100.0, y: 200.0,
     velocity_x: 0.0, velocity_y: 0.0,
     speed: 0.0,
-    body_angle: 0.0, turret_angle: 0.0,
+    turret_angle: 0.0,
     health: health, energy: energy, shield_level: 0,
     damage_dealt: 0, damage_taken: 0,
     size: :medium
   )
-  bot.actions = []
+  bot.actions = { sense: [], move: [], combat: [] }
   bot
 end
 ```
@@ -93,6 +93,75 @@ end
 - One test file per source file: `lib/rubowar/bullet.rb` → `test/bullet_test.rb`
 - Test file names end with `_test.rb`
 - Require `test_helper` at the top of each test file
+
+## Testing Phased Actions
+
+Actions are organized into three phases: `sense`, `move`, and `combat`. Each phase executes for all rubots before the next phase begins.
+
+### Action Phase Mapping
+
+| Method | Phase | Action Type |
+|--------|-------|-------------|
+| `probe`, `scan`, `pulse`, `detect` | `:sense` | Sensing actions |
+| `thrust`, `rotate_turret` | `:move` | Movement actions |
+| `fire`, `shield` | `:combat` | Combat actions |
+
+### Testing Action Queueing
+
+Test that actions queue to the correct phase:
+
+```ruby
+it "queues thrust to move phase" do
+  bot = build_bot
+
+  bot.thrust(speed: 5, angle: 90)
+
+  _(bot.actions[:move]).must_equal [{ type: :thrust, speed: 5, angle: 90 }]
+  _(bot.actions[:sense]).must_be_empty
+  _(bot.actions[:combat]).must_be_empty
+end
+
+it "queues fire to combat phase" do
+  bot = build_bot
+
+  bot.fire(15)
+
+  _(bot.actions[:combat]).must_equal [{ type: :fire, energy: 15 }]
+end
+```
+
+### Testing Phase Execution Order
+
+When testing that phases execute in the correct order, use integration tests:
+
+```ruby
+it "processes sensing before movement" do
+  battle = Rubowar::Battle.new([SensingBot, TargetBot], chronon_limit: 2)
+
+  battle.run
+
+  # Verify sensing happened at pre-movement positions
+  sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+  _(sensor.instance.sensed_positions).wont_be_empty
+end
+```
+
+### Testing Phase Isolation
+
+Each phase should be testable in isolation via Arena's `process_action`:
+
+```ruby
+it "processes rotate_turret action" do
+  arena = build_arena
+  actor = build_actor(turret_angle: 0)
+  arena.runners = [actor]
+
+  result = arena.process_action(runner: actor, action: { type: :rotate_turret, degrees: 45 })
+
+  _(result).must_equal true
+  _(actor.turret_angle).must_equal 45.0
+end
+```
 
 ## Running Tests
 

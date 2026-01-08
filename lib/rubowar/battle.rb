@@ -13,19 +13,30 @@ require "timeout"
 # output = "Winner, events log, final state"
 # collaborators = ["Arena", "RubotActor"]
 #
+# [actions]
+# structure = "Hash with phase keys: { sense: [], move: [], combat: [] }"
+# example = """
+#   {
+#     sense:  [{ type: :probe, attributes: [:position] }, { type: :detect }],
+#     move:   [{ type: :thrust, speed: 5, angle: 90 }, { type: :rotate_turret, degrees: 15 }],
+#     combat: [{ type: :fire, energy: 20 }, { type: :shield, energy: 10 }]
+#   }
+# """
+# note = "Each rubot's actions hash is reset at the start of each chronon"
+#
 # [chronon_phases]
 # order = [
-#   "1. Collect actions from all rubots (call act method)",
-#   "2. Process sensing actions (probe, scan, pulse, detect)",
-#   "3. Process movement actions (thrust, turret)",
-#   "4. Process combat actions (fire, shield)",
-#   "5. Update physics (bullets, collisions, friction)",
-#   "6. Check win conditions"
+#   "1. Collect actions - call each rubot's act method, which queues actions by phase",
+#   "2. Sense phase - process actions[:sense] (probe, scan, pulse, then detect last)",
+#   "3. Move phase - process actions[:move] (thrust, turret), then update rubot physics",
+#   "4. Combat phase - process actions[:combat] (fire, shield), then update bullet physics",
+#   "5. Energon phase - check collection, spawn new energons",
+#   "6. Maintenance - regenerate energy, degrade shields, check for deaths"
 # ]
-# fairness = "Actions processed in phases to prevent spawn-order advantage"
+# fairness = "All rubots queue actions first, then phases process all rubots simultaneously"
 #
 # [events]
-# types = ["chronon", "death", "hit", "battle_end"]
+# types = ["chronon", "death", "hit", "battle_end", "energon_spawn", "energon_collect"]
 # usage = "battle.on(:death) { |data| puts data[:runner].rubot_class.name }"
 
 module Rubowar
@@ -129,8 +140,8 @@ module Rubowar
       @arena.runners.each do |runner|
         next if runner.dead?
 
-        runner.instance.actions.each do |action|
-          next unless %i[probe scan pulse].include?(action[:type])
+        runner.instance.actions[:sense].each do |action|
+          next if action[:type] == :detect
 
           success = @arena.process_action(runner:, action:)
           emit(:action_failed, { runner:, action: }) unless success
@@ -142,7 +153,7 @@ module Rubowar
       @arena.runners.each do |runner|
         next if runner.dead?
 
-        runner.instance.actions.each do |action|
+        runner.instance.actions[:sense].each do |action|
           next unless action[:type] == :detect
 
           success = @arena.process_action(runner:, action:)
@@ -158,9 +169,7 @@ module Rubowar
       @arena.runners.each do |runner|
         next if runner.dead?
 
-        runner.instance.actions.each do |action|
-          next unless %i[thrust turret].include?(action[:type])
-
+        runner.instance.actions[:move].each do |action|
           success = @arena.process_action(runner:, action:)
           emit(:action_failed, { runner:, action: }) unless success
         end
@@ -175,14 +184,10 @@ module Rubowar
       @arena.runners.each do |runner|
         next if runner.dead?
 
-        actions = runner.instance.actions
-        actions.each do |action|
-          next unless %i[fire shield].include?(action[:type])
-
+        runner.instance.actions[:combat].each do |action|
           success = @arena.process_action(runner:, action:)
           emit(:action_failed, { runner:, action: }) unless success
         end
-        actions.clear
       end
 
       @arena.update_bullet_physics
@@ -211,7 +216,7 @@ module Rubowar
     def setup_rubot_for_chronon(runner)
       runner.instance.rubot_state = runner.to_state
       runner.instance.arena_state = @arena.to_state(@chronons)
-      runner.instance.actions ||= []
+      runner.instance.actions = { sense: [], move: [], combat: [] }
       # Reset pending energy spend for this chronon's upfront energy checks
       runner.instance._pending_energy_spend = 0
       # NOTE: Do NOT clear probe_result, scan_result, pulse_result here.
@@ -232,8 +237,8 @@ module Rubowar
                 elsif alive_runners.empty?
                   nil
                 else
-                  # Tiebreaker: most damage dealt, then highest HP
-                  alive_runners.max_by { |r| [r.damage_dealt, r.health] }
+                  # Tiebreaker: most damage dealt, then highest HP %
+                  alive_runners.max_by { |r| [r.damage_dealt, r.health.to_f / r.max_health] }
                 end
     end
 

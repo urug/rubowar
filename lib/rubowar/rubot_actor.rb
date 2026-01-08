@@ -23,8 +23,8 @@
 module Rubowar
   class RubotActor
     attr_accessor :x, :y, :velocity_x, :velocity_y, :turret_angle, :health, :energy, :shield_level, :damage_dealt,
-                  :damage_taken, :times_probed, :times_scanned, :times_pulsed
-    attr_reader :size, :rubot_class, :instance
+                  :damage_taken
+    attr_reader :size, :rubot_class, :instance, :detection_counts
 
     def initialize(rubot_class)
       @rubot_class = rubot_class
@@ -39,9 +39,7 @@ module Rubowar
       @shield_level = 0
       @damage_dealt = 0
       @damage_taken = 0
-      @times_probed = 0
-      @times_scanned = 0
-      @times_pulsed = 0
+      @detection_counts = { probed: 0, scanned: 0, pulsed: 0 }
       @instance = rubot_class.new
     end
 
@@ -122,9 +120,11 @@ module Rubowar
     end
 
     def reset_detection_counts
-      @times_probed = 0
-      @times_scanned = 0
-      @times_pulsed = 0
+      @detection_counts = { probed: 0, scanned: 0, pulsed: 0 }
+    end
+
+    def increment_detection(type)
+      @detection_counts[type] += 1
     end
 
     # Attempts to spend energy. If insufficient energy, drains to zero and returns false.
@@ -159,6 +159,28 @@ module Rubowar
       @velocity_y = vy
     end
 
+    def set_turret_angle(angle)
+      @turret_angle = angle % 360
+    end
+
+    def clamp_x(min, max)
+      @x = min if @x < min
+      @x = max if @x > max
+    end
+
+    def clamp_y(min, max)
+      @y = min if @y < min
+      @y = max if @y > max
+    end
+
+    def add_damage_dealt(amount)
+      @damage_dealt += amount
+    end
+
+    def add_energy(amount)
+      @energy = [@energy + amount, max_energy].min
+    end
+
     def adjust_velocity(dvx, dvy)
       @velocity_x += dvx
       @velocity_y += dvy
@@ -176,11 +198,7 @@ module Rubowar
     def process_detect
       return false unless spend_energy(SensorCalculations.detect_cost)
 
-      @instance.detect_result = {
-        probed: @times_probed,
-        scanned: @times_scanned,
-        pulsed: @times_pulsed
-      }
+      @instance.detect_result = @detection_counts.dup
       true
     end
 

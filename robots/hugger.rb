@@ -264,9 +264,10 @@ class Hugger
   end
 
   def brake
-    return unless velocity_angle
+    return if speed < 0.1
 
-    thrust(speed: 1, angle: (velocity_angle + 180) % 360)
+    reverse_angle = (Math.atan2(velocity_y, velocity_x) * 180 / Math::PI + 180) % 360
+    thrust(speed: 1, angle: reverse_angle)
   end
 
   def on_current_wall?
@@ -325,7 +326,7 @@ class Hugger
   def aim_at_target
     target_angle = calculate_lead_angle
     turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-15, 15))
+    rotate_turret(turret_diff.clamp(-15, 15))
 
     probe_target_health if turret_diff.abs < 20
   end
@@ -382,7 +383,7 @@ class Hugger
     corner = current_corner_to_scan
     corner_angle = angle_to(corner[:x], corner[:y])
     turret_diff = normalize_angle(corner_angle - turret_angle)
-    turret(turret_diff.clamp(-12, 12))
+    rotate_turret(turret_diff.clamp(-12, 12))
   end
 
   # ---------- Angle Helpers ----------

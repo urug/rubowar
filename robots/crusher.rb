@@ -108,7 +108,7 @@ class Crusher
       thrust(speed: 4, angle: center_angle) if speed < 8
     end
 
-    turret(15)
+    rotate_turret(15)
     shield(5) if energy > 60 && shield_level < 30
   end
 
@@ -311,7 +311,7 @@ class Crusher
     end
 
     turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-15, 15))
+    rotate_turret(turret_diff.clamp(-15, 15))
 
     dist = distance_to(@target[:x], @target[:y])
     threshold = aggressive ? 25 : 15

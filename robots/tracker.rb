@@ -17,7 +17,7 @@ class Tracker
       acquire_target_from_pulse(pulse_result)
 
     if target
-      turret(aim_at_target(target))
+      rotate_turret(aim_at_target(target))
       fire(12) if turret_aligned?(target) && energy > 25
       probe(:position, :velocity)
       @tracked_target = target

@@ -16,7 +16,7 @@
 #   self.target = acquire_target_from_probe(probe_result) || acquire_target_from_pulse(pulse_result)
 #
 #   if target
-#     turret(aim_at_target(target))
+#     rotate_turret(aim_at_target(target))
 #     fire(10) if turret_aligned?(target)
 #   end
 # """

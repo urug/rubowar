@@ -128,14 +128,14 @@ class Coroner
     turret_offset = normalize_angle(turret_angle - center_angle)
 
     if turret_offset.abs > 100
-      turret(turret_offset.positive? ? -15 : 15)
+      rotate_turret(turret_offset.positive? ? -15 : 15)
     else
       if turret_offset > 80 && @scan_direction.positive?
         @scan_direction = -1
       elsif turret_offset < -80 && @scan_direction.negative?
         @scan_direction = 1
       end
-      turret(6 * @scan_direction)
+      rotate_turret(6 * @scan_direction)
     end
   end
 
@@ -168,7 +168,7 @@ class Coroner
 
       target_angle = angle_to(target_x, target_y)
       turret_diff = normalize_angle(target_angle - turret_angle)
-      turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
+      rotate_turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
     end
 
     # Fire on probe hit - bigger shot if flush with energy

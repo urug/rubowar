@@ -155,20 +155,20 @@ class Evader
     angle = angle_to(@energon_target[:x], @energon_target[:y])
     spd = approaching_wall? ? 2 : 3
     thrust(speed: spd, angle: wall_adjust(angle))
-    turret(6 * @direction) # Keep sweeping
+    rotate_turret(6 * @direction) # Keep sweeping
   end
 
   def drift_center
     center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
     drift_angle = wall_adjust(center_angle + (45 * @direction))
     thrust(speed: 2, angle: drift_angle)
-    turret(6 * @direction)
+    rotate_turret(6 * @direction)
   end
 
   def aim_at_target
     target_angle = angle_to(@target[:x], @target[:y])
     diff = normalize_angle(target_angle - turret_angle)
-    turret(diff.clamp(-20, 20))
+    rotate_turret(diff.clamp(-20, 20))
   end
 
   def turret_aligned?

@@ -36,6 +36,469 @@ def build_runner(x:, y:, turret_angle: 0, klass: ProbeTestBot)
 end
 
 describe Rubowar::Arena do
+  describe "initialization" do
+    it "sets width and height" do
+      arena = Rubowar::Arena.new(width: 1000, height: 800)
+
+      _(arena.width).must_equal 1000
+      _(arena.height).must_equal 800
+    end
+
+    it "uses default values" do
+      arena = Rubowar::Arena.new
+
+      _(arena.width).must_equal Rubowar::Config::Arena::DEFAULT_WIDTH
+      _(arena.height).must_equal Rubowar::Config::Arena::DEFAULT_HEIGHT
+      _(arena.friction).must_equal Rubowar::Config::Arena::DEFAULT_FRICTION
+    end
+
+    it "starts with empty bullets and runners" do
+      arena = Rubowar::Arena.new
+
+      _(arena.bullets).must_equal []
+      _(arena.runners).must_equal []
+      _(arena.energons).must_equal []
+    end
+  end
+
+  describe "#arena_diagonal" do
+    it "calculates diagonal length" do
+      arena = build_arena
+
+      result = arena.arena_diagonal
+
+      expected = Math.sqrt((800**2) + (600**2))
+      _(result).must_equal expected
+    end
+  end
+
+  describe "#spawn_wall_buffer" do
+    it "returns buffer based on smaller dimension" do
+      arena = build_arena
+
+      result = arena.spawn_wall_buffer
+
+      expected = (600 * Rubowar::Config::Arena::SPAWN_WALL_BUFFER_RATIO).round
+      _(result).must_equal expected
+    end
+  end
+
+  describe "#spawn_min_distance" do
+    it "returns minimum spawn distance based on diagonal" do
+      arena = build_arena
+
+      result = arena.spawn_min_distance
+
+      expected = (arena.arena_diagonal * Rubowar::Config::Arena::SPAWN_MIN_DISTANCE_RATIO).round
+      _(result).must_equal expected
+    end
+  end
+
+  describe "#spawn_max_distance" do
+    it "returns maximum spawn distance based on diagonal" do
+      arena = build_arena
+
+      result = arena.spawn_max_distance
+
+      expected = (arena.arena_diagonal * Rubowar::Config::Arena::SPAWN_MAX_DISTANCE_RATIO).round
+      _(result).must_equal expected
+    end
+  end
+
+  describe "#spawn_rubots" do
+    it "creates runners from rubot classes" do
+      arena = build_arena
+
+      arena.spawn_rubots([ProbeTestBot, SmallProbeTestBot])
+
+      _(arena.runners.length).must_equal 2
+      _(arena.runners[0].instance).must_be_instance_of ProbeTestBot
+      _(arena.runners[1].instance).must_be_instance_of SmallProbeTestBot
+    end
+
+    it "positions runners within arena bounds" do
+      arena = build_arena
+
+      arena.spawn_rubots([ProbeTestBot, ProbeTestBot])
+
+      arena.runners.each do |runner|
+        _(runner.x).must_be :>, runner.radius
+        _(runner.x).must_be :<, arena.width - runner.radius
+        _(runner.y).must_be :>, runner.radius
+        _(runner.y).must_be :<, arena.height - runner.radius
+      end
+    end
+
+    it "sets random turret angles" do
+      arena = build_arena
+
+      arena.spawn_rubots([ProbeTestBot])
+
+      _(arena.runners[0].turret_angle).must_be :>=, 0
+      _(arena.runners[0].turret_angle).must_be :<, 360
+    end
+  end
+
+  describe "#to_state" do
+    it "returns ArenaState with current values" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      state = arena.to_state(50)
+
+      _(state).must_be_instance_of Rubowar::ArenaState
+      _(state.arena_width).must_equal 800
+      _(state.arena_height).must_equal 600
+      _(state.chronons).must_equal 50
+      _(state.live_rubot_count).must_equal 1
+    end
+
+    it "converts energons to hash format" do
+      arena = build_arena
+      energon = Rubowar::Energon.new(x: 200.0, y: 300.0, spawn_chronon: 10)
+      arena.energons = [energon]
+
+      state = arena.to_state(50)
+
+      _(state.energons).must_equal [{ x: 200.0, y: 300.0 }]
+    end
+  end
+
+  describe "#regenerate_and_degrade" do
+    it "regenerates energy for alive runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 50
+      arena.runners = [runner]
+
+      arena.regenerate_and_degrade
+
+      _(runner.energy).must_equal 60
+    end
+
+    it "degrades shields for alive runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.shield_level = 100
+      arena.runners = [runner]
+
+      arena.regenerate_and_degrade
+
+      _(runner.shield_level).must_equal 88
+    end
+
+    it "skips dead runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.health = 0
+      runner.energy = 50
+      arena.runners = [runner]
+
+      arena.regenerate_and_degrade
+
+      _(runner.energy).must_equal 50
+    end
+  end
+
+  describe "#process_action" do
+    it "processes thrust action" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      result = arena.process_action(runner:, action: { type: :thrust, speed: 3, angle: 0 })
+
+      _(result).must_equal true
+      _(runner.velocity_x).must_be :>, 0
+    end
+
+    it "processes turret action" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      arena.runners = [runner]
+
+      result = arena.process_action(runner:, action: { type: :rotate_turret, degrees: 45 })
+
+      _(result).must_equal true
+      _(runner.turret_angle).must_equal 45.0
+    end
+
+    it "processes fire action" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      arena.runners = [runner]
+
+      result = arena.process_action(runner:, action: { type: :fire, energy: 10 })
+
+      _(result).must_equal true
+      _(arena.bullets.length).must_equal 1
+    end
+
+    it "processes shield action" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      result = arena.process_action(runner:, action: { type: :shield, energy: 20 })
+
+      _(result).must_equal true
+      _(runner.shield_level).must_equal 20
+    end
+
+    it "returns false for unknown action" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+
+      result = arena.process_action(runner:, action: { type: :unknown })
+
+      _(result).must_equal false
+    end
+  end
+
+  describe "#process_fire" do
+    it "creates bullet at turret position" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      arena.runners = [runner]
+
+      arena.process_fire(runner:, energy: 10)
+
+      _(arena.bullets.length).must_equal 1
+      bullet = arena.bullets.first
+      _(bullet.x).must_be :>, runner.x
+    end
+
+    it "calculates damage from energy" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      arena.runners = [runner]
+
+      arena.process_fire(runner:, energy: 10)
+
+      bullet = arena.bullets.first
+      expected_damage = (10 * Rubowar::Config::Combat::FIRE_DAMAGE_MULTIPLIER).ceil
+      _(bullet.damage).must_equal expected_damage
+    end
+
+    it "spends energy" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      runner.energy = 50
+      arena.runners = [runner]
+
+      arena.process_fire(runner:, energy: 10)
+
+      _(runner.energy).must_equal 40
+    end
+
+    it "returns false when insufficient energy" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100, turret_angle: 0)
+      runner.energy = 5
+      arena.runners = [runner]
+
+      result = arena.process_fire(runner:, energy: 10)
+
+      _(result).must_equal false
+      _(arena.bullets).must_be_empty
+    end
+  end
+
+  describe "#check_bullet_hit" do
+    it "returns true when bullet hits runner" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 15, owner: shooter)
+      arena.runners = [runner, shooter]
+
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal true
+    end
+
+    it "applies damage to hit runner" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 15, owner: shooter)
+      initial_health = runner.health
+      arena.runners = [runner, shooter]
+
+      arena.check_bullet_hit(bullet)
+
+      _(runner.health).must_equal initial_health - 15
+    end
+
+    it "tracks damage dealt for shooter" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 15, owner: shooter)
+      arena.runners = [runner, shooter]
+
+      arena.check_bullet_hit(bullet)
+
+      _(shooter.damage_dealt).must_equal 15
+    end
+
+    it "does not track self-damage" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 15, owner: runner)
+      arena.runners = [runner]
+
+      arena.check_bullet_hit(bullet)
+
+      _(runner.damage_dealt).must_equal 0
+    end
+
+    it "returns false when bullet misses" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 500, y: 500, angle: 0, damage: 15, owner: runner)
+      arena.runners = [runner]
+
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal false
+    end
+
+    it "ignores dead runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.health = 0
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 15, owner: shooter)
+      arena.runners = [runner, shooter]
+
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal false
+    end
+  end
+
+  describe "#check_rubot_collisions" do
+    it "separates overlapping runners" do
+      arena = build_arena
+      runner_a = build_runner(x: 100, y: 100)
+      runner_b = build_runner(x: 110, y: 100) # Overlapping (distance < sum of radii)
+      arena.runners = [runner_a, runner_b]
+
+      arena.check_rubot_collisions
+
+      distance = Math.sqrt(((runner_a.x - runner_b.x)**2) + ((runner_a.y - runner_b.y)**2))
+      _(distance).must_be :>=, runner_a.radius + runner_b.radius - 1
+    end
+
+    it "applies collision damage" do
+      arena = build_arena
+      runner_a = build_runner(x: 100, y: 100)
+      runner_b = build_runner(x: 110, y: 100)
+      runner_a.velocity_x = 5.0
+      runner_b.velocity_x = -5.0
+      initial_health_a = runner_a.health
+      initial_health_b = runner_b.health
+      arena.runners = [runner_a, runner_b]
+
+      arena.check_rubot_collisions
+
+      _(runner_a.health).must_be :<, initial_health_a
+      _(runner_b.health).must_be :<, initial_health_b
+    end
+
+    it "ignores dead runners" do
+      arena = build_arena
+      runner_a = build_runner(x: 100, y: 100)
+      runner_b = build_runner(x: 110, y: 100)
+      runner_a.health = 0
+      initial_health_b = runner_b.health
+      arena.runners = [runner_a, runner_b]
+
+      arena.check_rubot_collisions
+
+      _(runner_b.health).must_equal initial_health_b
+    end
+  end
+
+  describe "#update_rubot_physics" do
+    it "applies friction to runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.velocity_x = 10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.update_rubot_physics
+
+      _(runner.velocity_x).must_be :<, 10.0
+    end
+
+    it "moves runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.velocity_x = 10.0
+      runner.velocity_y = 0.0
+      arena.runners = [runner]
+
+      arena.update_rubot_physics
+
+      _(runner.x).must_be :>, 100.0
+    end
+
+    it "skips dead runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.velocity_x = 10.0
+      runner.health = 0
+      arena.runners = [runner]
+
+      arena.update_rubot_physics
+
+      _(runner.x).must_equal 100.0
+    end
+  end
+
+  describe "#update_bullets" do
+    it "moves bullets" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 200, y: 200, angle: 0, damage: 10, owner: runner)
+      arena.runners = [runner]
+      arena.bullets = [bullet]
+
+      arena.update_bullets
+
+      _(bullet.x).must_be :>, 200
+    end
+
+    it "removes bullets that hit runners" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      shooter = build_runner(x: 300, y: 300)
+      bullet = Rubowar::Bullet.new(x: 100, y: 100, angle: 0, damage: 10, owner: shooter)
+      arena.runners = [runner, shooter]
+      arena.bullets = [bullet]
+
+      arena.update_bullets
+
+      _(arena.bullets).must_be_empty
+    end
+
+    it "removes bullets that leave arena" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 850, y: 200, angle: 0, damage: 10, owner: runner)
+      arena.runners = [runner]
+      arena.bullets = [bullet]
+
+      arena.update_bullets
+
+      _(arena.bullets).must_be_empty
+    end
+  end
+
   describe "#check_wall_collision" do
     it "bounces more for small bots and less for large bots" do
       arena = build_arena
@@ -1240,6 +1703,183 @@ describe Rubowar::Arena do
 
       bullet_result = result.find { |r| r[:type] == :bullet }
       _(bullet_result.key?(:owner)).must_equal false
+    end
+  end
+
+  describe "#spawn_energon" do
+    it "creates an energon in the arena" do
+      arena = build_arena
+      arena.runners = []
+
+      energon = arena.spawn_energon(100)
+
+      _(energon).must_be_instance_of Rubowar::Energon
+      _(arena.energons.length).must_equal 1
+    end
+
+    it "spawns at center when no rubots exist" do
+      arena = build_arena
+      arena.runners = []
+
+      energon = arena.spawn_energon(100)
+
+      _(energon.x).must_equal arena.width / 2.0
+      _(energon.y).must_equal arena.height / 2.0
+    end
+
+    it "spawns away from rubots" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      energon = arena.spawn_energon(100)
+
+      distance = Math.sqrt(((energon.x - runner.x)**2) + ((energon.y - runner.y)**2))
+      _(distance).must_be :>, 50 # Should spawn away from rubot
+    end
+
+    it "records spawn chronon" do
+      arena = build_arena
+      arena.runners = []
+
+      energon = arena.spawn_energon(150)
+
+      _(energon.spawn_chronon).must_equal 150
+    end
+
+    it "maximizes minimum distance from all rubots" do
+      arena = build_arena
+      runner1 = build_runner(x: 200, y: 200)
+      runner2 = build_runner(x: 600, y: 400)
+      arena.runners = [runner1, runner2]
+
+      energon = arena.spawn_energon(100)
+
+      # Energon should be positioned to maximize distance from nearest rubot
+      dist1 = Math.sqrt(((energon.x - runner1.x)**2) + ((energon.y - runner1.y)**2))
+      dist2 = Math.sqrt(((energon.x - runner2.x)**2) + ((energon.y - runner2.y)**2))
+      min_dist = [dist1, dist2].min
+
+      # Should be reasonably far from both (not right next to either)
+      _(min_dist).must_be :>, 100
+    end
+
+    it "respects wall buffer" do
+      arena = build_arena
+      arena.runners = []
+      wall_buffer = (arena.height * Rubowar::Config::Arena::ENERGON_WALL_BUFFER_RATIO).round
+
+      energon = arena.spawn_energon(100)
+
+      _(energon.x).must_be :>=, wall_buffer
+      _(energon.x).must_be :<=, arena.width - wall_buffer
+      _(energon.y).must_be :>=, wall_buffer
+      _(energon.y).must_be :<=, arena.height - wall_buffer
+    end
+  end
+
+  describe "#check_energon_collection" do
+    it "returns empty array when no energons exist" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+
+      collections = arena.check_energon_collection(100)
+
+      _(collections).must_equal []
+    end
+
+    it "returns empty array when rubot not touching energon" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 500, y: 500, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      collections = arena.check_energon_collection(100)
+
+      _(collections).must_equal []
+    end
+
+    it "collects energon when rubot overlaps" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+      # Place energon within collection range (rubot radius + energon radius)
+      energon = Rubowar::Energon.new(x: 100 + runner.radius, y: 100, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      collections = arena.check_energon_collection(100)
+
+      _(collections.length).must_equal 1
+      _(collections[0][:runner]).must_equal runner
+      _(collections[0][:energon]).must_equal energon
+    end
+
+    it "removes collected energon from arena" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      arena.check_energon_collection(100)
+
+      _(arena.energons).must_be_empty
+    end
+
+    it "adds energy to collecting rubot" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 50
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      arena.check_energon_collection(100)
+
+      _(runner.energy).must_be :>, 50
+    end
+
+    it "caps energy at max" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = runner.max_energy - 1
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 0)
+      arena.energons = [energon]
+
+      arena.check_energon_collection(100) # 100 chronons old = 101 value
+
+      _(runner.energy).must_equal runner.max_energy
+    end
+
+    it "ignores dead rubots" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.health = 0
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      collections = arena.check_energon_collection(100)
+
+      _(collections).must_be_empty
+      _(arena.energons.length).must_equal 1
+    end
+
+    it "returns collection amount based on energon value" do
+      arena = build_arena
+      runner = build_runner(x: 100, y: 100)
+      runner.energy = 0
+      arena.runners = [runner]
+      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      arena.energons = [energon]
+
+      collections = arena.check_energon_collection(100) # 50 chronons old
+
+      expected_value = energon.value_int(100)
+      _(collections[0][:amount]).must_equal expected_value
     end
   end
 end

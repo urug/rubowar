@@ -56,7 +56,7 @@ def run_battle(robot_classes, iterations)
   results
 end
 
-def calculate_points(results, num_participants, _iterations, num_robots)
+def calculate_points(results, num_participants, num_robots)
   points = Hash.new(0)
 
   case num_participants
@@ -87,7 +87,7 @@ completed = 0
 
 ROBOTS.combination(2).each do |pair|
   results = run_battle(pair, ITERATIONS)
-  points = calculate_points(results, 2, ITERATIONS, NUM_ROBOTS)
+  points = calculate_points(results, 2, NUM_ROBOTS)
   points.each { |name, pts| scores["1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1} battles"
@@ -101,7 +101,7 @@ completed = 0
 
 ROBOTS.combination(3).each do |trio|
   results = run_battle(trio, ITERATIONS)
-  points = calculate_points(results, 3, ITERATIONS, NUM_ROBOTS)
+  points = calculate_points(results, 3, NUM_ROBOTS)
   points.each { |name, pts| scores["1v1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1v1} battles"
@@ -115,7 +115,7 @@ completed = 0
 
 ROBOTS.combination(4).each do |quad|
   results = run_battle(quad, ITERATIONS)
-  points = calculate_points(results, 4, ITERATIONS, NUM_ROBOTS)
+  points = calculate_points(results, 4, NUM_ROBOTS)
   points.each { |name, pts| scores["1v1v1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1v1v1} battles"

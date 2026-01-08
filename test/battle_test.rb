@@ -77,7 +77,7 @@ class ProbeTestBotForBattle
     @probe_results_per_tick << probe_result&.dup
     probe(:size)
     # Rotate turret to sweep for targets
-    turret(15)
+    rotate_turret(15)
   end
 end
 
@@ -105,6 +105,20 @@ class StationaryBot
   include Rubowar::Rubot
 
   size :medium
+  def act; end
+end
+
+class SmallStationaryBot
+  include Rubowar::Rubot
+
+  size :small
+  def act; end
+end
+
+class LargeStationaryBot
+  include Rubowar::Rubot
+
+  size :large
   def act; end
 end
 
@@ -149,6 +163,215 @@ class SensingBot
 end
 
 describe Rubowar::Battle do
+  describe "initialization" do
+    it "creates arena with specified dimensions" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], width: 1000, height: 800)
+
+      _(battle.arena.width).must_equal 1000
+      _(battle.arena.height).must_equal 800
+    end
+
+    it "spawns runners for each rubot class" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+
+      _(battle.arena.runners.length).must_equal 2
+    end
+
+    it "starts at chronon zero" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+
+      _(battle.chronons).must_equal 0
+    end
+
+    it "starts with no winner" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+
+      _(battle.winner).must_be_nil
+    end
+
+    it "starts with empty events" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+
+      _(battle.events).must_equal []
+    end
+
+    it "raises error with less than 2 rubots" do
+      _ { Rubowar::Battle.new([StationaryBot]) }.must_raise Rubowar::InsufficientRubotsError
+    end
+
+    it "raises error with zero width" do
+      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], width: 0) }.must_raise Rubowar::InvalidDimensionsError
+    end
+
+    it "raises error with negative height" do
+      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], height: -100) }.must_raise Rubowar::InvalidDimensionsError
+    end
+
+    it "raises error with invalid friction" do
+      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], friction: 1.5) }.must_raise Rubowar::InvalidFrictionError
+    end
+
+    it "raises error with zero chronon limit" do
+      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 0) }.must_raise Rubowar::InvalidChrononLimitError
+    end
+  end
+
+  describe "#on" do
+    it "registers callback for event type" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      events_received = []
+      battle.on(:chronon) { |data| events_received << data }
+
+      battle.run
+
+      _(events_received).wont_be_empty
+    end
+
+    it "calls multiple callbacks for same event" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      count = 0
+      battle.on(:chronon) { count += 1 }
+      battle.on(:chronon) { count += 1 }
+
+      battle.run
+
+      _(count).must_equal 2
+    end
+  end
+
+  describe "#run" do
+    it "increments chronons each tick" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 5)
+
+      battle.run
+
+      _(battle.chronons).must_equal 5
+    end
+
+    it "emits chronon event each tick" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 3)
+
+      events = battle.run
+
+      chronon_events = events.select { |e| e[:type] == :chronon }
+      _(chronon_events.length).must_equal 3
+    end
+
+    it "emits battle_end event" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+
+      events = battle.run
+
+      end_events = events.select { |e| e[:type] == :battle_end }
+      _(end_events.length).must_equal 1
+    end
+
+    it "returns all events" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+
+      result = battle.run
+
+      _(result).must_be_instance_of Array
+      _(result).wont_be_empty
+    end
+
+    it "determines winner at end" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+
+      battle.run
+
+      _(battle.winner).wont_be_nil
+    end
+  end
+
+  describe "#battle_over?" do
+    it "returns true when only one runner alive" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
+      battle.arena.runners[0].health = 0
+
+      result = battle.send(:battle_over?)
+
+      _(result).must_equal true
+    end
+
+    it "returns true when chronon limit reached" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 10)
+      10.times { battle.instance_variable_set(:@chronons, battle.chronons + 1) }
+
+      result = battle.send(:battle_over?)
+
+      _(result).must_equal true
+    end
+
+    it "returns false when multiple runners alive and under limit" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
+      battle.instance_variable_set(:@chronons, 5)
+
+      result = battle.send(:battle_over?)
+
+      _(result).must_equal false
+    end
+
+    it "returns true when all runners dead" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
+      battle.arena.runners.each { |r| r.health = 0 }
+
+      result = battle.send(:battle_over?)
+
+      _(result).must_equal true
+    end
+  end
+
+  describe "#determine_winner" do
+    it "returns sole survivor" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle.arena.runners[1].health = 0
+
+      battle.send(:determine_winner)
+
+      _(battle.winner).must_equal battle.arena.runners[0]
+    end
+
+    it "returns nil when all dead" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle.arena.runners.each { |r| r.health = 0 }
+
+      battle.send(:determine_winner)
+
+      _(battle.winner).must_be_nil
+    end
+
+    it "selects winner by damage dealt when tied on survival" do
+      # Create a battle that will timeout with both alive
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle.run
+
+      # Manually set damage_dealt to test tiebreaker
+      battle.arena.runners[0].damage_dealt = 50
+      battle.arena.runners[1].damage_dealt = 30
+      battle.send(:determine_winner)
+
+      _(battle.winner).must_equal battle.arena.runners[0]
+    end
+
+    it "uses HP percentage as secondary tiebreaker after damage dealt" do
+      battle = Rubowar::Battle.new([SmallStationaryBot, LargeStationaryBot], chronon_limit: 1)
+      battle.run
+
+      # Same damage dealt, but different HP percentages
+      # Small bot: 72/80 = 90%
+      # Large bot: 96/120 = 80%
+      # Small bot should win despite lower absolute HP
+      battle.arena.runners[0].damage_dealt = 50
+      battle.arena.runners[0].health = 72  # 90% of 80 max
+      battle.arena.runners[1].damage_dealt = 50
+      battle.arena.runners[1].health = 96  # 80% of 120 max
+      battle.send(:determine_winner)
+
+      _(battle.winner).must_equal battle.arena.runners[0]
+    end
+  end
+
   describe "sensing results persistence" do
     it "pulse results from tick N are available in tick N+1" do
       battle = Rubowar::Battle.new([PulseTestBot, StationaryBot], chronon_limit: 5)
@@ -221,35 +444,6 @@ describe Rubowar::Battle do
 
       # All ticks after the first should have found the target with 360 degree scan
       _(ticks_with_target).must_equal results.length - 1
-    end
-  end
-
-  describe "#determine_winner" do
-    it "selects winner by damage dealt when tied on survival" do
-      # Create a battle that will timeout with both alive
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.run
-
-      # Manually set damage_dealt to test tiebreaker
-      battle.arena.runners[0].damage_dealt = 50
-      battle.arena.runners[1].damage_dealt = 30
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_equal battle.arena.runners[0]
-    end
-
-    it "uses HP as secondary tiebreaker after damage dealt" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.run
-
-      # Same damage dealt, different HP
-      battle.arena.runners[0].damage_dealt = 50
-      battle.arena.runners[0].health = 80
-      battle.arena.runners[1].damage_dealt = 50
-      battle.arena.runners[1].health = 90
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_equal battle.arena.runners[1]
     end
   end
 

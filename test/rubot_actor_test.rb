@@ -26,277 +26,666 @@ end
 describe Rubowar::RubotActor do
   describe "initialization" do
     it "starts with full health for its size" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.health).must_equal runner.max_health
+      _(actor.health).must_equal actor.max_health
     end
 
     it "starts with full energy" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.energy).must_equal runner.max_energy
+      _(actor.energy).must_equal actor.max_energy
     end
 
     it "starts with zero shield" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.shield_level).must_equal 0
+      _(actor.shield_level).must_equal 0
     end
 
     it "starts at origin" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.x).must_equal 0.0
-      _(runner.y).must_equal 0.0
+      _(actor.x).must_equal 0.0
+      _(actor.y).must_equal 0.0
     end
 
     it "starts with zero velocity" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.velocity_x).must_equal 0.0
-      _(runner.velocity_y).must_equal 0.0
+      _(actor.velocity_x).must_equal 0.0
+      _(actor.velocity_y).must_equal 0.0
     end
 
     it "creates an instance of the rubot class" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.instance).must_be_instance_of DummyBot
+      _(actor.instance).must_be_instance_of DummyBot
     end
 
     it "uses size from rubot class" do
-      runner = Rubowar::RubotActor.new(SmallDummyBot)
+      actor = Rubowar::RubotActor.new(SmallDummyBot)
 
-      _(runner.size).must_equal :small
+      _(actor.size).must_equal :small
     end
   end
 
   describe "#radius" do
     it "returns 16 for small rubots" do
-      runner = Rubowar::RubotActor.new(SmallDummyBot)
+      actor = Rubowar::RubotActor.new(SmallDummyBot)
 
-      _(runner.radius).must_equal 16
+      _(actor.radius).must_equal 16
     end
 
     it "returns 20 for medium rubots" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.radius).must_equal 20
+      _(actor.radius).must_equal 20
     end
 
     it "returns 24 for large rubots" do
-      runner = Rubowar::RubotActor.new(LargeDummyBot)
+      actor = Rubowar::RubotActor.new(LargeDummyBot)
 
-      _(runner.radius).must_equal 24
+      _(actor.radius).must_equal 24
     end
   end
 
   describe "#energy_regen" do
     it "returns 8 for small rubots" do
-      runner = Rubowar::RubotActor.new(SmallDummyBot)
+      actor = Rubowar::RubotActor.new(SmallDummyBot)
 
-      _(runner.energy_regen).must_equal 8
+      _(actor.energy_regen).must_equal 8
     end
 
     it "returns 10 for medium rubots" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.energy_regen).must_equal 10
+      _(actor.energy_regen).must_equal 10
     end
 
     it "returns 12 for large rubots" do
-      runner = Rubowar::RubotActor.new(LargeDummyBot)
+      actor = Rubowar::RubotActor.new(LargeDummyBot)
 
-      _(runner.energy_regen).must_equal 12
+      _(actor.energy_regen).must_equal 12
     end
   end
 
   describe "#max_health" do
     it "returns 80 for small rubots" do
-      runner = Rubowar::RubotActor.new(SmallDummyBot)
+      actor = Rubowar::RubotActor.new(SmallDummyBot)
 
-      _(runner.max_health).must_equal 80
+      _(actor.max_health).must_equal 80
     end
 
     it "returns 100 for medium rubots" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.max_health).must_equal 100
+      _(actor.max_health).must_equal 100
     end
 
     it "returns 120 for large rubots" do
-      runner = Rubowar::RubotActor.new(LargeDummyBot)
+      actor = Rubowar::RubotActor.new(LargeDummyBot)
 
-      _(runner.max_health).must_equal 120
+      _(actor.max_health).must_equal 120
     end
   end
 
   describe "#max_shield" do
     it "equals max_health for small rubots" do
-      runner = Rubowar::RubotActor.new(SmallDummyBot)
+      actor = Rubowar::RubotActor.new(SmallDummyBot)
 
-      _(runner.max_shield).must_equal 80
+      _(actor.max_shield).must_equal 80
     end
 
     it "equals max_health for medium rubots" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      _(runner.max_shield).must_equal 100
+      _(actor.max_shield).must_equal 100
     end
 
     it "equals max_health for large rubots" do
-      runner = Rubowar::RubotActor.new(LargeDummyBot)
+      actor = Rubowar::RubotActor.new(LargeDummyBot)
 
-      _(runner.max_shield).must_equal 120
+      _(actor.max_shield).must_equal 120
     end
   end
 
   describe "#speed" do
     it "calculates speed from velocity" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.velocity_x = 3.0
-      runner.velocity_y = 4.0
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.velocity_x = 3.0
+      actor.velocity_y = 4.0
 
-      _(runner.speed).must_equal 5.0
+      _(actor.speed).must_equal 5.0
     end
   end
 
   describe "#alive? and #dead?" do
     it "is alive when health is positive" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.health = 1
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.health = 1
 
-      _(runner.alive?).must_equal true
-      _(runner.dead?).must_equal false
+      _(actor.alive?).must_equal true
+      _(actor.dead?).must_equal false
     end
 
     it "is dead when health is zero" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.health = 0
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.health = 0
 
-      _(runner.alive?).must_equal false
-      _(runner.dead?).must_equal true
+      _(actor.alive?).must_equal false
+      _(actor.dead?).must_equal true
     end
   end
 
   describe "#apply_damage" do
     it "reduces health by damage amount" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      runner.apply_damage(30)
+      actor.apply_damage(30)
 
-      _(runner.health).must_equal 70
+      _(actor.health).must_equal 70
     end
 
     it "tracks damage taken" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      runner.apply_damage(30)
+      actor.apply_damage(30)
 
-      _(runner.damage_taken).must_equal 30
+      _(actor.damage_taken).must_equal 30
     end
 
     it "absorbs damage with shield first" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.shield_level = 20
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 20
 
-      runner.apply_damage(30)
+      actor.apply_damage(30)
 
-      _(runner.shield_level).must_equal 0
-      _(runner.health).must_equal 90
+      _(actor.shield_level).must_equal 0
+      _(actor.health).must_equal 90
     end
 
     it "does not reduce health below zero" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      runner.apply_damage(150)
+      actor.apply_damage(150)
 
-      _(runner.health).must_equal 0
+      _(actor.health).must_equal 0
     end
   end
 
   describe "#spend_energy" do
     it "returns true and reduces energy when sufficient" do
-      runner = Rubowar::RubotActor.new(DummyBot)
+      actor = Rubowar::RubotActor.new(DummyBot)
 
-      result = runner.spend_energy(30)
+      result = actor.spend_energy(30)
 
       _(result).must_equal true
-      _(runner.energy).must_equal 70
+      _(actor.energy).must_equal 70
     end
 
     it "returns false and drains to zero when insufficient" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.energy = 20
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 20
 
-      result = runner.spend_energy(50)
+      result = actor.spend_energy(50)
 
       _(result).must_equal false
-      _(runner.energy).must_equal 0
+      _(actor.energy).must_equal 0
     end
   end
 
   describe "#regenerate_energy" do
     it "adds energy regen amount" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.energy = 50
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 50
 
-      runner.regenerate_energy
+      actor.regenerate_energy
 
-      _(runner.energy).must_equal 60
+      _(actor.energy).must_equal 60
     end
 
     it "caps energy at max" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.energy = runner.max_energy - 5
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = actor.max_energy - 5
 
-      runner.regenerate_energy
+      actor.regenerate_energy
 
-      _(runner.energy).must_equal runner.max_energy
+      _(actor.energy).must_equal actor.max_energy
     end
   end
 
   describe "#degrade_shield" do
     it "reduces shield by 12% (proportional decay)" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.shield_level = 100
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 100
 
-      runner.degrade_shield
+      actor.degrade_shield
 
-      _(runner.shield_level).must_equal 88 # 100 * 0.88 = 88
+      _(actor.shield_level).must_equal 88 # 100 * 0.88 = 88
     end
 
     it "floors the result" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.shield_level = 20
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 20
 
-      runner.degrade_shield
+      actor.degrade_shield
 
-      _(runner.shield_level).must_equal 17 # 20 * 0.88 = 17.6 → 17
+      _(actor.shield_level).must_equal 17 # 20 * 0.88 = 17.6 → 17
     end
 
     it "decays to zero from low values" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.shield_level = 1
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 1
 
-      runner.degrade_shield
+      actor.degrade_shield
 
-      _(runner.shield_level).must_equal 0 # 1 * 0.88 = 0.88 → 0
+      _(actor.shield_level).must_equal 0 # 1 * 0.88 = 0.88 → 0
     end
   end
 
   describe "#to_state" do
     it "returns a RubotState with current values" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.x = 100.0
-      runner.y = 200.0
-      runner.health = 80
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.x = 100.0
+      actor.y = 200.0
+      actor.health = 80
 
-      state = runner.to_state
+      state = actor.to_state
 
       _(state).must_be_instance_of Rubowar::RubotState
       _(state.x).must_equal 100.0
       _(state.y).must_equal 200.0
       _(state.health).must_equal 80
+    end
+  end
+
+  describe "#apply_collision_damage" do
+    it "reduces health directly bypassing shields" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 50
+
+      actor.apply_collision_damage(20)
+
+      _(actor.health).must_equal 80
+      _(actor.shield_level).must_equal 50
+    end
+
+    it "tracks damage taken" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.apply_collision_damage(15)
+
+      _(actor.damage_taken).must_equal 15
+    end
+
+    it "does not reduce health below zero" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.apply_collision_damage(150)
+
+      _(actor.health).must_equal 0
+    end
+  end
+
+  describe "#apply_friction" do
+    it "multiplies velocity by friction factor" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.velocity_x = 10.0
+      actor.velocity_y = 10.0
+
+      actor.apply_friction(0.9)
+
+      _(actor.velocity_x).must_equal 9.0
+      _(actor.velocity_y).must_equal 9.0
+    end
+  end
+
+  describe "#move" do
+    it "adds velocity to position" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.x = 100.0
+      actor.y = 200.0
+      actor.velocity_x = 5.0
+      actor.velocity_y = -3.0
+
+      actor.move
+
+      _(actor.x).must_equal 105.0
+      _(actor.y).must_equal 197.0
+    end
+  end
+
+  describe "#set_position" do
+    it "sets x and y coordinates" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.set_position(150.0, 250.0)
+
+      _(actor.x).must_equal 150.0
+      _(actor.y).must_equal 250.0
+    end
+  end
+
+  describe "#set_velocity" do
+    it "sets velocity components" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.set_velocity(8.0, -4.0)
+
+      _(actor.velocity_x).must_equal 8.0
+      _(actor.velocity_y).must_equal(-4.0)
+    end
+  end
+
+  describe "#adjust_velocity" do
+    it "adds to existing velocity" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.velocity_x = 5.0
+      actor.velocity_y = 3.0
+
+      actor.adjust_velocity(2.0, -1.0)
+
+      _(actor.velocity_x).must_equal 7.0
+      _(actor.velocity_y).must_equal 2.0
+    end
+  end
+
+  describe "#adjust_position" do
+    it "adds to existing position" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.x = 100.0
+      actor.y = 200.0
+
+      actor.adjust_position(10.0, -5.0)
+
+      _(actor.x).must_equal 110.0
+      _(actor.y).must_equal 195.0
+    end
+  end
+
+  describe "#add_shield" do
+    it "increases shield level" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 20
+
+      actor.add_shield(15)
+
+      _(actor.shield_level).must_equal 35
+    end
+
+    it "caps shield at max_shield" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 90
+
+      actor.add_shield(50)
+
+      _(actor.shield_level).must_equal actor.max_shield
+    end
+  end
+
+  describe "#turn_turret" do
+    it "rotates turret by degrees" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.turret_angle = 45.0
+
+      actor.turn_turret(30)
+
+      _(actor.turret_angle).must_equal 75.0
+    end
+
+    it "wraps angle at 360" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.turret_angle = 350.0
+
+      actor.turn_turret(20)
+
+      _(actor.turret_angle).must_equal 10.0
+    end
+
+    it "spends energy based on degrees" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 50
+
+      actor.turn_turret(24) # Cost: ceil(24/24) = 1
+
+      _(actor.energy).must_equal 49
+    end
+
+    it "returns false when insufficient energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 0
+
+      result = actor.turn_turret(24)
+
+      _(result).must_equal false
+    end
+
+    it "returns true when successful" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      result = actor.turn_turret(24)
+
+      _(result).must_equal true
+    end
+  end
+
+  describe "#increase_shielding" do
+    it "adds shield equal to energy spent" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.shield_level = 10
+
+      actor.increase_shielding(20)
+
+      _(actor.shield_level).must_equal 30
+    end
+
+    it "spends the specified energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 50
+
+      actor.increase_shielding(20)
+
+      _(actor.energy).must_equal 30
+    end
+
+    it "returns false when insufficient energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 10
+
+      result = actor.increase_shielding(20)
+
+      _(result).must_equal false
+    end
+
+    it "returns true when successful" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      result = actor.increase_shielding(20)
+
+      _(result).must_equal true
+    end
+  end
+
+  describe "#thrust" do
+    it "adds velocity in specified direction" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 100
+
+      actor.thrust(speed: 3, angle: 0)
+
+      _(actor.velocity_x).must_be :>, 0
+      _(actor.velocity_y).must_be_close_to 0, 0.01
+    end
+
+    it "spends energy based on speed and mass" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      initial_energy = actor.energy
+
+      actor.thrust(speed: 3, angle: 0)
+
+      _(actor.energy).must_be :<, initial_energy
+    end
+
+    it "returns false when no energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 0
+
+      result = actor.thrust(speed: 3, angle: 0)
+
+      _(result).must_equal false
+    end
+
+    it "returns true when successful" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      result = actor.thrust(speed: 3, angle: 0)
+
+      _(result).must_equal true
+    end
+
+    it "provides partial thrust when energy insufficient for full speed" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 1
+
+      actor.thrust(speed: 10, angle: 0)
+
+      _(actor.energy).must_equal 0
+      _(actor.velocity_x).must_be :>, 0
+      _(actor.velocity_x).must_be :<, 10
+    end
+  end
+
+  describe "#process_detect" do
+    it "sets detect_result on instance" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      2.times { actor.increment_detection(:probed) }
+      3.times { actor.increment_detection(:scanned) }
+      1.times { actor.increment_detection(:pulsed) }
+
+      actor.process_detect
+
+      result = actor.instance.detect_result
+      _(result[:probed]).must_equal 2
+      _(result[:scanned]).must_equal 3
+      _(result[:pulsed]).must_equal 1
+    end
+
+    it "spends energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 50
+
+      actor.process_detect
+
+      _(actor.energy).must_equal 50 - Rubowar::Config::Sensing::DETECT_COST
+    end
+
+    it "returns false when insufficient energy" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.energy = 0
+
+      result = actor.process_detect
+
+      _(result).must_equal false
+    end
+
+    it "returns true when successful" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      result = actor.process_detect
+
+      _(result).must_equal true
+    end
+  end
+
+  describe "#reset_detection_counts" do
+    it "resets all detection counters to zero" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      5.times { actor.increment_detection(:probed) }
+      3.times { actor.increment_detection(:scanned) }
+      2.times { actor.increment_detection(:pulsed) }
+
+      actor.reset_detection_counts
+
+      _(actor.detection_counts[:probed]).must_equal 0
+      _(actor.detection_counts[:scanned]).must_equal 0
+      _(actor.detection_counts[:pulsed]).must_equal 0
+    end
+  end
+
+  describe "#increment_detection" do
+    it "increments the probed count" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.increment_detection(:probed)
+      actor.increment_detection(:probed)
+
+      _(actor.detection_counts[:probed]).must_equal 2
+    end
+
+    it "increments the scanned count" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      actor.increment_detection(:scanned)
+
+      _(actor.detection_counts[:scanned]).must_equal 1
+    end
+
+    it "increments the pulsed count" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      3.times { actor.increment_detection(:pulsed) }
+
+      _(actor.detection_counts[:pulsed]).must_equal 3
+    end
+  end
+
+  describe "#safe_callback" do
+    it "calls method on instance" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+
+      # act is defined on DummyBot
+      result = actor.safe_callback(:act)
+
+      _(result).must_be_nil # act returns nil
+    end
+
+    it "returns nil when actor is dead" do
+      actor = Rubowar::RubotActor.new(DummyBot)
+      actor.health = 0
+
+      result = actor.safe_callback(:act)
+
+      _(result).must_be_nil
+    end
+
+    it "applies damage when callback raises error" do
+      error_bot_class = Class.new do
+        include Rubowar::Rubot
+        def act
+          raise "Test error"
+        end
+      end
+      actor = Rubowar::RubotActor.new(error_bot_class)
+      initial_health = actor.health
+
+      actor.safe_callback(:act)
+
+      _(actor.health).must_equal initial_health - Rubowar::Config::Battle::ERROR_DAMAGE
+    end
+
+    it "returns nil when callback raises error" do
+      error_bot_class = Class.new do
+        include Rubowar::Rubot
+        def act
+          raise "Test error"
+        end
+      end
+      actor = Rubowar::RubotActor.new(error_bot_class)
+
+      result = actor.safe_callback(:act)
+
+      _(result).must_be_nil
     end
   end
 end

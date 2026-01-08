@@ -129,7 +129,7 @@ class Hunter
       thrust(speed: 3, angle: (chronons * 3) % 360) if speed < 6
     end
 
-    turret(12)
+    rotate_turret(12)
     shield(4) if energy > 60 && shield_level < 30
   end
 
@@ -244,7 +244,7 @@ class Hunter
     return unless @target
     target_angle = angle_to(@target[:x], @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-20, 20))
+    rotate_turret(turret_diff.clamp(-20, 20))
   end
 
   def turret_aligned?
@@ -268,7 +268,7 @@ class Hunter
     end
 
     turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-20, 20))
+    rotate_turret(turret_diff.clamp(-20, 20))
 
     # Fire when aligned
     return unless turret_diff.abs < 18 && energy > power + 10
