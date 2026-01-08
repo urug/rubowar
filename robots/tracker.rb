@@ -2,6 +2,7 @@
 
 # A stationary turret that uses SimpleTargeting to track and shoot enemies.
 # Large size provides 120 HP and 12 energy regen - tanky and high firepower.
+# A step up from Spinner - demonstrates proper target tracking.
 class Tracker
   include Rubowar::Rubot
   include Rubowar::SimpleTargeting

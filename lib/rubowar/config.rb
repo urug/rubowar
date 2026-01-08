@@ -29,7 +29,7 @@ module Rubowar
 
       # Energon spawn settings
       ENERGON_WALL_BUFFER_RATIO = 0.15 # 15% of smaller dimension
-      ENERGON_SPAWN_INTERVAL = 60
+      ENERGON_SPAWN_INTERVAL = 50
     end
 
     module Physics
@@ -40,7 +40,7 @@ module Rubowar
       WALL_MASS = 24.0 # Effective mass of walls (heavy = bots bounce more)
       THRUST_MULTIPLIER = 1.5
       STATIONARY_SPEED_THRESHOLD = 0.1
-      MAX_SPEED = 999 # Effectively uncapped - physics handles limits
+      # No MAX_SPEED cap - friction and wall collisions naturally limit velocity
     end
 
     module Combat

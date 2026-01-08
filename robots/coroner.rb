@@ -118,7 +118,6 @@ class Coroner
       if rubots.any?
         closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
         @last_target = closest
-        @last_target_chronon = chronons
         @tracking = true
         @chronons_without_probe_hit = 0
       end
@@ -146,7 +145,6 @@ class Coroner
 
     if probe_result&.any?
       @last_target = probe_result
-      @last_target_chronon = chronons
       @chronons_without_probe_hit = 0
     else
       @chronons_without_probe_hit = (@chronons_without_probe_hit || 0) + 1

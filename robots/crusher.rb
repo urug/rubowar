@@ -1,503 +1,262 @@
 # frozen_string_literal: true
 
-# A ramming tank optimized for wall damage. Herds enemies into walls/corners,
-# then crushes them against the wall for sustained damage.
+# A wall-ramming specialist designed to counter corner campers.
 #
-# Strategy:
-# - Herd targets toward nearest wall
-# - Ram them INTO the wall (perpendicular angle for max wall damage)
-# - Crush: stay close and keep pushing into wall (they can't bounce away)
-# - Corner traps maximize wall damage
+# Core strategy: Always approach from the angle that rams targets INTO walls.
+# Wall collisions deal extra damage and trap targets for follow-up rams.
+#
+# Anti-corner-camping tactics:
+# - Approach from opposite side of nearest wall (push them into it)
+# - Corner targets take damage from TWO walls - prioritize them
+# - Keep ramming pinned targets repeatedly
+# - Fire while closing and while crushing
 class Crusher
   include Rubowar::Rubot
 
-  size :large # Large = more collision damage, more HP (120), mass 1.44
+  size :large # Mass 1.44 = devastating rams, 120 HP to tank return fire
 
-  WALL_BUFFER = 80
-  CORNER_RADIUS = 100
-  CHARGE_DISTANCE = 180    # Start building momentum
-  RAM_DISTANCE = 70        # Commit to ram
-  CRUSH_DISTANCE = 50      # Stay this close when crushing
-  CRUSH_BACKUP_DIST = 35   # Back up this far for repeated rams
-  STUCK_SPEED_THRESHOLD = 2.0 # Enemy is "stuck" if moving slower than this
-  ENERGON_COLLECT_RANGE = 200
-  CRUSH_TIMEOUT = 60 # Max chronons in crush before reassessing
+  WALL_DANGER = 100       # Target this close to wall = attack opportunity
+  CORNER_ZONE = 120       # Corner detection radius
+  ENGAGE_DISTANCE = 250   # Start pursuing at this range
+  RAM_COMMIT = 80         # Fully commit to ram
+  CRUSH_RANGE = 50        # Stay this close when crushing
+  PIN_THRESHOLD = 35      # Target is "pinned" if this close to wall
 
   def on_spawn
     @mode = :hunting
     @target = nil
-    @ram_angle = nil
-    @last_pulse_chronon = -100
-    @target_energon = nil
-    @crush_duration = 0
-    @crush_phase = :ram # Oscillate between :ram and :backup for repeated hits
+    @crush_start = nil
+    @last_pulse = -100
   end
 
   def act
-    # Priority: wall safety (but less cautious when crushing)
-    if @mode != :crushing && approaching_wall?(WALL_BUFFER)
-      brake_from_wall
-      return
-    end
+    sense_targets
 
     case @mode
     when :hunting
-      hunt_targets
-    when :herding
-      herd_to_wall
-    when :charging
-      charge_ram
+      hunt
+    when :positioning
+      position_for_ram
+    when :ramming
+      execute_ram
     when :crushing
-      crush_against_wall
-    when :collecting
-      collecting_action
+      crush_pinned_target
+    end
+  end
+
+  def on_collision(other)
+    # Successful ram - if they're pinned, start crushing
+    return unless @target
+
+    if target_pinned?
+      @mode = :crushing
+      @crush_start = chronons
     end
   end
 
   def on_hit(_damage, direction)
-    # Attacker is behind us - acquire target
+    # Someone's shooting us - find them and ram them
+    return if @target && @mode == :crushing
+
     attacker_angle = (direction + 180) % 360
     @target = {
-      x: x + (Math.cos(attacker_angle * Math::PI / 180) * 150),
-      y: y + (Math.sin(attacker_angle * Math::PI / 180) * 150),
-      velocity_x: nil,
-      velocity_y: nil
+      x: x + Math.cos(attacker_angle * Math::PI / 180) * 150,
+      y: y + Math.sin(attacker_angle * Math::PI / 180) * 150
     }
-    @mode = :herding
-  end
-
-  def on_collision(_other)
-    # Successful ram! Switch to crushing
-    if target_against_wall?(@target)
-      @mode = :crushing
-      @crush_phase = :backup # Just hit them, back up for another ram
-    elsif @mode == :crushing
-      # Not against wall yet, keep pushing
-      @mode = :charging
-    end
+    @mode = :positioning
   end
 
   def on_wall
-    # We hit a wall - reassess but don't panic if crushing
-    if @mode == :charging
-      @mode = :hunting
-    elsif @mode == :crushing
-      # Acceptable during crush - we're pushing them into wall
-      @crush_duration += 1
-    end
-  end
-
-  def on_energon(_amount)
-    @target_energon = nil
-    @mode = :hunting unless @target
+    # We hit a wall - recalculate approach
+    @mode = :positioning if @mode == :ramming
   end
 
   private
 
-  # === HUNTING ===
-
-  def hunt_targets
-    update_target_from_pulse
-
-    if @target
-      assess_target_position
-    elsif energy < 70
-      find_energon
-    else
-      patrol_for_targets
-    end
-  end
-
-  def update_target_from_pulse
-    return if chronons - @last_pulse_chronon < 8
+  def sense_targets
+    # Pulse every few ticks for awareness
+    return if chronons - @last_pulse < 8
 
     pulse(distance: 400)
-    @last_pulse_chronon = chronons
-
-    return unless pulse_result
+    @last_pulse = chronons
+    return unless pulse_result&.any?
 
     rubots = pulse_result.select { |t| t[:type] == :rubot }
     return if rubots.empty?
 
-    # Prioritize: stuck against wall > near corner > near wall > closest
+    # Prioritize: corner-trapped > wall-adjacent > closest
     @target = rubots.min_by do |t|
       dist = distance_to(t[:x], t[:y])
-      wall_dist = target_wall_distance(t)
+      wall_dist = wall_distance_of(t)
 
-      # Huge bonus for wall-stuck enemies (easy to crush)
-      stuck_bonus = wall_dist < 30 ? -200 : 0
-      corner_bonus = target_near_corner?(t) ? -150 : 0
-      wall_bonus = wall_dist < WALL_BUFFER ? -80 : 0
+      # Huge priority for corner-trapped targets
+      corner_bonus = in_corner?(t) ? -300 : 0
+      # High priority for wall-adjacent targets
+      wall_bonus = wall_dist < WALL_DANGER ? -150 : 0
 
-      dist + stuck_bonus + corner_bonus + wall_bonus
+      dist + corner_bonus + wall_bonus
     end
 
-    @mode = :herding if @target
+    @mode = :positioning if @target && @mode == :hunting
   end
 
-  def assess_target_position
-    wall_dist = target_wall_distance(@target)
+  def hunt
+    # No target - patrol toward center, scan around
+    center_angle = angle_to(arena_width / 2, arena_height / 2)
 
-    if target_against_wall?(@target)
-      # They're stuck! Go straight for the crush
-      @ram_angle = perpendicular_wall_angle(@target)
-      @mode = :charging
-    elsif target_near_corner?(@target)
-      # Corner trap - ram into corner
-      @ram_angle = corner_ram_angle(@target)
-      @mode = :charging
-    elsif wall_dist < WALL_BUFFER * 1.5
-      # Near a wall - ram perpendicular to maximize wall damage
-      @ram_angle = perpendicular_wall_angle(@target)
-      @mode = :charging
-    else
-      # Open field - herd them toward nearest wall
-      @mode = :herding
-    end
-  end
-
-  def patrol_for_targets
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
-
-    if momentum_aligned?(center_angle, tolerance: 45)
-      thrust(speed: 3, angle: center_angle) if speed < 8
-    else
-      thrust(speed: 3, angle: center_angle)
+    if distance_to(arena_width / 2, arena_height / 2) > 150
+      thrust(speed: 4, angle: center_angle) if speed < 8
     end
 
-    turret(10)
-    shield(3) if energy > 50 && shield_level < 30
+    turret(15)
+    shield(5) if energy > 60 && shield_level < 30
   end
 
-  # === HERDING ===
+  def position_for_ram
+    return hunt unless @target
 
-  def herd_to_wall
-    return revert_to_hunting unless @target
-
-    update_target_from_probe
+    update_target_position
     dist = distance_to(@target[:x], @target[:y])
 
-    # Determine which wall to herd toward
-    herd_angle = calculate_herd_angle
+    # If close enough to ram, do it
+    if dist < RAM_COMMIT
+      @mode = :ramming
+      return
+    end
 
-    if dist > CHARGE_DISTANCE
-      position_for_herd(herd_angle)
-    elsif target_wall_distance(@target) < WALL_BUFFER * 2
-      # Close enough to wall - charge!
-      @ram_angle = perpendicular_wall_angle(@target)
-      @mode = :charging
+    # Calculate ram angle: approach from opposite side of their nearest wall
+    ram_angle = calculate_ram_angle
+
+    # Move to attack position
+    if dist > ENGAGE_DISTANCE
+      # Far away - close distance directly first
+      approach_angle = angle_to(@target[:x], @target[:y])
+      thrust(speed: 5, angle: approach_angle) if speed < 12
     else
-      push_toward_wall(herd_angle)
+      # In range - position for wall ram
+      thrust(speed: 6, angle: ram_angle) if speed < 14
     end
 
-    aim_turret_at_target
-    # Heavy shields during approach - absorb fire from corner campers
-    shield(10) if energy > 30 && shield_level < 80
+    # Fire while closing
+    aim_and_fire
+    # Moderate shields
+    shield(8) if energy > 50 && shield_level < 60
   end
 
-  def calculate_herd_angle
-    wall = nearest_wall_to_target(@target)
-    case wall
-    when :left then 180
-    when :right then 0
-    when :bottom then 270
-    when :top then 90
-    end
-  end
+  def execute_ram
+    return hunt unless @target
 
-  def position_for_herd(herd_angle)
-    opposite_angle = (herd_angle + 180) % 360
-    ideal_x = @target[:x] + (Math.cos(opposite_angle * Math::PI / 180) * 150)
-    ideal_y = @target[:y] + (Math.sin(opposite_angle * Math::PI / 180) * 150)
+    update_target_position
 
-    ideal_x = ideal_x.clamp(WALL_BUFFER, arena_width - WALL_BUFFER)
-    ideal_y = ideal_y.clamp(WALL_BUFFER, arena_height - WALL_BUFFER)
-
-    move_angle = angle_to(ideal_x, ideal_y)
-    move_toward(move_angle, 4)
-  end
-
-  def push_toward_wall(herd_angle)
-    push_angle = angle_to(@target[:x], @target[:y])
-    blended_angle = blend_angles(push_angle, herd_angle, 0.4)
-    move_toward(blended_angle, 5)
-  end
-
-  # === CHARGING ===
-
-  def charge_ram
-    return revert_to_hunting unless @target && @ram_angle
-
-    update_target_from_probe
-    dist = distance_to(@target[:x], @target[:y])
-
-    # Check if target is already stuck - go straight to crushing
-    if target_against_wall?(@target) && dist < RAM_DISTANCE
+    # Check if target is now pinned
+    if target_pinned?
       @mode = :crushing
-      @crush_duration = 0
+      @crush_start = chronons
       return
     end
 
-    if dist > RAM_DISTANCE
-      build_momentum
+    # Ram angle pushes them into wall
+    ram_angle = calculate_ram_angle
+
+    # Full speed ram
+    if momentum_aligned?(ram_angle, tolerance: 40)
+      thrust(speed: 8, angle: ram_angle) if speed < 18
     else
-      commit_to_ram
+      # Adjust trajectory
+      thrust(speed: 6, angle: ram_angle)
     end
 
-    aim_turret_at_target
-    # Maximum shields during charge - absorb damage before impact
-    shield(12) if energy > 25 && shield_level < 90
+    # Fire while ramming
+    aim_and_fire
+    # Heavy shields for impact
+    shield(12) if energy > 40 && shield_level < 80
   end
 
-  def build_momentum
-    # Recalculate optimal ram angle
-    @ram_angle = if target_near_corner?(@target)
-                   corner_ram_angle(@target)
-                 else
-                   perpendicular_wall_angle(@target)
-                 end
+  def crush_pinned_target
+    return hunt unless @target
 
-    if momentum_aligned?(@ram_angle, tolerance: 30)
-      thrust(speed: 6, angle: @ram_angle) if speed < 16
-    elsif speed > 8
-      brake_thrust
-    else
-      thrust(speed: 5, angle: @ram_angle)
-    end
-  end
-
-  def commit_to_ram
-    direct_angle = angle_to(@target[:x], @target[:y])
-
-    if momentum_aligned?(direct_angle, tolerance: 45)
-      thrust(speed: 7, angle: direct_angle) if speed < 18
-    else
-      thrust(speed: 5, angle: direct_angle)
-    end
-  end
-
-  # === CRUSHING (signature move) ===
-  # Oscillates between ramming and backing up for repeated collision damage
-  # Also shoots while crushing for extra damage
-
-  def crush_against_wall
-    return revert_to_hunting unless @target
-
-    update_target_from_probe
+    update_target_position
     dist = distance_to(@target[:x], @target[:y])
-    @crush_duration += 1
 
-    # Crush timeout or target escaped wall
-    if @crush_duration > CRUSH_TIMEOUT || !target_against_wall?(@target)
-      @mode = :charging
-      @ram_angle = angle_to(@target[:x], @target[:y])
-      @crush_duration = 0
+    # Stop crushing if: target escaped, timeout, or target dead (no update)
+    if !target_pinned? || (chronons - @crush_start) > 60
+      @mode = :positioning
+      @crush_start = nil
       return
     end
 
-    # Aim turret and SHOOT while crushing - free damage!
-    aim_turret_at_target
-    fire_at_pinned_target
-
-    # Oscillate between ram and backup phases for repeated collision damage
-    case @crush_phase
-    when :ram
-      crush_ram_phase(dist)
-    when :backup
-      crush_backup_phase(dist)
-    end
-
-    # Moderate shields during crush
-    shield(4) if energy > 25 && shield_level < 40
-  end
-
-  def crush_ram_phase(dist)
-    if dist < CRUSH_BACKUP_DIST
-      # Very close - switch to backup for another hit
-      @crush_phase = :backup
-    else
-      # Ram into them aggressively
-      direct_angle = angle_to(@target[:x], @target[:y])
-      thrust(speed: 6, angle: direct_angle) if speed < 12
-    end
-  end
-
-  def crush_backup_phase(dist)
-    if dist > CRUSH_DISTANCE
-      # Far enough - ram again!
-      @crush_phase = :ram
-    else
-      # Back up perpendicular to wall (away from target)
+    # Ram them into the wall repeatedly
+    if dist > CRUSH_RANGE
+      # Close in for another ram
+      ram_angle = angle_to(@target[:x], @target[:y])
+      thrust(speed: 6, angle: ram_angle) if speed < 12
+    elsif dist < 25
+      # Too close, back up slightly for momentum
       backup_angle = (angle_to(@target[:x], @target[:y]) + 180) % 360
-      # Don't back into center too far - stay close
-      thrust(speed: 4, angle: backup_angle) if dist < CRUSH_DISTANCE
-    end
-  end
-
-  def fire_at_pinned_target
-    return unless @target
-
-    target_angle = angle_to(@target[:x], @target[:y])
-    turret_diff = normalize_angle(target_angle - turret_angle).abs
-    dist = distance_to(@target[:x], @target[:y])
-
-    # Fire when reasonably aligned - pinned targets are easy to hit
-    return unless turret_diff < 25 && dist < 100 && energy > 20
-
-    fire(10) # Medium power shots while grinding
-  end
-
-  # === ENERGON COLLECTION ===
-
-  def find_energon
-    energon = find_nearest_energon(max_distance: ENERGON_COLLECT_RANGE)
-    if energon
-      @target_energon = energon
-      @mode = :collecting
+      thrust(speed: 3, angle: backup_angle)
     else
-      patrol_for_targets
+      # Perfect range - ram into wall
+      ram_angle = calculate_ram_angle
+      thrust(speed: 7, angle: ram_angle) if speed < 15
+    end
+
+    # Fire at pinned target - easy hits
+    aim_and_fire(aggressive: true)
+    shield(6) if energy > 35 && shield_level < 50
+  end
+
+  # Calculate angle that pushes target INTO their nearest wall
+  # We need to hit them from the opposite side of their nearest wall
+  def calculate_ram_angle
+    return angle_to(@target[:x], @target[:y]) unless @target
+
+    nearest = nearest_wall_to(@target)
+
+    # Calculate ideal attack position (opposite side of wall from target)
+    case nearest
+    when :left
+      # Target near left wall - we want to be EAST of them, pushing west
+      ideal_x = @target[:x] + 100
+      ideal_y = @target[:y]
+    when :right
+      # Target near right wall - we want to be WEST of them, pushing east
+      ideal_x = @target[:x] - 100
+      ideal_y = @target[:y]
+    when :top
+      # Target near top wall - we want to be SOUTH of them, pushing north
+      ideal_x = @target[:x]
+      ideal_y = @target[:y] - 100
+    when :bottom
+      # Target near bottom wall - we want to be NORTH of them, pushing south
+      ideal_x = @target[:x]
+      ideal_y = @target[:y] + 100
+    end
+
+    # If we're already roughly in position, ram directly at target
+    # Otherwise, move toward the ideal attack position
+    dist_to_ideal = Math.sqrt((x - ideal_x)**2 + (y - ideal_y)**2)
+    dist_to_target = distance_to(@target[:x], @target[:y])
+
+    if dist_to_ideal < 60 || dist_to_target < RAM_COMMIT
+      # In position or close enough - ram directly
+      angle_to(@target[:x], @target[:y])
+    else
+      # Move toward attack position
+      angle_to(ideal_x.clamp(50, arena_width - 50), ideal_y.clamp(50, arena_height - 50))
     end
   end
 
-  def collecting_action
-    update_target_from_pulse
-    if @target
-      @target_energon = nil
-      @mode = :herding
-      return
-    end
-
-    unless energon_still_exists?(@target_energon)
-      @target_energon = nil
-      @mode = :hunting
-      return
-    end
-
-    energon_angle = angle_to(@target_energon[:x], @target_energon[:y])
-    safe_angle = safe_movement_angle(energon_angle)
-
-    move_toward(safe_angle, 4)
-    turret(8)
-    shield(3) if energy > 50 && shield_level < 30
-  end
-
-  # === HELPERS ===
-
-  def revert_to_hunting
-    @mode = :hunting
-    @target = nil
-    @ram_angle = nil
-    @crush_duration = 0
-    @crush_phase = :ram
-  end
-
-  def update_target_from_probe
-    return unless @target
-
-    turret_diff = normalize_angle(angle_to(@target[:x], @target[:y]) - turret_angle)
-    return unless turret_diff.abs < 20 && energy > 10
-
-    probe(:position, :velocity)
-    return unless probe_result&.any?
-
-    @target = {
-      x: probe_result[:x],
-      y: probe_result[:y],
-      velocity_x: probe_result[:velocity_x],
-      velocity_y: probe_result[:velocity_y]
+  def nearest_wall_to(target)
+    distances = {
+      left: target[:x],
+      right: arena_width - target[:x],
+      top: arena_height - target[:y],
+      bottom: target[:y]
     }
+    distances.min_by { |_, d| d }.first
   end
 
-  def aim_turret_at_target
-    return unless @target
-
-    target_angle = angle_to(@target[:x], @target[:y])
-    turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-15, 15))
-  end
-
-  def move_toward(angle, thrust_speed)
-    safe_angle = safe_movement_angle(angle)
-
-    if momentum_aligned?(safe_angle, tolerance: 45)
-      thrust(speed: thrust_speed, angle: safe_angle) if speed < 15
-    elsif speed > 8
-      brake_thrust
-    else
-      thrust(speed: thrust_speed, angle: safe_angle)
-    end
-  end
-
-  def brake_thrust
-    return unless velocity_angle
-
-    brake_angle = (velocity_angle + 180) % 360
-    thrust(speed: 4, angle: brake_angle)
-  end
-
-  def brake_from_wall
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
-    thrust(speed: 4, angle: center_angle)
-  end
-
-  def safe_movement_angle(angle)
-    return angle if wall_distance(angle) > WALL_BUFFER * 1.5
-
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
-    diff = normalize_angle(center_angle - angle)
-    (angle + (diff * 0.6)) % 360
-  end
-
-  # === WALL/CORNER GEOMETRY ===
-
-  def target_against_wall?(target)
-    return false unless target
-
-    target_wall_distance(target) < 40
-  end
-
-  def target_is_stuck?(target)
-    return false unless target && target[:velocity_x] && target[:velocity_y]
-
-    target_speed = Math.sqrt((target[:velocity_x]**2) + (target[:velocity_y]**2))
-    target_against_wall?(target) && target_speed < STUCK_SPEED_THRESHOLD
-  end
-
-  def corners
-    @corners ||= [
-      { x: CORNER_RADIUS, y: CORNER_RADIUS },
-      { x: arena_width - CORNER_RADIUS, y: CORNER_RADIUS },
-      { x: CORNER_RADIUS, y: arena_height - CORNER_RADIUS },
-      { x: arena_width - CORNER_RADIUS, y: arena_height - CORNER_RADIUS }
-    ]
-  end
-
-  def target_near_corner?(target)
-    return false unless target
-
-    corners.any? do |corner|
-      dx = target[:x] - corner[:x]
-      dy = target[:y] - corner[:y]
-      Math.sqrt((dx * dx) + (dy * dy)) < CORNER_RADIUS
-    end
-  end
-
-  def nearest_corner_to(target)
-    corners.min_by do |corner|
-      dx = target[:x] - corner[:x]
-      dy = target[:y] - corner[:y]
-      Math.sqrt((dx * dx) + (dy * dy))
-    end
-  end
-
-  def corner_ram_angle(target)
-    corner = nearest_corner_to(target)
-    angle_to(corner[:x], corner[:y])
-  end
-
-  def target_wall_distance(target)
-    return Float::INFINITY unless target
-
+  def wall_distance_of(target)
     [
       target[:x],
       arena_width - target[:x],
@@ -506,34 +265,61 @@ class Crusher
     ].min
   end
 
-  def nearest_wall_to_target(target)
-    distances = {
-      left: target[:x],
-      right: arena_width - target[:x],
-      bottom: target[:y],
-      top: arena_height - target[:y]
-    }
-    distances.min_by { |_, d| d }.first
+  def in_corner?(target)
+    wall_x = [target[:x], arena_width - target[:x]].min
+    wall_y = [target[:y], arena_height - target[:y]].min
+    wall_x < CORNER_ZONE && wall_y < CORNER_ZONE
   end
 
-  # Ram perpendicular to the nearest wall for maximum wall impact damage
-  def perpendicular_wall_angle(target)
-    wall = nearest_wall_to_target(target)
-    case wall
-    when :left then 180   # Push west into left wall
-    when :right then 0    # Push east into right wall
-    when :bottom then 270 # Push south into bottom wall
-    when :top then 90     # Push north into top wall
+  def target_pinned?
+    return false unless @target
+    wall_distance_of(@target) < PIN_THRESHOLD
+  end
+
+  def update_target_position
+    return unless @target
+
+    # Use probe for precise tracking when aligned
+    target_angle = angle_to(@target[:x], @target[:y])
+    turret_diff = normalize_angle(target_angle - turret_angle).abs
+
+    if turret_diff < 20 && energy > 10
+      probe(:position, :velocity)
+      if probe_result&.any?
+        @target = {
+          x: probe_result[:x],
+          y: probe_result[:y],
+          velocity_x: probe_result[:velocity_x],
+          velocity_y: probe_result[:velocity_y]
+        }
+      end
     end
   end
 
-  def blend_angles(angle1, angle2, weight)
-    rad1 = angle1 * Math::PI / 180
-    rad2 = angle2 * Math::PI / 180
+  def aim_and_fire(aggressive: false)
+    return unless @target
 
-    x_val = (Math.cos(rad1) * (1 - weight)) + (Math.cos(rad2) * weight)
-    y_val = (Math.sin(rad1) * (1 - weight)) + (Math.sin(rad2) * weight)
+    # Lead moving targets
+    if @target[:velocity_x] && @target[:velocity_y]
+      target_angle = lead_angle(
+        @target[:x], @target[:y],
+        @target[:velocity_x], @target[:velocity_y],
+        projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+      )
+    else
+      target_angle = angle_to(@target[:x], @target[:y])
+    end
 
-    Math.atan2(y_val, x_val) * 180 / Math::PI
+    turret_diff = normalize_angle(target_angle - turret_angle)
+    turret(turret_diff.clamp(-15, 15))
+
+    dist = distance_to(@target[:x], @target[:y])
+    threshold = aggressive ? 25 : 15
+    min_energy = aggressive ? 20 : 35
+
+    return unless turret_diff.abs < threshold && energy > min_energy
+
+    power = aggressive ? 15 : 10
+    fire(power)
   end
 end

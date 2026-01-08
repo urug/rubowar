@@ -139,15 +139,6 @@ module Rubowar
       end
     end
 
-    def clamp_speed
-      current_speed = speed
-      return unless current_speed > Config::Physics::MAX_SPEED
-
-      scale = Config::Physics::MAX_SPEED / current_speed
-      @velocity_x *= scale
-      @velocity_y *= scale
-    end
-
     def apply_friction(friction)
       @velocity_x *= friction
       @velocity_y *= friction

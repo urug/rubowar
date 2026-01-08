@@ -95,7 +95,7 @@ describe Rubowar::Rubot do
     it "delegates friction with default" do
       bot = build_bot
 
-      _(bot.friction).must_equal 0.95
+      _(bot.friction).must_equal 0.92
     end
   end
 

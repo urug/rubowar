@@ -284,29 +284,6 @@ describe Rubowar::RubotActor do
     end
   end
 
-  describe "#clamp_speed" do
-    it "does nothing when under max speed" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.velocity_x = 10.0
-      runner.velocity_y = 10.0
-
-      runner.clamp_speed
-
-      _(runner.velocity_x).must_equal 10.0
-      _(runner.velocity_y).must_equal 10.0
-    end
-
-    it "scales velocity to max speed when over" do
-      runner = Rubowar::RubotActor.new(DummyBot)
-      runner.velocity_x = 600.0
-      runner.velocity_y = 800.0 # speed = 1000, over cap
-
-      runner.clamp_speed
-
-      _(runner.speed).must_be_close_to Rubowar::Config::Physics::MAX_SPEED, 0.001
-    end
-  end
-
   describe "#to_state" do
     it "returns a RubotState with current values" do
       runner = Rubowar::RubotActor.new(DummyBot)

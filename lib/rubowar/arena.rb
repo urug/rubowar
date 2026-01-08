@@ -93,7 +93,6 @@ module Rubowar
 
         runner.apply_friction(@friction)
         runner.move
-        runner.clamp_speed
         check_wall_collision(runner)
       end
 

@@ -16,7 +16,7 @@ rescue StandardError
 end.sort_by(&:name)
 
 NUM_ROBOTS = ROBOTS.size
-ITERATIONS = 12
+ITERATIONS = 16
 
 puts "Tournament with #{NUM_ROBOTS} rubots: #{ROBOTS.map(&:name).join(", ")}"
 puts "Running #{ITERATIONS} iterations per combination"
