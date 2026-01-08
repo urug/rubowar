@@ -11,10 +11,10 @@
 # collaborators = ["Arena", "Battle", "RubotState"]
 #
 # [sizes]
-# small = { radius: 16, energy_regen: 8, max_health: 80, max_energy: 120 }
-# medium = { radius: 20, energy_regen: 10, max_health: 100, max_energy: 100 }
-# large = { radius: 24, energy_regen: 12, max_health: 120, max_energy: 80 }
-# tradeoffs = "Small = agile, high energy cap. Large = tanky, high regen, low energy cap"
+# small = { radius: 16, energy_regen: 8, max_health: 80 }
+# medium = { radius: 20, energy_regen: 10, max_health: 100 }
+# large = { radius: 24, energy_regen: 12, max_health: 120 }
+# tradeoffs = "Small = agile, cheap thrust. Large = tanky, high regen, harder to hit"
 #
 # [damage_methods]
 # apply_damage = "Normal damage, shields absorb first"
@@ -56,7 +56,7 @@ module Rubowar
     end
 
     def max_energy
-      Config::Rubot::SIZES[@size][:max_energy]
+      Config::Rubot::MAX_ENERGY
     end
 
     def max_shield

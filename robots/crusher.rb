@@ -44,14 +44,12 @@ class Crusher
     end
   end
 
-  def on_collision(other)
+  def on_collision(_other)
     # Successful ram - if they're pinned, start crushing
-    return unless @target
+    return unless @target && target_pinned?
 
-    if target_pinned?
-      @mode = :crushing
-      @crush_start = chronons
-    end
+    @mode = :crushing
+    @crush_start = chronons
   end
 
   def on_hit(_damage, direction)
@@ -139,7 +137,7 @@ class Crusher
 
     # Fire while closing
     aim_and_fire
-    # Moderate shields
+    # Moderate shields - save energy for thrust
     shield(8) if energy > 50 && shield_level < 60
   end
 
@@ -234,7 +232,7 @@ class Crusher
 
     # If we're already roughly in position, ram directly at target
     # Otherwise, move toward the ideal attack position
-    dist_to_ideal = Math.sqrt((x - ideal_x)**2 + (y - ideal_y)**2)
+    dist_to_ideal = distance_to(ideal_x, ideal_y)
     dist_to_target = distance_to(@target[:x], @target[:y])
 
     if dist_to_ideal < 60 || dist_to_target < RAM_COMMIT
@@ -313,13 +311,11 @@ class Crusher
     turret_diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-15, 15))
 
-    dist = distance_to(@target[:x], @target[:y])
-    threshold = aggressive ? 25 : 15
-    min_energy = aggressive ? 20 : 35
+    # Fire if aligned - aggressive mode has wider tolerance and lower energy threshold
+    alignment_threshold = aggressive ? 25 : 15
+    energy_threshold = aggressive ? 20 : 35
+    return unless turret_diff.abs < alignment_threshold && energy > energy_threshold
 
-    return unless turret_diff.abs < threshold && energy > min_energy
-
-    power = aggressive ? 15 : 10
-    fire(power)
+    fire(aggressive ? 15 : 10)
   end
 end

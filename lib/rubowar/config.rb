@@ -52,13 +52,12 @@ module Rubowar
 
     module Rubot
       SHIELD_DECAY_RATE = 0.12
+      MAX_ENERGY = 100
 
-      # Small: low HP/regen but high energy cap (save for big hits/evasion)
-      # Large: high HP/regen but low energy cap (steady pressure)
       SIZES = {
-        small: { radius: 16, energy_regen: 8, max_health: 80, max_energy: 120 },
-        medium: { radius: 20, energy_regen: 10, max_health: 100, max_energy: 100 },
-        large: { radius: 24, energy_regen: 12, max_health: 120, max_energy: 80 }
+        small: { radius: 16, energy_regen: 8, max_health: 80 },
+        medium: { radius: 20, energy_regen: 10, max_health: 100 },
+        large: { radius: 24, energy_regen: 12, max_health: 120 }
       }.freeze
     end
 

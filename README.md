@@ -14,7 +14,7 @@ class MyRubot
   end
 
   def act
-    turret(10)                              # Rotate turret
+    rotate_turret(10)                       # Rotate turret
     fire(5) if probe                        # Fire when we see someone
     thrust(speed: 3, angle: @heading)       # Move in heading direction
   end
@@ -35,13 +35,13 @@ end
 | `energy` | Current energy (max 100) |
 | `shield_level` | Shield strength (0 to max_health, decays 12%/chronon) |
 | `arena_width`, `arena_height` | Arena dimensions |
-| `friction` | Arena friction (default 0.95) |
+| `friction` | Arena friction (default 0.92) |
 | `chronons` | Current game tick |
 | `damage_dealt`, `damage_taken` | Match stats |
 | `energons` | All energon positions `[{x:, y:}]` (free) |
 | `size` | Rubot size (:small, :medium, :large) |
 | `live_rubot_count` | Number of rubots still alive |
-| `energon_spawn_interval` | Ticks between energon spawns (default 80) |
+| `energon_spawn_interval` | Ticks between energon spawns (default 50) |
 | `energon_growth_rate` | Energy growth per chronon (default 1.0) |
 
 ### Actions
@@ -49,7 +49,7 @@ end
 | Method | Cost | Effect |
 |--------|------|--------|
 | `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
-| `turret(degrees)` | ceil(\|degrees\|/24) | Rotate turret |
+| `rotate_turret(degrees)` | ceil(\|degrees\|/24) | Rotate turret |
 | `fire(energy)` | energy | Damage = 1.5 x energy, bullet speed 18 |
 | `shield(energy)` | energy | Add to shield (max = HP cap, decays 12%/chronon) |
 
@@ -59,7 +59,7 @@ end
 
 ```
 Phase 1: SENSE   → All probe(), scan(), pulse() for all rubots
-Phase 2: MOVE    → All thrust(), turret() for all rubots → physics (movement, collisions)
+Phase 2: MOVE    → All thrust(), rotate_turret() for all rubots → physics (movement, collisions)
 Phase 3: COMBAT  → All fire(), shield() for all rubots → bullet physics
 ```
 
@@ -172,7 +172,7 @@ def act
     # We have a target! Aim and fire
     target_angle = angle_to(probe_result[:x], probe_result[:y])
     turret_diff = normalize_angle(target_angle - turret_angle)
-    turret(turret_diff.clamp(-20, 20))
+    rotate_turret(turret_diff.clamp(-20, 20))
     fire(10) if turret_diff.abs < 15
   end
 
@@ -215,22 +215,22 @@ def on_energon(amount)         # Collected energon
 
 | Size | Radius | HP | Energy Regen | Mass |
 |------|--------|-----|--------------|------|
-| `:small` | 15 | 80 | +8/chronon | 0.56 |
+| `:small` | 16 | 80 | +8/chronon | 0.64 |
 | `:medium` | 20 | 100 | +10/chronon | 1.0 |
-| `:large` | 25 | 120 | +12/chronon | 1.56 |
+| `:large` | 24 | 120 | +12/chronon | 1.44 |
 
 **Tradeoffs:**
 - **Small**: Harder to hit, cheapest thrust, but least HP
 - **Medium**: Balanced baseline
-- **Large**: Most HP and firepower, but expensive to move and easier to hit
+- **Large**: Most HP and regen, but expensive to move and easier to hit
 
 ## Arena
 
 - **Dimensions**: Variable (default 800x600)
 - **Origin**: Bottom-left (0,0)
 - **Angles**: 0 = East, 90 = North, 180 = West, 270 = South
-- **Friction**: 0.95 default (velocity *= friction each chronon)
-- **Max speed**: 30 u/chronon
+- **Friction**: 0.92 default (velocity *= friction each chronon)
+- **Max speed**: No hard cap (friction naturally limits sustained speed)
 
 ## Physics
 
@@ -238,34 +238,33 @@ def on_energon(amount)         # Collected energon
 - `thrust(speed:, angle:)` adds velocity in the specified world direction
 - Cost: `(speed/1.5)^2 x mass x direction_multiplier`
 - Direction multiplier: 1.0 (same direction) to 2.0 (opposite direction)
-- Friction slows rubots each chronon (velocity *= 0.95)
+- Friction slows rubots each chronon (velocity *= 0.92)
 
 ### Bullets
-- Travel 18 u/chronon (slower than max rubot speed, but max speed requires burst energy)
+- Travel 18 u/chronon (rubots can outrun bullets with sustained thrust, but it's energy-expensive)
 - Spawn at edge of rubot (position + rubot radius + bullet radius)
 - Self-damage is possible (your bullets can hit you if you're fast enough)
 
 ### Collision Damage
-- **Wall**: `2 + speed x 0.75` (at max speed: 25 damage)
-- **Rubot**: `2 + attacker_mass x attacker_speed x 0.5` (momentum-based)
+- **Wall**: `2 + mass × impact_speed × 0.5` (momentum-based)
+- **Rubot**: `2 + other_mass × closing_speed × 0.5` (momentum-based)
 
-Large rubots deal more collision damage due to higher mass.
+Larger rubots deal more collision damage due to higher mass.
 
 ### Wall Bounce
-Wall collisions absorb most of your momentum. Larger rubots retain slightly more velocity:
-- Bounce velocity = `velocity x mass x 0.12`
-- **Small** (0.56 mass): 7% velocity retained
-- **Medium** (1.0 mass): 12% velocity retained
-- **Large** (1.56 mass): 19% velocity retained
+Wall collisions use realistic impulse physics with elasticity 0.2. Larger rubots retain more velocity due to mass advantage against the wall's effective mass:
+- **Small** (0.64 mass): ~15% velocity retained
+- **Medium** (1.0 mass): ~21% velocity retained
+- **Large** (1.44 mass): ~27% velocity retained
 
-Walls can't be used for free direction changes - you'll lose most of your speed.
+Walls absorb most momentum - they can't be used for free direction changes.
 
 ## Energons
 
 Energy power-ups that spawn periodically and grow in value over time.
 
 ### Mechanics
-- **Spawn rate**: Every 80 chronons (configurable)
+- **Spawn rate**: Every 50 chronons (configurable)
 - **Starting value**: 1 energy
 - **Growth**: +1 energy per chronon alive
 - **Collection**: Touch to collect (8 unit radius)
@@ -286,28 +285,25 @@ Energy power-ups that spawn periodically and grow in value over time.
 The engine emits events for any renderer:
 
 ```ruby
-battle = Rubowar::Battle.new(rubots: [Spinner, Tracker])
+battle = Rubowar::Battle.new([Spinner, Tracker])
 
 # Block-based (real-time)
 battle.on(:chronon) { |state| render_frame(state) }
-battle.on(:hit) { |event| play_sound(:hit) }
+battle.on(:death) { |event| play_sound(:death) }
 battle.run
 
 # Collect events (replays)
 events = battle.run
 save_replay(events)
-
-# Built-in terminal
-battle.run(renderer: Rubowar::Renderers::Terminal)
 ```
 
-**Event types**: `:chronon`, `:fire`, `:hit`, `:death`, `:wall_collision`, `:rubot_collision`, `:energon_spawn`, `:energon_collect`, `:battle_end`
+**Event types**: `:chronon`, `:death`, `:error`, `:action_failed`, `:energon_spawn`, `:energon_collect`, `:battle_end`
 
 ## Victory
 
 - Last rubot standing wins
-- Chronon limit (5000 chronons) prevents stalemates
-- Tiebreaker: highest HP, then most damage dealt
+- Chronon limit (10,000 chronons) prevents stalemates
+- Tiebreaker: most damage dealt, then highest HP percentage
 
 ## Error Handling
 
