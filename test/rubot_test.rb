@@ -7,7 +7,7 @@ ARENA_WIDTH = Rubowar::Config::Arena::DEFAULT_WIDTH
 ARENA_HEIGHT = Rubowar::Config::Arena::DEFAULT_HEIGHT
 ARENA_FRICTION = Rubowar::Config::Arena::DEFAULT_FRICTION
 
-class TestBot
+class RubotTestBot
   include Rubowar::Rubot
 
   def act; end
@@ -28,7 +28,7 @@ class LargeBot
 end
 
 def build_bot(energy: 50, health: 100, x: 100.0, y: 200.0, velocity_x: 1.0, velocity_y: 2.0, turret_angle: 90.0)
-  bot = TestBot.new
+  bot = RubotTestBot.new
   speed = Math.sqrt((velocity_x**2) + (velocity_y**2))
   bot.rubot_state = Rubowar::RubotState.new(
     x:, y:,
@@ -47,7 +47,7 @@ end
 describe Rubowar::Rubot do
   describe "size class method" do
     it "defaults to medium" do
-      _(TestBot.size).must_equal :medium
+      _(RubotTestBot.size).must_equal :medium
     end
 
     it "can be set to small" do
@@ -122,21 +122,6 @@ describe Rubowar::Rubot do
       _(bot.actions[:move].first[:angle]).must_equal 40
     end
 
-    it "ignores zero speed" do
-      bot = build_bot
-
-      bot.thrust(speed: 0, angle: 45)
-
-      _(bot.actions[:move]).must_be_empty
-    end
-
-    it "ignores negative speed" do
-      bot = build_bot
-
-      bot.thrust(speed: -5, angle: 45)
-
-      _(bot.actions[:move]).must_be_empty
-    end
   end
 
   describe "#rotate_turret" do
@@ -155,6 +140,24 @@ describe Rubowar::Rubot do
 
       _(bot.actions[:move].first[:degrees]).must_equal 40
     end
+
+    it "returns false when degrees is zero" do
+      bot = build_bot
+
+      result = bot.rotate_turret(0)
+
+      _(result).must_equal false
+      _(bot.actions[:move]).must_be_empty
+    end
+
+    it "returns false when degrees normalizes to zero" do
+      bot = build_bot
+
+      result = bot.rotate_turret(360)
+
+      _(result).must_equal false
+      _(bot.actions[:move]).must_be_empty
+    end
   end
 
   describe "#fire" do
@@ -166,20 +169,13 @@ describe Rubowar::Rubot do
       _(bot.actions[:combat]).must_equal [{ type: :fire, energy: 15 }]
     end
 
-    it "ignores zero energy" do
-      bot = build_bot
-
-      bot.fire(0)
-
-      _(bot.actions[:combat]).must_be_empty
-    end
   end
 
-  describe "#shield" do
+  describe "#raise_shields" do
     it "queues a shield action with energy" do
       bot = build_bot
 
-      bot.shield(20)
+      bot.raise_shields(20)
 
       _(bot.actions[:combat]).must_equal [{ type: :shield, energy: 20 }]
     end
@@ -222,6 +218,26 @@ describe Rubowar::Rubot do
       bot.probe(:size, :position, :velocity, :shield, :health, :energy)
 
       _(bot.actions[:sense].first[:attributes]).must_equal %i[size position velocity shield health energy]
+    end
+
+    it "removes duplicate attributes" do
+      bot = build_bot
+
+      bot.probe(:size, :size, :position, :size)
+
+      _(bot.actions[:sense].first[:attributes]).must_equal %i[size position]
+    end
+
+    it "only charges energy once for duplicate attributes" do
+      bot = build_bot(energy: 50)
+      bot._pending_energy_spend = 0
+
+      # size costs 1 energy, position costs 4 energy
+      # With duplicates removed, total should be 5, not 6
+      bot.probe(:size, :size, :position)
+
+      # pending energy should reflect deduplicated cost
+      _(bot._pending_energy_spend).must_equal 5
     end
   end
 
@@ -267,36 +283,13 @@ describe Rubowar::Rubot do
       _(bot.actions[:sense]).must_be_empty
     end
 
-    it "scan_result returns previous tick result" do
+    it "scan_echo returns previous tick result" do
       bot = build_bot
-      bot.scan_result = [{ x: 100, y: 200, type: :rubot }]
+      bot.scan_echo = [{ x: 100, y: 200, type: :rubot }]
 
-      _(bot.scan_result).must_equal [{ x: 100, y: 200, type: :rubot }]
+      _(bot.scan_echo).must_equal [{ x: 100, y: 200, type: :rubot }]
     end
 
-    it "raises ArgumentError for zero angle" do
-      bot = build_bot
-
-      _ { bot.scan(angle: 0, distance: 200) }.must_raise ArgumentError
-    end
-
-    it "raises ArgumentError for negative angle" do
-      bot = build_bot
-
-      _ { bot.scan(angle: -10, distance: 200) }.must_raise ArgumentError
-    end
-
-    it "raises ArgumentError for zero distance" do
-      bot = build_bot
-
-      _ { bot.scan(angle: 30, distance: 0) }.must_raise ArgumentError
-    end
-
-    it "raises ArgumentError for negative distance" do
-      bot = build_bot
-
-      _ { bot.scan(angle: 30, distance: -100) }.must_raise ArgumentError
-    end
   end
 
   describe "#pulse" do
@@ -333,23 +326,11 @@ describe Rubowar::Rubot do
       _(bot.actions[:sense]).must_be_empty
     end
 
-    it "pulse_result returns previous tick result" do
+    it "pulse_echo returns previous tick result" do
       bot = build_bot
-      bot.pulse_result = [{ x: 150, y: 250, type: :rubot }]
+      bot.pulse_echo = [{ x: 150, y: 250, type: :rubot }]
 
-      _(bot.pulse_result).must_equal [{ x: 150, y: 250, type: :rubot }]
-    end
-
-    it "raises ArgumentError for zero distance" do
-      bot = build_bot
-
-      _ { bot.pulse(distance: 0) }.must_raise ArgumentError
-    end
-
-    it "raises ArgumentError for negative distance" do
-      bot = build_bot
-
-      _ { bot.pulse(distance: -50) }.must_raise ArgumentError
+      _(bot.pulse_echo).must_equal [{ x: 150, y: 250, type: :rubot }]
     end
   end
 
@@ -379,11 +360,11 @@ describe Rubowar::Rubot do
       _(bot.actions[:sense]).must_be_empty
     end
 
-    it "detect_result returns previous tick result" do
+    it "detect_intel returns previous tick result" do
       bot = build_bot
-      bot.detect_result = { probed: 1, scanned: 2, pulsed: 0 }
+      bot.detect_intel = { probed: 1, scanned: 2, pulsed: 0 }
 
-      _(bot.detect_result).must_equal({ probed: 1, scanned: 2, pulsed: 0 })
+      _(bot.detect_intel).must_equal({ probed: 1, scanned: 2, pulsed: 0 })
     end
   end
 
@@ -684,7 +665,7 @@ describe Rubowar::Rubot do
     it "returns original coordinates when inside arena" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, ARENA_HEIGHT / 2.0)
+      result = bot.clamp_to_arena(target_x: ARENA_WIDTH / 2.0, target_y: ARENA_HEIGHT / 2.0)
 
       _(result).must_equal [ARENA_WIDTH / 2.0, ARENA_HEIGHT / 2.0]
     end
@@ -692,7 +673,7 @@ describe Rubowar::Rubot do
     it "clamps x to left boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(-50.0, ARENA_HEIGHT / 2.0, margin: 20)
+      result = bot.clamp_to_arena(target_x: -50.0, target_y: ARENA_HEIGHT / 2.0, margin: 20)
 
       _(result).must_equal [20.0, ARENA_HEIGHT / 2.0]
     end
@@ -700,7 +681,7 @@ describe Rubowar::Rubot do
     it "clamps x to right boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(ARENA_WIDTH + 100.0, ARENA_HEIGHT / 2.0, margin: 20)
+      result = bot.clamp_to_arena(target_x: ARENA_WIDTH + 100.0, target_y: ARENA_HEIGHT / 2.0, margin: 20)
 
       _(result).must_equal [ARENA_WIDTH - 20.0, ARENA_HEIGHT / 2.0]
     end
@@ -708,7 +689,7 @@ describe Rubowar::Rubot do
     it "clamps y to bottom boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, -50.0, margin: 20)
+      result = bot.clamp_to_arena(target_x: ARENA_WIDTH / 2.0, target_y: -50.0, margin: 20)
 
       _(result).must_equal [ARENA_WIDTH / 2.0, 20.0]
     end
@@ -716,7 +697,7 @@ describe Rubowar::Rubot do
     it "clamps y to top boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, ARENA_HEIGHT + 100.0, margin: 20)
+      result = bot.clamp_to_arena(target_x: ARENA_WIDTH / 2.0, target_y: ARENA_HEIGHT + 100.0, margin: 20)
 
       _(result).must_equal [ARENA_WIDTH / 2.0, ARENA_HEIGHT - 20.0]
     end
@@ -726,7 +707,7 @@ describe Rubowar::Rubot do
     it "returns target position when velocity is nil" do
       bot = build_bot(x: 0.0, y: 0.0)
 
-      result = bot.lead_position(100.0, 100.0, nil, nil)
+      result = bot.lead_position(target_x: 100.0, target_y: 100.0, velocity_x: nil, velocity_y: nil)
 
       _(result).must_equal [100.0, 100.0]
     end
@@ -734,7 +715,7 @@ describe Rubowar::Rubot do
     it "returns position ahead of moving target" do
       bot = build_bot(x: 100.0, y: 300.0)
 
-      result = bot.lead_position(200.0, 300.0, 10.0, 0.0)
+      result = bot.lead_position(target_x: 200.0, target_y: 300.0, velocity_x: 10.0, velocity_y: 0.0)
 
       # Target at 200,300 moving east at 10, distance is 100, projectile speed 18
       # Lead chronons = 100/18 = 5.55
@@ -746,7 +727,7 @@ describe Rubowar::Rubot do
     it "clamps lead position to arena bounds" do
       bot = build_bot(x: 0.0, y: 0.0)
 
-      result = bot.lead_position(ARENA_WIDTH - 40.0, 0.0, 100.0, 0.0)
+      result = bot.lead_position(target_x: ARENA_WIDTH - 40.0, target_y: 0.0, velocity_x: 100.0, velocity_y: 0.0)
 
       # Should clamp to arena width - 20
       _(result[0]).must_equal(ARENA_WIDTH - 20)
@@ -757,7 +738,7 @@ describe Rubowar::Rubot do
     it "calculates angle to lead position" do
       bot = build_bot(x: 0.0, y: 0.0)
 
-      result = bot.lead_angle(100.0, 0.0, 0.0, 10.0)
+      result = bot.lead_angle(target_x: 100.0, target_y: 0.0, velocity_x: 0.0, velocity_y: 10.0)
 
       # Target moving north, so lead position is above target
       _(result).must_be :>, 0

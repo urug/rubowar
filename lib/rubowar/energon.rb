@@ -3,7 +3,7 @@
 # [file]
 # purpose = "Collectible energy pickups that spawn in the arena"
 # responsibility = "Track position and calculate value based on age"
-# pattern = "Entity"
+# pattern = "Value Object (Data.define)"
 #
 # [class.Energon]
 # purpose = "Energy pickup that grows more valuable over time"
@@ -12,17 +12,9 @@
 # collection = "Rubot touches energon -> gains value as energy"
 
 module Rubowar
-  class Energon
-    attr_reader :x, :y, :spawn_chronon
-
-    def initialize(x:, y:, spawn_chronon:)
-      @x = x
-      @y = y
-      @spawn_chronon = spawn_chronon
-    end
-
+  Energon = Data.define(:x, :y, :spawn_chronon) do
     def value(current_chronon)
-      chronons_alive = current_chronon - @spawn_chronon
+      chronons_alive = current_chronon - spawn_chronon
       Config::Energon::INITIAL_VALUE + (chronons_alive * Config::Energon::GROWTH_RATE)
     end
 

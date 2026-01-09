@@ -17,7 +17,7 @@ Metrics/AbcSize:
   Exclude:
     - "lib/rubowar/arena.rb"
     - "lib/rubowar/renderers/**/*"
-    - "robots/**/*"
+    - "rubots/**/*"
 
 Naming/MethodParameterName:
   Enabled: false

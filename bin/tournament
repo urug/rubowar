@@ -4,21 +4,21 @@
 require "bundler/setup"
 require "rubowar"
 
-# Load all robots
-robot_files = Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
-robot_files.each { |f| require f }
+# Load all rubots
+rubot_files = Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
+rubot_files.each { |f| require f }
 
-# Get all robot classes
-ROBOTS = ObjectSpace.each_object(Class).select do |c|
+# Get all rubot classes
+RUBOTS = ObjectSpace.each_object(Class).select do |c|
   c.include?(Rubowar::Rubot)
 rescue StandardError
   false
 end.sort_by(&:name)
 
-NUM_ROBOTS = ROBOTS.size
+NUM_RUBOTS = RUBOTS.size
 ITERATIONS = 64
 
-puts "Tournament with #{NUM_ROBOTS} rubots: #{ROBOTS.map(&:name).join(", ")}"
+puts "Tournament with #{NUM_RUBOTS} rubots: #{RUBOTS.map(&:name).join(", ")}"
 puts "Running #{ITERATIONS} iterations per combination"
 puts
 
@@ -29,12 +29,12 @@ scores = {
   "1v1v1v1" => Hash.new(0)
 }
 
-def run_battle(robot_classes, iterations)
+def run_battle(rubot_classes, iterations)
   results = Hash.new(0)
 
   iterations.times do
     battle = Rubowar::Battle.new(
-      robot_classes,
+      rubot_classes,
       width: 800,
       height: 600,
       friction: 0.92,
@@ -43,27 +43,27 @@ def run_battle(robot_classes, iterations)
     battle.run
 
     # Rank by: alive first, then health, then damage dealt
-    rankings = battle.arena.runners.sort_by do |r|
+    rankings = battle.arena.actors.sort_by do |r|
       [r.alive? ? 0 : 1, -r.health, -r.damage_dealt]
     end
 
-    rankings.each_with_index do |runner, idx|
-      results[[runner.rubot_class.name, idx]] ||= 0
-      results[[runner.rubot_class.name, idx]] += 1
+    rankings.each_with_index do |actor, idx|
+      results[[actor.rubot_class.name, idx]] ||= 0
+      results[[actor.rubot_class.name, idx]] += 1
     end
   end
 
   results
 end
 
-def calculate_points(results, num_participants, num_robots)
+def calculate_points(results, num_participants, num_rubots)
   points = Hash.new(0)
 
   case num_participants
   when 2
-    # 1v1: winner gets num_robots points
+    # 1v1: winner gets num_rubots points
     results.each do |(name, rank), count|
-      points[name] += count * num_robots if rank.zero?
+      points[name] += count * num_rubots if rank.zero?
     end
   when 3
     # 1v1v1: 1st: 3, 2nd: 2, 3rd: 1
@@ -81,13 +81,13 @@ def calculate_points(results, num_participants, num_robots)
 end
 
 # 1v1 battles
-puts "=== 1v1 Battles (#{ROBOTS.combination(2).count} combinations × #{ITERATIONS} iterations) ==="
-total_1v1 = ROBOTS.combination(2).count * ITERATIONS
+puts "=== 1v1 Battles (#{RUBOTS.combination(2).count} combinations × #{ITERATIONS} iterations) ==="
+total_1v1 = RUBOTS.combination(2).count * ITERATIONS
 completed = 0
 
-ROBOTS.combination(2).each do |pair|
+RUBOTS.combination(2).each do |pair|
   results = run_battle(pair, ITERATIONS)
-  points = calculate_points(results, 2, NUM_ROBOTS)
+  points = calculate_points(results, 2, NUM_RUBOTS)
   points.each { |name, pts| scores["1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1} battles"
@@ -95,13 +95,13 @@ end
 puts "\n"
 
 # 1v1v1 battles
-puts "=== 1v1v1 Battles (#{ROBOTS.combination(3).count} combinations × #{ITERATIONS} iterations) ==="
-total_1v1v1 = ROBOTS.combination(3).count * ITERATIONS
+puts "=== 1v1v1 Battles (#{RUBOTS.combination(3).count} combinations × #{ITERATIONS} iterations) ==="
+total_1v1v1 = RUBOTS.combination(3).count * ITERATIONS
 completed = 0
 
-ROBOTS.combination(3).each do |trio|
+RUBOTS.combination(3).each do |trio|
   results = run_battle(trio, ITERATIONS)
-  points = calculate_points(results, 3, NUM_ROBOTS)
+  points = calculate_points(results, 3, NUM_RUBOTS)
   points.each { |name, pts| scores["1v1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1v1} battles"
@@ -109,13 +109,13 @@ end
 puts "\n"
 
 # 1v1v1v1 battles
-puts "=== 1v1v1v1 Battles (#{ROBOTS.combination(4).count} combinations × #{ITERATIONS} iterations) ==="
-total_1v1v1v1 = ROBOTS.combination(4).count * ITERATIONS
+puts "=== 1v1v1v1 Battles (#{RUBOTS.combination(4).count} combinations × #{ITERATIONS} iterations) ==="
+total_1v1v1v1 = RUBOTS.combination(4).count * ITERATIONS
 completed = 0
 
-ROBOTS.combination(4).each do |quad|
+RUBOTS.combination(4).each do |quad|
   results = run_battle(quad, ITERATIONS)
-  points = calculate_points(results, 4, NUM_ROBOTS)
+  points = calculate_points(results, 4, NUM_RUBOTS)
   points.each { |name, pts| scores["1v1v1v1"][name] += pts }
   completed += ITERATIONS
   print "\r  Progress: #{completed}/#{total_1v1v1v1} battles"
@@ -124,8 +124,8 @@ puts "\n"
 
 # Calculate grand totals
 grand_totals = Hash.new(0)
-ROBOTS.each do |robot|
-  name = robot.name
+RUBOTS.each do |rubot|
+  name = rubot.name
   grand_totals[name] = scores["1v1"][name] + scores["1v1v1"][name] + scores["1v1v1v1"][name]
 end
 
@@ -137,14 +137,14 @@ puts
 puts "| Rubot        |  1v1 Total |  1v1v1 Total |  1v1v1v1 Total |  Grand Total |"
 puts "|#{"-" * 14}|#{"-" * 12}|#{"-" * 14}|#{"-" * 16}|#{"-" * 14}|"
 
-sorted_robots = ROBOTS.sort_by { |r| -grand_totals[r.name] }
-sorted_robots.each do |robot|
-  name = robot.name
+sorted_rubots = RUBOTS.sort_by { |r| -grand_totals[r.name] }
+sorted_rubots.each do |rubot|
+  name = rubot.name
   puts format("| %-12s | %10d | %12d | %14d | %12d |", name, scores["1v1"][name], scores["1v1v1"][name], scores["1v1v1v1"][name], grand_totals[name])
 end
 
 puts
 puts "Maximum possible points:"
-puts "  1v1:     #{ROBOTS.combination(2).count * ITERATIONS * NUM_ROBOTS} (#{ROBOTS.combination(2).count} matchups × #{ITERATIONS} wins × #{NUM_ROBOTS} pts)"
-puts "  1v1v1:   #{ROBOTS.combination(3).count * ITERATIONS * 3} (#{ROBOTS.combination(3).count} matchups × #{ITERATIONS} × 3 pts for 1st)"
-puts "  1v1v1v1: #{ROBOTS.combination(4).count * ITERATIONS * 4} (#{ROBOTS.combination(4).count} matchups × #{ITERATIONS} × 4 pts for 1st)"
+puts "  1v1:     #{RUBOTS.combination(2).count * ITERATIONS * NUM_RUBOTS} (#{RUBOTS.combination(2).count} matchups × #{ITERATIONS} wins × #{NUM_RUBOTS} pts)"
+puts "  1v1v1:   #{RUBOTS.combination(3).count * ITERATIONS * 3} (#{RUBOTS.combination(3).count} matchups × #{ITERATIONS} × 3 pts for 1st)"
+puts "  1v1v1v1: #{RUBOTS.combination(4).count * ITERATIONS * 4} (#{RUBOTS.combination(4).count} matchups × #{ITERATIONS} × 4 pts for 1st)"

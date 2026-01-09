@@ -7,17 +7,19 @@ require "optparse"
 require "json"
 
 options = {
-  width: 800,
-  height: 600,
+  width: 480,
+  height: 480,
   friction: 0.95,
   chronon_limit: 1000,
   battles: 1,
   format: "text",
-  seed: nil
+  seed: nil,
+  watch: false,
+  delay: 0.05
 }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: bin/simulate [options] robot1.rb robot2.rb [robot3.rb ...]"
+  opts.banner = "Usage: bin/simulate [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
 
   opts.separator ""
   opts.separator "Arena options:"
@@ -56,6 +58,14 @@ OptionParser.new do |opts|
     options[:format] = fmt
   end
 
+  opts.on("-w", "--watch", "Watch battle in terminal with live rendering") do
+    options[:watch] = true
+  end
+
+  opts.on("-d", "--delay SECONDS", Float, "Delay between frames in watch mode (default: 0.05)") do |d|
+    options[:delay] = d
+  end
+
   opts.on("-h", "--help", "Show this help") do
     puts opts
     exit
@@ -71,11 +81,11 @@ rubot_files = if ARGV.empty?
 
 if rubot_files.size < 2
   warn "Error: Need at least 2 rubots to battle"
-  warn "Usage: bin/simulate [options] robot1.rb robot2.rb [robot3.rb ...]"
+  warn "Usage: bin/simulate [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
   exit 1
 end
 
-robot_classes = []
+rubot_classes = []
 rubot_files.each do |file|
   unless File.exist?(file)
     warn "Error: File not found: #{file}"
@@ -100,7 +110,7 @@ rubot_files.each do |file|
     exit 1
   end
 
-  robot_classes << new_classes.first
+  rubot_classes << new_classes.first
 end
 
 # Set random seed if provided
@@ -110,20 +120,30 @@ srand(options[:seed]) if options[:seed]
 results = []
 options[:battles].times do |i|
   battle = Rubowar::Battle.new(
-    robot_classes,
+    rubot_classes,
     width: options[:width],
     height: options[:height],
     friction: options[:friction],
     chronon_limit: options[:chronon_limit]
   )
 
+  if options[:watch]
+    renderer = Rubowar::Renderers::Terminal.new(battle)
+    battle.on(:chronon) do |tick_state|
+      renderer.render(tick_state)
+      sleep options[:delay]
+    end
+  end
+
   battle.run
+
+  renderer.render_final(battle.winner) if options[:watch]
 
   battle_result = {
     battle_number: i + 1,
     chronons: battle.chronons,
     winner: battle.winner&.rubot_class&.name,
-    rubots: battle.arena.runners.map do |r|
+    rubots: battle.arena.actors.map do |r|
       {
         name: r.rubot_class.name,
         size: r.size,
@@ -175,12 +195,12 @@ when "json"
 
 when "csv"
   # Header
-  puts "battle,ticks,winner,#{robot_classes.map { |c| "#{c.name}_hp,#{c.name}_dmg" }.join(",")}"
+  puts "battle,ticks,winner,#{rubot_classes.map { |c| "#{c.name}_hp,#{c.name}_dmg" }.join(",")}"
 
   # Data rows
   results.each do |r|
     row = [r[:battle_number], r[:chronons], r[:winner] || "draw"]
-    robot_classes.each do |klass|
+    rubot_classes.each do |klass|
       bot = r[:rubots].find { |b| b[:name] == klass.name }
       row << (bot ? bot[:health] : 0)
       row << (bot ? bot[:damage_dealt] : 0)
@@ -191,7 +211,7 @@ when "csv"
 when "text"
   puts "Simulation: #{options[:battles]} battle(s)"
   puts "Arena: #{options[:width]}x#{options[:height]}, friction=#{options[:friction]}, chronon_limit=#{options[:chronon_limit]}"
-  puts "Rubots: #{robot_classes.map { |c| "#{c.name} (#{c.size})" }.join(", ")}"
+  puts "Rubots: #{rubot_classes.map { |c| "#{c.name} (#{c.size})" }.join(", ")}"
   puts
 
   if options[:battles] == 1
@@ -205,7 +225,7 @@ when "text"
     end
   else
     puts "Win rates:"
-    robot_classes.each do |klass|
+    rubot_classes.each do |klass|
       count = wins[klass.name]
       pct = (count.to_f / options[:battles] * 100).round(1)
       puts "  #{klass.name}: #{count}/#{options[:battles]} (#{pct}%)"
@@ -214,7 +234,7 @@ when "text"
 
     puts
     puts "Averages per battle:"
-    robot_classes.each do |klass|
+    rubot_classes.each do |klass|
       name = klass.name
       puts "  #{name}: HP=#{summary[:avg_health][name]} DMG=#{summary[:avg_damage][name]}"
     end

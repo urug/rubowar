@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require "set"
 require "timeout"
 
 # [file]
@@ -27,16 +28,17 @@ require "timeout"
 # [chronon_phases]
 # order = [
 #   "1. Collect actions - call each rubot's act method, which queues actions by phase",
-#   "2. Sense phase - process actions[:sense] (probe, scan, pulse, then detect last)",
-#   "3. Move phase - process actions[:move] (thrust, turret), then update rubot physics",
-#   "4. Combat phase - process actions[:combat] (fire, shield), then update bullet physics",
-#   "5. Energon phase - check collection, spawn new energons",
+#   "2. Phases::Sense - process actions[:sense] (probe, scan, pulse, then detect last)",
+#   "3. Phases::Move - process actions[:move] (thrust, turret), then update rubot physics",
+#   "4. Phases::Combat - process actions[:combat] (fire, shield), then update bullet physics",
+#   "5. Phases::Energon - check collection, spawn new energons",
 #   "6. Maintenance - regenerate energy, degrade shields, check for deaths"
 # ]
 # fairness = "All rubots queue actions first, then phases process all rubots simultaneously"
+# pattern = "Each phase is a module_function module returning failed actions for event emission"
 #
 # [events]
-# types = ["chronon", "death", "hit", "battle_end", "energon_spawn", "energon_collect"]
+# types = ["chronon", "death", "hit", "battle_end", "energon_spawn", "energon_spawn_failed", "energon_collect"]
 # usage = "battle.on(:death) { |data| puts data[:actor].rubot_class.name }"
 
 module Rubowar
@@ -56,11 +58,11 @@ module Rubowar
       @chronons = 0
       @winner = nil
       @events = []
-      @callbacks = Hash.new { |h, k| h[k] = [] }
+      @callbacks = Hash.new { |h, k| h[k] = Set.new }
     end
 
     def on(event_type, &block)
-      @callbacks[event_type] << block
+      @callbacks[event_type].add(block)
     end
 
     def run
@@ -86,20 +88,23 @@ module Rubowar
     def call_on_spawn
       @arena.actors.each do |actor|
         setup_rubot_for_chronon(actor)
-        actor.safe_callback(:on_spawn)
+        actor.call_safely(&:on_spawn)
       end
     end
 
     def run_chronon
+      # Cache arena state once per chronon (same for all actors)
+      cached_arena_state = @arena.to_state(@chronons)
+
       # 1. Set up state and call each rubot's act to queue actions
       @arena.actors.each do |actor|
         next if actor.dead?
 
-        setup_rubot_for_chronon(actor)
+        setup_rubot_for_chronon(actor, cached_arena_state)
 
         begin
           Timeout.timeout(Config::Battle::CHRONON_TIMEOUT) do
-            actor.instance.act
+            actor.act
           end
         rescue Timeout::Error
           actor.apply_damage(Config::Battle::TIMEOUT_DAMAGE)
@@ -111,93 +116,46 @@ module Rubowar
       end
 
       # 2. Process actions in phases for fairness (no spawn-order advantage)
-      process_sense_phase
-      process_move_phase
-      process_combat_phase
+      execute_phases
 
-      # 3. Process energons (collection after movement, then spawning)
-      process_energon_phase
-
-      # 4. Regenerate energy and degrade shields
+      # 3. Regenerate energy and degrade shields
       @arena.regenerate_and_degrade
 
-      # 5. Check for deaths
+      # 4. Check for deaths (only process newly dead rubots)
       @arena.actors.each do |actor|
-        next unless actor.dead?
+        next unless actor.dead? && !actor.death_processed
 
-        actor.safe_callback(:on_death)
+        actor.death_processed = true
+        actor.call_on_death
         emit(:death, { actor: })
       end
     end
 
-    # Phase 1: All sensing actions (probe, scan, pulse, detect)
-    # Detect is processed last so it reports current chronon's detection counts
-    def process_sense_phase
-      # 1a. Reset detection counts (prepare for this chronon's sensing)
-      @arena.actors.each(&:reset_detection_counts)
+    def execute_phases
+      actors = @arena.actors
 
-      # 1b. Process probe/scan/pulse (increments detection counts on targets)
-      @arena.actors.each do |actor|
-        next if actor.dead?
-
-        actor.instance.actions[:sense].each do |action|
-          next if action[:type] == :detect
-
-          success = @arena.process_action(actor:, action:)
-          emit(:action_failed, { actor:, action: }) unless success
-        end
+      # Phase 1: Sensing (probe, scan, pulse, then detect last)
+      Phases::Sense.execute(arena: @arena, actors:).each do |failure|
+        emit(:action_failed, failure)
+        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
       end
 
-      # 1c. Process detect actions last (reports this chronon's detection counts)
-      # rubocop:disable Style/CombinableLoops -- detect must run AFTER all sensing completes
-      @arena.actors.each do |actor|
-        next if actor.dead?
-
-        actor.instance.actions[:sense].each do |action|
-          next unless action[:type] == :detect
-
-          success = @arena.process_action(actor:, action:)
-          emit(:action_failed, { actor:, action: }) unless success
-        end
-      end
-      # rubocop:enable Style/CombinableLoops
-    end
-
-    # Phase 2: All movement actions (thrust, turret), then rubot physics
-    # Rubots move simultaneously, then collisions are resolved
-    def process_move_phase
-      @arena.actors.each do |actor|
-        next if actor.dead?
-
-        actor.instance.actions[:move].each do |action|
-          success = @arena.process_action(actor:, action:)
-          emit(:action_failed, { actor:, action: }) unless success
-        end
+      # Phase 2: Movement (thrust, turret), then physics
+      Phases::Move.execute(arena: @arena, actors:).each do |failure|
+        emit(:action_failed, failure)
+        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
       end
 
-      @arena.update_rubot_physics
-    end
-
-    # Phase 3: All combat actions (fire, shield), then bullet physics
-    # Bullets spawn from post-movement positions, then move and hit
-    def process_combat_phase
-      @arena.actors.each do |actor|
-        next if actor.dead?
-
-        actor.instance.actions[:combat].each do |action|
-          success = @arena.process_action(actor:, action:)
-          emit(:action_failed, { actor:, action: }) unless success
-        end
+      # Phase 3: Combat (fire, shield), then bullet physics
+      Phases::Combat.execute(arena: @arena, actors:).each do |failure|
+        emit(:action_failed, failure)
+        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
       end
 
-      @arena.update_bullet_physics
-    end
+      # Phase 4: Energon collection and spawning
+      energon_result = Phases::Energon.execute(arena: @arena, chronon: @chronons)
 
-    # Phase 4: Energon collection and spawning
-    def process_energon_phase
-      # Check for collections (after movement)
-      collections = @arena.check_energon_collection(@chronons)
-      collections.each do |collection|
+      energon_result[:collections].each do |collection|
         emit(:energon_collect, {
                actor: collection[:actor],
                x: collection[:energon].x,
@@ -206,20 +164,20 @@ module Rubowar
              })
       end
 
-      # Spawn new energon every ENERGON_SPAWN_INTERVAL chronons
-      return unless (@chronons % Config::Arena::ENERGON_SPAWN_INTERVAL).zero?
-
-      energon = @arena.spawn_energon(@chronons)
-      emit(:energon_spawn, { x: energon.x, y: energon.y }) if energon
+      if energon_result[:spawned]
+        emit(:energon_spawn, { x: energon_result[:spawned].x, y: energon_result[:spawned].y })
+      elsif energon_result[:spawn_failed]
+        emit(:energon_spawn_failed, { chronon: @chronons })
+      end
     end
 
-    def setup_rubot_for_chronon(actor)
-      actor.instance.rubot_state = actor.to_state
-      actor.instance.arena_state = @arena.to_state(@chronons)
-      actor.instance.actions = { sense: [], move: [], combat: [] }
+    def setup_rubot_for_chronon(actor, arena_state = nil)
+      actor.rubot_state = actor.to_state
+      actor.arena_state = arena_state || @arena.to_state(@chronons)
+      actor.reset_actions
       # Reset pending energy spend for this chronon's upfront energy checks
-      actor.instance._pending_energy_spend = 0
-      # NOTE: Do NOT clear probe_result, scan_result, pulse_result here.
+      actor._pending_energy_spend = 0
+      # NOTE: Do NOT clear probe_echo, scan_echo, pulse_echo here.
       # They contain results from the PREVIOUS chronon's sensing actions,
       # which rubots need to read during the current chronon.
     end
@@ -271,6 +229,7 @@ module Rubowar
 
     def validate_chronon_limit!(chronon_limit)
       raise InvalidChrononLimitError, "chronon_limit must be positive" unless chronon_limit.positive?
+      raise InvalidChrononLimitError, "chronon_limit must be finite" if chronon_limit.respond_to?(:infinite?) && chronon_limit.infinite?
     end
   end
 end

@@ -18,6 +18,9 @@
 #   "COLLISION_ELASTICITY - Bounce elasticity (0.5)",
 #   "DEFAULT_FRICTION - Velocity decay per chronon (0.92)"
 # ]
+#
+# [collaborators]
+# CollisionSystem = "Handles rubot-rubot and wall collision detection/resolution"
 # sensing = [
 #   "Probe - Check turret line for target, returns attributes",
 #   "Scan - Arc scan from turret, returns positions in cone",
@@ -73,17 +76,11 @@ module Rubowar
         arena_height: @height,
         friction: @friction,
         chronons:,
-        energons: @energons.map { |e| { x: e.x, y: e.y } },
+        energons: @energons.map { |e| { x: e.x, y: e.y }.freeze }.freeze,
         live_rubot_count: @actors.count(&:alive?),
         energon_spawn_interval: Config::Arena::ENERGON_SPAWN_INTERVAL,
         energon_growth_rate: Config::Energon::GROWTH_RATE
       )
-    end
-
-    # Legacy method for backwards compatibility - calls both phases
-    def update
-      update_rubot_physics
-      update_bullet_physics
     end
 
     # Phase 2 physics: Move rubots, apply friction, handle collisions
@@ -93,10 +90,10 @@ module Rubowar
 
         actor.apply_friction(@friction)
         actor.move
-        check_wall_collision(actor)
+        CollisionSystem.process_wall_collision(actor:, arena_width: @width, arena_height: @height)
       end
 
-      check_rubot_collisions
+      CollisionSystem.process_rubot_collisions(@actors)
     end
 
     # Phase 3 physics: Move bullets, check hits
@@ -139,194 +136,23 @@ module Rubowar
     end
 
     def find_spawn_position(radius)
-      max_attempts = 100
-      wall_buffer = spawn_wall_buffer
-      min_dist = spawn_min_distance
-      max_dist = spawn_max_distance
+      # Find already-placed actors
+      placed_positions = @actors
+                         .select(&:position_set)
+                         .map { |r| { x: r.x, y: r.y } }
 
-      # Find already-placed actors (those with non-zero positions)
-      placed_actors = @actors.select { |r| r.x != 0 || r.y != 0 }
-
-      max_attempts.times do
-        x = rand((wall_buffer + radius)..(@width - wall_buffer - radius))
-        y = rand((wall_buffer + radius)..(@height - wall_buffer - radius))
-
-        # Check minimum distance from all placed actors
-        too_close = placed_actors.any? do |other|
-          Physics.distance(x1: x, y1: y, x2: other.x, y2: other.y) < min_dist
-        end
-        next if too_close
-
-        # Check maximum distance (at least one actor must be within max_dist, if any exist)
-        if placed_actors.any?
-          close_enough = placed_actors.any? do |other|
-            Physics.distance(x1: x, y1: y, x2: other.x, y2: other.y) <= max_dist
-          end
-          next unless close_enough
-        end
-
-        return { x:, y: }
-      end
-
-      raise SpawnError, "Could not find valid spawn position after #{max_attempts} attempts. " \
+      SpawnPositionCalculator.find_rubot_position(
+        width: @width,
+        height: @height,
+        radius: radius,
+        existing_positions: placed_positions,
+        wall_buffer: spawn_wall_buffer,
+        min_distance: spawn_min_distance,
+        max_distance: spawn_max_distance
+      )
+    rescue SpawnError
+      raise SpawnError, "Could not find valid spawn position. " \
                         "Arena may be too small for #{@actors.size} rubots."
-    end
-
-    def check_wall_collision(actor)
-      hit_x = false
-      hit_y = false
-      total_damage = 0
-
-      # Check X walls
-      if (actor.x - actor.radius).negative?
-        actor.clamp_x(min: actor.radius, max: @width - actor.radius)
-        hit_x = true
-        total_damage += handle_wall_bounce_x(actor: actor, wall_x: 0)
-      elsif actor.x + actor.radius > @width
-        actor.clamp_x(min: actor.radius, max: @width - actor.radius)
-        hit_x = true
-        total_damage += handle_wall_bounce_x(actor: actor, wall_x: @width)
-      end
-
-      # Check Y walls
-      if (actor.y - actor.radius).negative?
-        actor.clamp_y(min: actor.radius, max: @height - actor.radius)
-        hit_y = true
-        total_damage += handle_wall_bounce_y(actor: actor, wall_y: 0)
-      elsif actor.y + actor.radius > @height
-        actor.clamp_y(min: actor.radius, max: @height - actor.radius)
-        hit_y = true
-        total_damage += handle_wall_bounce_y(actor: actor, wall_y: @height)
-      end
-
-      return unless hit_x || hit_y
-
-      actor.apply_collision_damage(total_damage)
-      actor.safe_callback(:on_wall)
-    end
-
-    def handle_wall_bounce_x(actor:, wall_x:)
-      normal_x = wall_x.zero? ? 1.0 : -1.0
-      mass = Physics.mass_factor(actor.radius)
-
-      damage = Physics.wall_damage(
-        vx: actor.velocity_x, vy: actor.velocity_y,
-        normal_x: normal_x, normal_y: 0.0, mass: mass
-      )
-
-      if (result = Physics.wall_bounce(
-        vx: actor.velocity_x, vy: actor.velocity_y,
-        normal_x: normal_x, normal_y: 0.0, bot_mass: mass
-      ))
-        actor.set_velocity(vx: result[:vx], vy: result[:vy])
-      end
-
-      damage
-    end
-
-    def handle_wall_bounce_y(actor:, wall_y:)
-      normal_y = wall_y.zero? ? 1.0 : -1.0
-      mass = Physics.mass_factor(actor.radius)
-
-      damage = Physics.wall_damage(
-        vx: actor.velocity_x, vy: actor.velocity_y,
-        normal_x: 0.0, normal_y: normal_y, mass: mass
-      )
-
-      if (result = Physics.wall_bounce(
-        vx: actor.velocity_x, vy: actor.velocity_y,
-        normal_x: 0.0, normal_y: normal_y, bot_mass: mass
-      ))
-        actor.set_velocity(vx: result[:vx], vy: result[:vy])
-      end
-
-      damage
-    end
-
-    def check_rubot_collisions
-      # Phase 1: Detect all collisions and calculate responses
-      # This prevents race conditions where position changes during iteration
-      # affect subsequent collision calculations
-      collision_responses = []
-
-      @actors.combination(2).each do |actor_a, actor_b|
-        next if actor_a.dead? || actor_b.dead?
-
-        distance = Physics.distance(x1: actor_a.x, y1: actor_a.y, x2: actor_b.x, y2: actor_b.y)
-        min_distance = actor_a.radius + actor_b.radius
-
-        next unless distance < min_distance
-
-        # Calculate position adjustments and velocity changes without applying them
-        response = calculate_collision_response(actor_a: actor_a, actor_b: actor_b, distance: distance, min_distance: min_distance)
-        collision_responses << response
-      end
-
-      # Phase 2: Apply all position adjustments atomically
-      collision_responses.each do |response|
-        response[:actor_a].adjust_position(dx: response[:pos_adjust_a_x], dy: response[:pos_adjust_a_y])
-        response[:actor_b].adjust_position(dx: response[:pos_adjust_b_x], dy: response[:pos_adjust_b_y])
-      end
-
-      # Phase 3: Apply all velocity changes atomically
-      collision_responses.each do |response|
-        response[:actor_a].adjust_velocity(dvx: response[:vel_adjust_a_x], dvy: response[:vel_adjust_a_y])
-        response[:actor_b].adjust_velocity(dvx: response[:vel_adjust_b_x], dvy: response[:vel_adjust_b_y])
-      end
-
-      # Phase 4: Apply damage and callbacks (after all physics resolved)
-      collision_responses.each do |response|
-        response[:actor_a].apply_collision_damage(response[:damage_to_a])
-        response[:actor_b].apply_collision_damage(response[:damage_to_b])
-
-        response[:actor_a].safe_callback(:on_collision, response[:actor_b].to_state)
-        response[:actor_b].safe_callback(:on_collision, response[:actor_a].to_state)
-      end
-    end
-
-    def calculate_collision_response(actor_a:, actor_b:, distance:, min_distance:)
-      overlap = min_distance - distance
-      mass_a = Physics.mass_factor(actor_a.radius)
-      mass_b = Physics.mass_factor(actor_b.radius)
-
-      # Collision normal (from A to B)
-      nx = (actor_b.x - actor_a.x) / distance
-      ny = (actor_b.y - actor_a.y) / distance
-
-      separation = Physics.collision_separation(
-        a_x: actor_a.x, a_y: actor_a.y,
-        b_x: actor_b.x, b_y: actor_b.y,
-        distance: distance, overlap: overlap
-      )
-
-      bounce = Physics.collision_bounce(
-        a_vx: actor_a.velocity_x, a_vy: actor_a.velocity_y,
-        b_vx: actor_b.velocity_x, b_vy: actor_b.velocity_y,
-        nx: nx, ny: ny, mass_a: mass_a, mass_b: mass_b
-      )
-
-      {
-        actor_a: actor_a,
-        actor_b: actor_b,
-        pos_adjust_a_x: separation[:a_x],
-        pos_adjust_a_y: separation[:a_y],
-        pos_adjust_b_x: separation[:b_x],
-        pos_adjust_b_y: separation[:b_y],
-        vel_adjust_a_x: bounce[:a_vx],
-        vel_adjust_a_y: bounce[:a_vy],
-        vel_adjust_b_x: bounce[:b_vx],
-        vel_adjust_b_y: bounce[:b_vy],
-        damage_to_a: Physics.collision_damage(
-          rel_vx: actor_b.velocity_x - actor_a.velocity_x,
-          rel_vy: actor_b.velocity_y - actor_a.velocity_y,
-          mass: mass_b
-        ),
-        damage_to_b: Physics.collision_damage(
-          rel_vx: actor_a.velocity_x - actor_b.velocity_x,
-          rel_vy: actor_a.velocity_y - actor_b.velocity_y,
-          mass: mass_a
-        )
-      }
     end
 
     def update_bullets
@@ -337,27 +163,41 @@ module Rubowar
       end
     end
 
+    # Returns true if bullet hit a target and should be removed
+    # Note: A bullet can only hit one target per update
     def check_bullet_hit(bullet)
       @actors.each do |actor|
         next if actor.dead?
+        next unless bullet_hits_actor?(bullet, actor)
 
-        distance = Physics.distance(x1: bullet.x, y1: bullet.y, x2: actor.x, y2: actor.y)
-        next unless distance < bullet.radius + actor.radius
-
-        actor.apply_damage(bullet.damage)
-        # Self-damage doesn't count toward damage_dealt (for tiebreaker fairness)
-        bullet.owner.add_damage_dealt(bullet.damage) unless actor == bullet.owner
-
-        direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
-        actor.safe_callback(:on_hit, damage: bullet.damage, direction: direction)
-
-        return true
+        apply_bullet_damage(bullet, actor)
+        return true # Bullet consumed - exit immediately
       end
 
-      false
+      false # No hit
+    end
+
+    def bullet_hits_actor?(bullet, actor)
+      distance = Physics.distance(x1: bullet.x, y1: bullet.y, x2: actor.x, y2: actor.y)
+      distance < bullet.radius + actor.radius
+    end
+
+    def apply_bullet_damage(bullet, actor)
+      actor.apply_damage(bullet.damage)
+
+      # Self-damage doesn't count toward damage_dealt (for tiebreaker fairness)
+      # Dead rubots don't accumulate damage stats
+      if bullet.owner&.alive? && actor != bullet.owner
+        bullet.owner.add_damage_dealt(bullet.damage)
+      end
+
+      direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
+      actor.call_safely { |bot| bot.on_hit(damage: bullet.damage, direction: direction) }
     end
 
     def process_fire(actor:, energy:)
+      NumericValidation.validate!(energy, name: "fire energy", positive: true)
+
       return false unless actor.spend_energy(energy)
 
       damage = (energy * Config::Combat::FIRE_DAMAGE_MULTIPLIER).ceil
@@ -375,16 +215,16 @@ module Rubowar
     end
 
     def process_probe(actor:, attributes:)
-      cost = SensorCalculations.probe_cost(attributes)
+      cost = SensorCalculator.probe_cost(attributes)
       return false unless actor.spend_energy(cost)
 
       target = find_probe_target(actor)
-      result = target ? build_probe_result(target:, attributes:) : {}
+      result = target ? build_probe_echo(target:, attributes:) : {}
 
       # Track that this target was probed
       target.increment_detection(:probed) if target
 
-      actor.instance.probe_result = result
+      actor.set_sensing_results(probe: result)
       true
     end
 
@@ -399,35 +239,45 @@ module Rubowar
       @actors.each do |other|
         next if other == actor || other.dead?
 
-        # Vector from actor to other
-        dx = other.x - actor.x
-        dy = other.y - actor.y
+        hit_distance = ray_circle_intersection(
+          origin_x: actor.x, origin_y: actor.y,
+          dir_x:, dir_y:,
+          circle_x: other.x, circle_y: other.y, radius: other.radius
+        )
 
-        # Project onto ray direction
-        projection = (dx * dir_x) + (dy * dir_y)
-        next if projection <= 0 # Behind the actor
+        next unless hit_distance
+        next unless hit_distance < closest_distance
 
-        # Closest point on ray to other's center
-        closest_x = actor.x + (dir_x * projection)
-        closest_y = actor.y + (dir_y * projection)
-
-        # Distance from closest point to other's center
-        dist_to_center = Physics.distance(x1: closest_x, y1: closest_y, x2: other.x, y2: other.y)
-
-        # Check if ray passes through other's radius
-        next unless dist_to_center <= other.radius
-
-        # Use projection as distance (how far along the ray)
-        if projection < closest_distance
-          closest_distance = projection
-          closest_target = other
-        end
+        closest_distance = hit_distance
+        closest_target = other
       end
 
       closest_target
     end
 
-    def build_probe_result(target:, attributes:)
+    # Returns distance along ray to circle intersection, or nil if no hit
+    def ray_circle_intersection(origin_x:, origin_y:, dir_x:, dir_y:, circle_x:, circle_y:, radius:)
+      dx = circle_x - origin_x
+      dy = circle_y - origin_y
+
+      # Project circle center onto ray direction
+      projection = (dx * dir_x) + (dy * dir_y)
+      return nil if projection <= 0 # Circle is behind ray origin
+
+      # Find closest point on ray to circle center
+      closest_x = origin_x + (dir_x * projection)
+      closest_y = origin_y + (dir_y * projection)
+
+      # Check if ray passes through circle (use squared distance to avoid sqrt)
+      dx_to_center = circle_x - closest_x
+      dy_to_center = circle_y - closest_y
+      dist_squared = (dx_to_center * dx_to_center) + (dy_to_center * dy_to_center)
+      return nil unless dist_squared <= (radius * radius)
+
+      projection
+    end
+
+    def build_probe_echo(target:, attributes:)
       result = {}
 
       if attributes.include?(:position)
@@ -451,7 +301,10 @@ module Rubowar
     end
 
     def process_scan(actor:, angle:, distance:, velocity:, owner:)
-      cost = SensorCalculations.scan_cost(angle:, distance:, velocity:, owner:)
+      NumericValidation.validate!(angle, name: "scan angle", positive: true, max: 360)
+      NumericValidation.validate!(distance, name: "scan distance", positive: true)
+
+      cost = SensorCalculator.scan_cost(angle:, distance:, velocity:, owner:)
       return false unless actor.spend_energy(cost)
 
       results = []
@@ -469,7 +322,7 @@ module Rubowar
           result[:velocity_x] = other.velocity_x
           result[:velocity_y] = other.velocity_y
         end
-        result[:owner] = nil if owner
+        # Note: rubots don't have an :owner field (only bullets do)
         results << result
       end
 
@@ -482,11 +335,11 @@ module Rubowar
           result[:velocity_x] = bullet.velocity_x
           result[:velocity_y] = bullet.velocity_y
         end
-        result[:owner] = bullet.owner.rubot_class.name if owner
+        result[:owner] = bullet.owner&.rubot_class&.name if owner
         results << result
       end
 
-      actor.instance.scan_result = results
+      actor.set_sensing_results(scan: results)
       true
     end
 
@@ -498,21 +351,22 @@ module Rubowar
       actual_distance = Math.sqrt((dx * dx) + (dy * dy))
 
       return false if actual_distance > distance
-      return false if actual_distance < Float::EPSILON # Too close to measure angle
+      return false if actual_distance < Config::Sensing::MIN_MEASURABLE_DISTANCE # Too close to measure angle
 
       # Calculate angle to target (in degrees)
       target_angle = Math.atan2(dy, dx) * 180 / Math::PI
 
       # Normalize angle difference to -180..180
-      angle_diff = (target_angle - actor.turret_angle) % 360
-      angle_diff -= 360 if angle_diff > 180
+      angle_diff = Physics.normalize_angle(target_angle - actor.turret_angle)
 
       # Check if within half the arc on either side
       angle_diff.abs <= angle / 2.0
     end
 
     def process_pulse(actor:, distance:, owner:)
-      cost = SensorCalculations.pulse_cost(distance:, owner:)
+      NumericValidation.validate!(distance, name: "pulse distance", positive: true)
+
+      cost = SensorCalculator.pulse_cost(distance:, owner:)
       return false unless actor.spend_energy(cost)
 
       results = []
@@ -526,7 +380,7 @@ module Rubowar
         other.increment_detection(:pulsed)
 
         result = { x: other.x, y: other.y, type: :rubot }
-        result[:owner] = nil if owner
+        # Note: rubots don't have an :owner field (only bullets do)
         results << result
       end
 
@@ -535,11 +389,11 @@ module Rubowar
         next unless within_distance?(actor:, distance:, x: bullet.x, y: bullet.y)
 
         result = { x: bullet.x, y: bullet.y, type: :bullet }
-        result[:owner] = bullet.owner.rubot_class.name if owner
+        result[:owner] = bullet.owner&.rubot_class&.name if owner
         results << result
       end
 
-      actor.instance.pulse_result = results
+      actor.set_sensing_results(pulse: results)
       true
     end
 
@@ -550,7 +404,10 @@ module Rubowar
     # Spawns an energon at the position maximizing minimum distance from all bots
     def spawn_energon(chronons)
       position = find_energon_spawn_position
-      return nil unless position
+      unless position
+        warn "[Arena] Failed to find energon spawn position at chronon #{chronons}"
+        return nil
+      end
 
       energon = Energon.new(x: position[:x], y: position[:y], spawn_chronon: chronons)
       @energons << energon
@@ -566,7 +423,7 @@ module Rubowar
         if collector
           amount = energon.value_int(chronons)
           collector.add_energy(amount)
-          collector.safe_callback(:on_energon, amount)
+          collector.call_safely { |bot| bot.on_energon(amount) }
           collections << { actor: collector, energon:, amount: }
           true # Remove this energon
         else
@@ -580,36 +437,18 @@ module Rubowar
     private
 
     def find_energon_spawn_position
-      alive_actors = @actors.select(&:alive?)
-      return { x: @width / 2.0, y: @height / 2.0 } if alive_actors.empty?
+      rubot_positions = @actors
+                        .select(&:alive?)
+                        .map { |r| { x: r.x, y: r.y } }
 
-      candidates = []
-      best_min_distance = -1
-
-      # Calculate wall buffer based on arena size (15% of smaller dimension)
       wall_buffer = ([@width, @height].min * Config::Arena::ENERGON_WALL_BUFFER_RATIO).round
 
-      # Sample candidate positions using a grid
-      grid_step = 20
-      (wall_buffer..(@width - wall_buffer)).step(grid_step) do |cx|
-        (wall_buffer..(@height - wall_buffer)).step(grid_step) do |cy|
-          # Find minimum distance to any alive bot
-          min_dist = alive_actors.map do |actor|
-            Physics.distance(x1: cx, y1: cy, x2: actor.x, y2: actor.y)
-          end.min
-
-          # Tolerance of 20 units for "equally good" positions
-          if min_dist > best_min_distance + 20
-            best_min_distance = min_dist
-            candidates = [{ x: cx.to_f, y: cy.to_f }]
-          elsif min_dist >= best_min_distance - 20
-            candidates << { x: cx.to_f, y: cy.to_f }
-          end
-        end
-      end
-
-      # Pick randomly from equally-good candidates
-      candidates.sample
+      SpawnPositionCalculator.find_energon_position(
+        width: @width,
+        height: @height,
+        rubot_positions: rubot_positions,
+        wall_buffer: wall_buffer
+      )
     end
 
     def find_energon_collector(energon)

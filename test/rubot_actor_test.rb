@@ -557,7 +557,7 @@ describe Rubowar::RubotActor do
   end
 
   describe "#process_detect" do
-    it "sets detect_result on instance" do
+    it "sets detect_intel on instance" do
       actor = Rubowar::RubotActor.new(DummyBot)
       2.times { actor.increment_detection(:probed) }
       3.times { actor.increment_detection(:scanned) }
@@ -565,7 +565,7 @@ describe Rubowar::RubotActor do
 
       actor.process_detect
 
-      result = actor.instance.detect_result
+      result = actor.instance.detect_intel
       _(result[:probed]).must_equal 2
       _(result[:scanned]).must_equal 3
       _(result[:pulsed]).must_equal 1
@@ -640,12 +640,12 @@ describe Rubowar::RubotActor do
     end
   end
 
-  describe "#safe_callback" do
-    it "calls method on instance" do
+  describe "#call_safely" do
+    it "calls block with instance" do
       actor = Rubowar::RubotActor.new(DummyBot)
 
       # act is defined on DummyBot
-      result = actor.safe_callback(:act)
+      result = actor.call_safely(&:act)
 
       _(result).must_be_nil # act returns nil
     end
@@ -654,7 +654,7 @@ describe Rubowar::RubotActor do
       actor = Rubowar::RubotActor.new(DummyBot)
       actor.health = 0
 
-      result = actor.safe_callback(:act)
+      result = actor.call_safely(&:act)
 
       _(result).must_be_nil
     end
@@ -669,7 +669,7 @@ describe Rubowar::RubotActor do
       actor = Rubowar::RubotActor.new(error_bot_class)
       initial_health = actor.health
 
-      actor.safe_callback(:act)
+      actor.call_safely(&:act)
 
       _(actor.health).must_equal initial_health - Rubowar::Config::Battle::ERROR_DAMAGE
     end
@@ -683,9 +683,27 @@ describe Rubowar::RubotActor do
       end
       actor = Rubowar::RubotActor.new(error_bot_class)
 
-      result = actor.safe_callback(:act)
+      result = actor.call_safely(&:act)
 
       _(result).must_be_nil
+    end
+
+    it "passes arguments via block" do
+      callback_bot_class = Class.new do
+        include Rubowar::Rubot
+        attr_reader :received_damage, :received_direction
+
+        def on_hit(damage:, direction:)
+          @received_damage = damage
+          @received_direction = direction
+        end
+      end
+      actor = Rubowar::RubotActor.new(callback_bot_class)
+
+      actor.call_safely { |bot| bot.on_hit(damage: 15, direction: 90) }
+
+      _(actor.instance.received_damage).must_equal 15
+      _(actor.instance.received_direction).must_equal 90
     end
   end
 end

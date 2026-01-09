@@ -30,19 +30,19 @@ class IntegrationSensingBot
 
   size :medium
 
-  attr_reader :ticks_with_pulse_result, :ticks_with_probe_result, :ticks_with_scan_result
+  attr_reader :ticks_with_pulse_echo, :ticks_with_probe_echo, :ticks_with_scan_echo
 
   def on_spawn
-    @ticks_with_pulse_result = []
-    @ticks_with_probe_result = []
-    @ticks_with_scan_result = []
+    @ticks_with_pulse_echo = []
+    @ticks_with_probe_echo = []
+    @ticks_with_scan_echo = []
   end
 
   def act
     # Record which ticks have results
-    @ticks_with_pulse_result << chronons if pulse_result&.any?
-    @ticks_with_probe_result << chronons if probe_result&.any?
-    @ticks_with_scan_result << chronons if scan_result&.any?
+    @ticks_with_pulse_echo << chronons if pulse_echo&.any?
+    @ticks_with_probe_echo << chronons if probe_echo&.any?
+    @ticks_with_scan_echo << chronons if scan_echo&.any?
 
     # Queue sensing for next tick
     pulse(distance: 500)
@@ -120,7 +120,7 @@ class IntegrationShieldBot
   size :medium
 
   def act
-    shield(20) if energy > 30 && shield_level < 50
+    raise_shields(20) if energy > 30 && shield_level < 50
   end
 end
 
@@ -151,14 +151,14 @@ class IntegrationDetectBot
 
   size :medium
 
-  attr_reader :detect_results_by_tick
+  attr_reader :detect_intels_by_tick
 
   def on_spawn
-    @detect_results_by_tick = {}
+    @detect_intels_by_tick = {}
   end
 
   def act
-    @detect_results_by_tick[chronons] = detect_result.dup if detect_result
+    @detect_intels_by_tick[chronons] = detect_intel.dup if detect_intel
     detect
   end
 end
@@ -242,7 +242,7 @@ describe "Integration Tests" do
       battle.run
 
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(IntegrationSensingBot) }
-      results = sensor.instance.ticks_with_pulse_result
+      results = sensor.instance.ticks_with_pulse_echo
 
       # Tick 1: pulse queued, no result yet
       # Tick 2: result from tick 1's pulse available
@@ -264,7 +264,7 @@ describe "Integration Tests" do
 
       battle.run
 
-      results = sensor.instance.ticks_with_probe_result
+      results = sensor.instance.ticks_with_probe_echo
 
       # Results should not appear on tick 1
       _(results).wont_include 1
@@ -275,7 +275,7 @@ describe "Integration Tests" do
       battle.run
 
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(IntegrationSensingBot) }
-      results = sensor.instance.ticks_with_scan_result
+      results = sensor.instance.ticks_with_scan_echo
 
       # Tick 1: scan queued, no result
       # Tick 2+: results available
@@ -296,7 +296,7 @@ describe "Integration Tests" do
 
       battle.run
 
-      results = detector.instance.detect_results_by_tick
+      results = detector.instance.detect_intels_by_tick
 
       # Should have detected being sensed (results appear on tick after detect was called)
       total_sensed = results.values.sum { |r| (r[:probed] || 0) + (r[:scanned] || 0) + (r[:pulsed] || 0) }

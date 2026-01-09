@@ -36,7 +36,7 @@ class Evader
     # COMBAT: Kill shot based on target's health
     attempt_kill_shot
 
-    # queue detect_result for targeted check
+    # queue detect_intel for targeted check
     detect
   end
 
@@ -62,14 +62,14 @@ class Evader
       end
     end
 
-    return unless detect_result
+    return unless detect_intel.targeted?
 
-    if (detect_result[:probed] || 0).positive?
+    if detect_intel.probed.positive?
       # Being probed = enemy aiming at us, dodge NOW
       @evading = EVASION_CHRONONS
       @direction *= -1
       @juke_timer = rand(5..10)
-    elsif (detect_result[:scanned] || 0).positive?
+    elsif detect_intel.scanned.positive?
       # Being scanned = enemy looking for us
       @evading = [8, @evading].max
       @direction *= -1 if rand < 0.5
@@ -78,10 +78,10 @@ class Evader
 
   def update_target
     pulse(distance: PULSE_RANGE)
-    return unless pulse_result
+    return unless pulse_echo.any_rubots?
 
-    rubots = pulse_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
+    closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+    @target = { x: closest.x, y: closest.y }
   end
 
   def move
@@ -180,10 +180,10 @@ class Evader
 
   def probe_target_health
     probe(:health, :shield)
-    return unless probe_result&.any?
+    return unless probe_echo.found?
 
-    @target[:health] = probe_result[:health]
-    @target[:shield] = probe_result[:shield]
+    @target[:health] = probe_echo.health
+    @target[:shield] = probe_echo.shield_level
   end
 
   def attempt_kill_shot
