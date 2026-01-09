@@ -25,25 +25,25 @@ describe Rubowar::Physics do
 
   describe ".distance" do
     it "returns 0 for same point" do
-      dist = Rubowar::Physics.distance(100, 100, 100, 100)
+      dist = Rubowar::Physics.distance(x1: 100, y1: 100, x2: 100, y2: 100)
 
       _(dist).must_equal 0
     end
 
     it "returns horizontal distance" do
-      dist = Rubowar::Physics.distance(0, 0, 30, 0)
+      dist = Rubowar::Physics.distance(x1: 0, y1: 0, x2: 30, y2: 0)
 
       _(dist).must_equal 30
     end
 
     it "returns vertical distance" do
-      dist = Rubowar::Physics.distance(0, 0, 0, 40)
+      dist = Rubowar::Physics.distance(x1: 0, y1: 0, x2: 0, y2: 40)
 
       _(dist).must_equal 40
     end
 
     it "returns diagonal distance" do
-      dist = Rubowar::Physics.distance(0, 0, 30, 40)
+      dist = Rubowar::Physics.distance(x1: 0, y1: 0, x2: 30, y2: 40)
 
       _(dist).must_equal 50 # 3-4-5 triangle scaled by 10
     end

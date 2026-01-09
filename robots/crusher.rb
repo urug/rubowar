@@ -52,7 +52,7 @@ class Crusher
     @crush_start = chronons
   end
 
-  def on_hit(_damage, direction)
+  def on_hit(damage:, direction:)
     # Someone's shooting us - find them and ram them
     return if @target && @mode == :crushing
 
@@ -84,7 +84,7 @@ class Crusher
 
     # Prioritize: corner-trapped > wall-adjacent > closest
     @target = rubots.min_by do |t|
-      dist = distance_to(t[:x], t[:y])
+      dist = distance_to(target_x: t[:x], target_y: t[:y])
       wall_dist = wall_distance_of(t)
 
       # Huge priority for corner-trapped targets
@@ -100,9 +100,9 @@ class Crusher
 
   def hunt
     # No target - patrol toward center, scan around
-    center_angle = angle_to(arena_width / 2, arena_height / 2)
+    center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
 
-    if distance_to(arena_width / 2, arena_height / 2) > 150
+    if distance_to(target_x: arena_width / 2, target_y: arena_height / 2) > 150
       thrust(speed: 4, angle: center_angle) if speed < 8
     end
 
@@ -114,7 +114,7 @@ class Crusher
     return hunt unless @target
 
     update_target_position
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # If close enough to ram, do it
     if dist < RAM_COMMIT
@@ -128,7 +128,7 @@ class Crusher
     # Move to attack position
     if dist > ENGAGE_DISTANCE
       # Far away - close distance directly first
-      approach_angle = angle_to(@target[:x], @target[:y])
+      approach_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
       thrust(speed: 5, angle: approach_angle) if speed < 12
     else
       # In range - position for wall ram
@@ -174,7 +174,7 @@ class Crusher
     return hunt unless @target
 
     update_target_position
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Stop crushing if: target escaped, timeout, or target dead (no update)
     if !target_pinned? || (chronons - @crush_start) > 60
@@ -186,11 +186,11 @@ class Crusher
     # Ram them into the wall repeatedly
     if dist > CRUSH_RANGE
       # Close in for another ram
-      ram_angle = angle_to(@target[:x], @target[:y])
+      ram_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
       thrust(speed: 6, angle: ram_angle) if speed < 12
     elsif dist < 25
       # Too close, back up slightly for momentum
-      backup_angle = (angle_to(@target[:x], @target[:y]) + 180) % 360
+      backup_angle = (angle_to(target_x: @target[:x], target_y: @target[:y]) + 180) % 360
       thrust(speed: 3, angle: backup_angle)
     else
       # Perfect range - ram into wall
@@ -206,7 +206,7 @@ class Crusher
   # Calculate angle that pushes target INTO their nearest wall
   # We need to hit them from the opposite side of their nearest wall
   def calculate_ram_angle
-    return angle_to(@target[:x], @target[:y]) unless @target
+    return angle_to(target_x: @target[:x], target_y: @target[:y]) unless @target
 
     nearest = nearest_wall_to(@target)
 
@@ -232,15 +232,15 @@ class Crusher
 
     # If we're already roughly in position, ram directly at target
     # Otherwise, move toward the ideal attack position
-    dist_to_ideal = distance_to(ideal_x, ideal_y)
-    dist_to_target = distance_to(@target[:x], @target[:y])
+    dist_to_ideal = distance_to(target_x: ideal_x, target_y: ideal_y)
+    dist_to_target = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     if dist_to_ideal < 60 || dist_to_target < RAM_COMMIT
       # In position or close enough - ram directly
-      angle_to(@target[:x], @target[:y])
+      angle_to(target_x: @target[:x], target_y: @target[:y])
     else
       # Move toward attack position
-      angle_to(ideal_x.clamp(50, arena_width - 50), ideal_y.clamp(50, arena_height - 50))
+      angle_to(target_x: ideal_x.clamp(50, arena_width - 50), target_y: ideal_y.clamp(50, arena_height - 50))
     end
   end
 
@@ -278,7 +278,7 @@ class Crusher
     return unless @target
 
     # Use probe for precise tracking when aligned
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle).abs
 
     if turret_diff < 20 && energy > 10
@@ -305,7 +305,7 @@ class Crusher
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else
-      target_angle = angle_to(@target[:x], @target[:y])
+      target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     end
 
     turret_diff = normalize_angle(target_angle - turret_angle)

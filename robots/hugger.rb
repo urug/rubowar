@@ -38,7 +38,7 @@ class Hugger
     detect
   end
 
-  def on_hit(_damage, _direction)
+  def on_hit(damage:, direction:)
     @evading = 15
     @direction *= -1
     shield(8) if energy > 25 && shield_level < 50
@@ -101,12 +101,12 @@ class Hugger
     check_incoming_bullets(bullets) if bullets.any?
 
     rubots = scan_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(t[:x], t[:y]) } if rubots.any?
+    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
   end
 
   def process_pulse_results
     rubots = pulse_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(t[:x], t[:y]) } if rubots.any?
+    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
   end
 
   def update_safe_wall
@@ -126,7 +126,7 @@ class Hugger
   end
 
   def bullet_heading_toward_us?(bullet)
-    dist = distance_to(bullet[:x], bullet[:y])
+    dist = distance_to(target_x: bullet[:x], target_y: bullet[:y])
     return false if dist > 400 || dist < 20
     return false unless bullet[:velocity_x] && bullet[:velocity_y]
 
@@ -139,7 +139,7 @@ class Hugger
 
   def scan_opposite_corners
     corner = current_corner_to_scan
-    corner_angle = angle_to(corner[:x], corner[:y])
+    corner_angle = angle_to(target_x: corner[:x], target_y: corner[:y])
     turret_diff = normalize_angle(corner_angle - turret_angle)
 
     return unless turret_diff.abs < 40
@@ -229,7 +229,7 @@ class Hugger
   end
 
   def evade_toward_wall
-    base_angle = angle_to(*wall_target_position)
+    base_angle = angle_to(target_x: wall_target_position[0], target_y: wall_target_position[1])
     jink_offset = (chronons % 6 < 3) ? 25 : -25
     move_angle = (base_angle + jink_offset) % 360
 
@@ -238,7 +238,7 @@ class Hugger
   end
 
   def move_to_wall
-    move_angle = angle_to(*wall_target_position)
+    move_angle = angle_to(target_x: wall_target_position[0], target_y: wall_target_position[1])
     thrust(speed: 4, angle: move_angle) if speed < 8
     shield(5) if energy > 50 && shield_level < 40
   end
@@ -285,7 +285,7 @@ class Hugger
     return false if energy < 50
     return false if @plant_timer.positive?
 
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle).abs
     turret_diff < 20
   end
@@ -339,7 +339,7 @@ class Hugger
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else
-      angle_to(@target[:x], @target[:y])
+      angle_to(target_x: @target[:x], target_y: @target[:y])
     end
   end
 
@@ -356,11 +356,11 @@ class Hugger
   def attempt_shot
     return unless @target
 
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle).abs
     return unless turret_diff < 15
 
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
     return if dist > 600
 
     fire_appropriate_shot
@@ -381,7 +381,7 @@ class Hugger
 
   def sweep_turret
     corner = current_corner_to_scan
-    corner_angle = angle_to(corner[:x], corner[:y])
+    corner_angle = angle_to(target_x: corner[:x], target_y: corner[:y])
     turret_diff = normalize_angle(corner_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-12, 12))
   end

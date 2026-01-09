@@ -20,16 +20,7 @@ Metrics/AbcSize:
     - "robots/**/*"
 
 Naming/MethodParameterName:
-  AllowedNames:
-    - x
-    - y
-    - dx
-    - dy
-    - vx
-    - vy
-    - id
-    - to
-    - at
+  Enabled: false
 
 Style/Documentation:
   Enabled: false

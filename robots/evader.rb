@@ -40,7 +40,7 @@ class Evader
     detect
   end
 
-  def on_hit(_damage, _direction)
+  def on_hit(damage:, direction:)
     @evading = EVASION_CHRONONS
     @direction *= -1
   end
@@ -55,7 +55,7 @@ class Evader
     # Proactive juking: change direction every 8-15 chronons when near enemy
     @juke_timer -= 1
     if @juke_timer <= 0 && @target
-      dist = distance_to(@target[:x], @target[:y])
+      dist = distance_to(target_x: @target[:x], target_y: @target[:y])
       if dist < 250 # In danger zone
         @direction *= -1
         @juke_timer = rand(8..15)
@@ -81,7 +81,7 @@ class Evader
     return unless pulse_result
 
     rubots = pulse_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(t[:x], t[:y]) } if rubots.any?
+    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
   end
 
   def move
@@ -110,12 +110,12 @@ class Evader
 
   def escape_wall
     # Thrust toward center to brake
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
     thrust(speed: 3, angle: center_angle)
   end
 
   def evade
-    base_angle = @target ? angle_to(@target[:x], @target[:y]) + 180 : rand(360)
+    base_angle = @target ? angle_to(target_x: @target[:x], target_y: @target[:y]) + 180 : rand(360)
     evade_angle = wall_adjust(base_angle + (60 * @direction))
     # Low speeds to avoid wall damage with momentum
     spd = approaching_wall? ? 2 : 4
@@ -123,7 +123,7 @@ class Evader
   end
 
   def keep_distance
-    threat_angle = angle_to(@target[:x], @target[:y])
+    threat_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     move_angle = wall_adjust(threat_angle + (90 * @direction))
     spd = approaching_wall? ? 2 : 3
     thrust(speed: spd, angle: move_angle)
@@ -152,21 +152,21 @@ class Evader
   end
 
   def collect_energon
-    angle = angle_to(@energon_target[:x], @energon_target[:y])
+    angle = angle_to(target_x: @energon_target[:x], target_y: @energon_target[:y])
     spd = approaching_wall? ? 2 : 3
     thrust(speed: spd, angle: wall_adjust(angle))
     rotate_turret(6 * @direction) # Keep sweeping
   end
 
   def drift_center
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
     drift_angle = wall_adjust(center_angle + (45 * @direction))
     thrust(speed: 2, angle: drift_angle)
     rotate_turret(6 * @direction)
   end
 
   def aim_at_target
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(diff.clamp(-20, 20))
   end
@@ -174,7 +174,7 @@ class Evader
   def turret_aligned?
     return false unless @target
 
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     normalize_angle(target_angle - turret_angle).abs < 15
   end
 

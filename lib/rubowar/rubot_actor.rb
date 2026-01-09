@@ -149,12 +149,12 @@ module Rubowar
       @y += @velocity_y
     end
 
-    def set_position(x, y)
+    def set_position(x:, y:)
       @x = x
       @y = y
     end
 
-    def set_velocity(vx, vy)
+    def set_velocity(vx:, vy:)
       @velocity_x = vx
       @velocity_y = vy
     end
@@ -163,12 +163,12 @@ module Rubowar
       @turret_angle = angle % 360
     end
 
-    def clamp_x(min, max)
+    def clamp_x(min:, max:)
       @x = min if @x < min
       @x = max if @x > max
     end
 
-    def clamp_y(min, max)
+    def clamp_y(min:, max:)
       @y = min if @y < min
       @y = max if @y > max
     end
@@ -181,12 +181,12 @@ module Rubowar
       @energy = [@energy + amount, max_energy].min
     end
 
-    def adjust_velocity(dvx, dvy)
+    def adjust_velocity(dvx:, dvy:)
       @velocity_x += dvx
       @velocity_y += dvy
     end
 
-    def adjust_position(dx, dy)
+    def adjust_position(dx:, dy:)
       @x += dx
       @y += dy
     end
@@ -238,18 +238,19 @@ module Rubowar
       end
 
       velocity = Physics.thrust_velocity(speed: actual_speed, angle: angle, mass: mass)
-      adjust_velocity(velocity[:vx], velocity[:vy])
+      adjust_velocity(dvx: velocity[:vx], dvy: velocity[:vy])
       true
     end
 
     # Safely call a method on the rubot instance, penalizing errors with damage
     # @param method [Symbol] method name to call
-    # @param args [Array] arguments to pass
+    # @param args [Array] positional arguments to pass
+    # @param kwargs [Hash] keyword arguments to pass
     # @return [Object, nil] return value or nil on error
-    def safe_callback(method, *)
+    def safe_callback(method, *args, **kwargs)
       return nil if dead?
 
-      @instance.public_send(method, *)
+      @instance.public_send(method, *args, **kwargs)
     rescue StandardError => e
       apply_collision_damage(Config::Battle::ERROR_DAMAGE)
       warn "[#{@rubot_class.name}] Error in #{method}: #{e.class} - #{e.message}"

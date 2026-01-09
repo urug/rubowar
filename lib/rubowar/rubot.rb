@@ -220,7 +220,7 @@ module Rubowar
 
     # Callbacks (override in rubot class)
     def on_spawn; end
-    def on_hit(damage, direction); end
+    def on_hit(damage:, direction:); end
     def on_death; end
     def on_wall; end
     def on_collision(other_rubot); end
@@ -234,12 +234,12 @@ module Rubowar
     # === Utility methods (available to all rubots) ===
 
     # Calculate distance to a point
-    def distance_to(target_x, target_y)
-      Math.sqrt(((target_x - x)**2) + ((target_y - y)**2))
+    def distance_to(target_x:, target_y:)
+      Physics.distance(x1: x, y1: y, x2: target_x, y2: target_y)
     end
 
     # Calculate angle to a point (in degrees, 0° = east, 90° = north)
-    def angle_to(target_x, target_y)
+    def angle_to(target_x:, target_y:)
       Math.atan2(target_y - y, target_x - x) * 180 / Math::PI
     end
 
@@ -263,11 +263,11 @@ module Rubowar
       return nil if energons.empty?
 
       candidates = energons
-      candidates = candidates.select { |e| distance_to(e[:x], e[:y]) <= max_distance } if max_distance
+      candidates = candidates.select { |e| distance_to(target_x: e[:x], target_y: e[:y]) <= max_distance } if max_distance
 
       return nil if candidates.empty?
 
-      candidates.min_by { |e| distance_to(e[:x], e[:y]) }
+      candidates.min_by { |e| distance_to(target_x: e[:x], target_y: e[:y]) }
     end
 
     # Calculate lead position for shooting a moving target
@@ -279,7 +279,7 @@ module Rubowar
     def lead_position(target_x, target_y, velocity_x, velocity_y, projectile_speed: 18, max_lead_chronons: 15)
       return [target_x, target_y] unless velocity_x && velocity_y
 
-      dist = distance_to(target_x, target_y)
+      dist = distance_to(target_x: target_x, target_y: target_y)
       lead_chronons = [dist / projectile_speed, max_lead_chronons].min
 
       lead_x = target_x + (velocity_x * lead_chronons)
@@ -295,7 +295,7 @@ module Rubowar
     # Calculate angle to lead position (for aiming turret at moving target)
     def lead_angle(target_x, target_y, velocity_x, velocity_y, projectile_speed: 18)
       lead_x, lead_y = lead_position(target_x, target_y, velocity_x, velocity_y, projectile_speed:)
-      angle_to(lead_x, lead_y)
+      angle_to(target_x: lead_x, target_y: lead_y)
     end
 
     # Clamp coordinates to stay within arena bounds
@@ -308,7 +308,7 @@ module Rubowar
     end
 
     # Calculate speed from velocity components
-    def speed_from_velocity(velocity_x, velocity_y)
+    def speed_from_velocity(velocity_x:, velocity_y:)
       return 0 unless velocity_x && velocity_y
 
       Math.sqrt((velocity_x**2) + (velocity_y**2))

@@ -171,10 +171,10 @@ describe Rubowar::Battle do
       _(battle.arena.height).must_equal 800
     end
 
-    it "spawns runners for each rubot class" do
+    it "spawns actors for each rubot class" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
 
-      _(battle.arena.runners.length).must_equal 2
+      _(battle.arena.actors.length).must_equal 2
     end
 
     it "starts at chronon zero" do
@@ -285,9 +285,9 @@ describe Rubowar::Battle do
   end
 
   describe "#battle_over?" do
-    it "returns true when only one runner alive" do
+    it "returns true when only one actor alive" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
-      battle.arena.runners[0].health = 0
+      battle.arena.actors[0].health = 0
 
       result = battle.send(:battle_over?)
 
@@ -303,7 +303,7 @@ describe Rubowar::Battle do
       _(result).must_equal true
     end
 
-    it "returns false when multiple runners alive and under limit" do
+    it "returns false when multiple actors alive and under limit" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
       battle.instance_variable_set(:@chronons, 5)
 
@@ -312,9 +312,9 @@ describe Rubowar::Battle do
       _(result).must_equal false
     end
 
-    it "returns true when all runners dead" do
+    it "returns true when all actors dead" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
-      battle.arena.runners.each { |r| r.health = 0 }
+      battle.arena.actors.each { |r| r.health = 0 }
 
       result = battle.send(:battle_over?)
 
@@ -325,16 +325,16 @@ describe Rubowar::Battle do
   describe "#determine_winner" do
     it "returns sole survivor" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.arena.runners[1].health = 0
+      battle.arena.actors[1].health = 0
 
       battle.send(:determine_winner)
 
-      _(battle.winner).must_equal battle.arena.runners[0]
+      _(battle.winner).must_equal battle.arena.actors[0]
     end
 
     it "returns nil when all dead" do
       battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.arena.runners.each { |r| r.health = 0 }
+      battle.arena.actors.each { |r| r.health = 0 }
 
       battle.send(:determine_winner)
 
@@ -347,11 +347,11 @@ describe Rubowar::Battle do
       battle.run
 
       # Manually set damage_dealt to test tiebreaker
-      battle.arena.runners[0].damage_dealt = 50
-      battle.arena.runners[1].damage_dealt = 30
+      battle.arena.actors[0].damage_dealt = 50
+      battle.arena.actors[1].damage_dealt = 30
       battle.send(:determine_winner)
 
-      _(battle.winner).must_equal battle.arena.runners[0]
+      _(battle.winner).must_equal battle.arena.actors[0]
     end
 
     it "uses HP percentage as secondary tiebreaker after damage dealt" do
@@ -362,13 +362,13 @@ describe Rubowar::Battle do
       # Small bot: 72/80 = 90%
       # Large bot: 96/120 = 80%
       # Small bot should win despite lower absolute HP
-      battle.arena.runners[0].damage_dealt = 50
-      battle.arena.runners[0].health = 72  # 90% of 80 max
-      battle.arena.runners[1].damage_dealt = 50
-      battle.arena.runners[1].health = 96  # 80% of 120 max
+      battle.arena.actors[0].damage_dealt = 50
+      battle.arena.actors[0].health = 72  # 90% of 80 max
+      battle.arena.actors[1].damage_dealt = 50
+      battle.arena.actors[1].health = 96  # 80% of 120 max
       battle.send(:determine_winner)
 
-      _(battle.winner).must_equal battle.arena.runners[0]
+      _(battle.winner).must_equal battle.arena.actors[0]
     end
   end
 
@@ -377,7 +377,7 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([PulseTestBot, StationaryBot], chronon_limit: 5)
       battle.run
 
-      pulser = battle.arena.runners.find { |r| r.instance.is_a?(PulseTestBot) }
+      pulser = battle.arena.actors.find { |r| r.instance.is_a?(PulseTestBot) }
       results = pulser.instance.pulse_results_per_tick
 
       # Tick 1: no previous pulse, returns []
@@ -393,19 +393,19 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([ProbeTestBotForBattle, StationaryBot], chronon_limit: 5)
 
       # Position rubots so prober's turret will sweep across target
-      prober_runner = battle.arena.runners.find { |r| r.instance.is_a?(ProbeTestBotForBattle) }
-      target_runner = battle.arena.runners.find { |r| r.instance.is_a?(StationaryBot) }
+      prober_actor = battle.arena.actors.find { |r| r.instance.is_a?(ProbeTestBotForBattle) }
+      target_actor = battle.arena.actors.find { |r| r.instance.is_a?(StationaryBot) }
 
       # Place prober at center, target directly to the east
-      prober_runner.x = 200
-      prober_runner.y = 200
-      prober_runner.turret_angle = 350 # Start slightly before east (0 degrees)
-      target_runner.x = 400
-      target_runner.y = 200
+      prober_actor.x = 200
+      prober_actor.y = 200
+      prober_actor.turret_angle = 350 # Start slightly before east (0 degrees)
+      target_actor.x = 400
+      target_actor.y = 200
 
       battle.run
 
-      results = prober_runner.instance.probe_results_per_tick
+      results = prober_actor.instance.probe_results_per_tick
 
       # Tick 1: no previous probe, returns nil
       _(results[0]).must_be_nil
@@ -419,7 +419,7 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([ScanTestBot, StationaryBot], chronon_limit: 3)
       battle.run
 
-      scanner = battle.arena.runners.find { |r| r.instance.is_a?(ScanTestBot) }
+      scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
       results = scanner.instance.scan_results_per_tick
 
       # Tick 1: no previous scan, returns []
@@ -436,7 +436,7 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([ScanTestBot, StationaryBot], chronon_limit: 10)
       battle.run
 
-      scanner = battle.arena.runners.find { |r| r.instance.is_a?(ScanTestBot) }
+      scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
       results = scanner.instance.scan_results_per_tick
 
       # Count how many ticks found the target (should be all ticks after the first)
@@ -452,7 +452,7 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([PositionRecordingBot, StationaryBot], chronon_limit: 1)
 
       # Position bot at known location, facing east
-      mover = battle.arena.runners.find { |r| r.instance.is_a?(PositionRecordingBot) }
+      mover = battle.arena.actors.find { |r| r.instance.is_a?(PositionRecordingBot) }
       mover.x = 100.0
       mover.y = 300.0
       mover.turret_angle = 0 # Facing east
@@ -474,8 +474,8 @@ describe Rubowar::Battle do
       battle = Rubowar::Battle.new([MoveAndFireBot, MoveAndFireBot], chronon_limit: 1)
 
       # Position both bots
-      bot_a = battle.arena.runners[0]
-      bot_b = battle.arena.runners[1]
+      bot_a = battle.arena.actors[0]
+      bot_b = battle.arena.actors[1]
 
       bot_a.x = 100.0
       bot_a.y = 300.0
@@ -504,8 +504,8 @@ describe Rubowar::Battle do
       # Create a battle where pulse happens before movement
       battle = Rubowar::Battle.new([PulseTestBot, StationaryBot], chronon_limit: 2)
 
-      pulser = battle.arena.runners.find { |r| r.instance.is_a?(PulseTestBot) }
-      target = battle.arena.runners.find { |r| r.instance.is_a?(StationaryBot) }
+      pulser = battle.arena.actors.find { |r| r.instance.is_a?(PulseTestBot) }
+      target = battle.arena.actors.find { |r| r.instance.is_a?(StationaryBot) }
 
       # Position them close together
       pulser.x = 200.0
@@ -527,7 +527,7 @@ describe Rubowar::Battle do
       # and use energy first, potentially leaving less for fire
       battle = Rubowar::Battle.new([MoveAndFireBot, StationaryBot], chronon_limit: 1)
 
-      bot = battle.arena.runners.find { |r| r.instance.is_a?(MoveAndFireBot) }
+      bot = battle.arena.actors.find { |r| r.instance.is_a?(MoveAndFireBot) }
       bot.x = 400.0
       bot.y = 300.0
       bot.energy = 15 # Only enough for fire(10) OR pulse, not both
@@ -555,8 +555,8 @@ describe Rubowar::Battle do
     it "reports zero counts when not being sensed" do
       battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 2)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      target = battle.arena.runners.find { |r| r.instance.is_a?(StationaryBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      target = battle.arena.actors.find { |r| r.instance.is_a?(StationaryBot) }
 
       # Position them far apart so no sensing happens
       detector.x = 100.0
@@ -578,8 +578,8 @@ describe Rubowar::Battle do
     it "reports probe count when probed" do
       battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
 
       # Position sensor to aim at detector
       sensor.x = 100.0
@@ -602,8 +602,8 @@ describe Rubowar::Battle do
     it "reports scan count when scanned" do
       battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
 
       # Position them close enough for scan
       sensor.x = 100.0
@@ -625,8 +625,8 @@ describe Rubowar::Battle do
     it "reports pulse count when pulsed" do
       battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
 
       # Position them close enough for pulse
       sensor.x = 100.0
@@ -648,8 +648,8 @@ describe Rubowar::Battle do
     it "reports combined counts from multiple sensors" do
       battle = Rubowar::Battle.new([DetectTestBot, SensingBot, SensingBot], chronon_limit: 2)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      sensors = battle.arena.runners.select { |r| r.instance.is_a?(SensingBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      sensors = battle.arena.actors.select { |r| r.instance.is_a?(SensingBot) }
 
       # Position all close together
       detector.x = 200.0
@@ -673,8 +673,8 @@ describe Rubowar::Battle do
     it "resets counts each tick" do
       battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 3)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
-      sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
+      sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
 
       # Position them close
       sensor.x = 100.0
@@ -700,7 +700,7 @@ describe Rubowar::Battle do
     it "costs 2 energy" do
       battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 1)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       detector.energy = 50
 
       battle.send(:call_on_spawn)
@@ -714,7 +714,7 @@ describe Rubowar::Battle do
     it "returns false and fails when insufficient energy" do
       battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 1)
 
-      detector = battle.arena.runners.find { |r| r.instance.is_a?(DetectTestBot) }
+      detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       detector.energy = 1 # Not enough for detect (costs 2)
 
       battle.send(:call_on_spawn)

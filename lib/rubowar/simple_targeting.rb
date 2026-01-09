@@ -127,7 +127,7 @@ module Rubowar
     def distance_to_target(target)
       return nil unless target
 
-      distance_to(target[:x], target[:y])
+      distance_to(target_x: target[:x], target_y: target[:y])
     end
 
     # === State Helpers ===
@@ -176,7 +176,7 @@ module Rubowar
       rubots = results.select { |t| t[:type] == :rubot }
       return nil if rubots.empty?
 
-      closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
+      closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
       normalize_target(closest)
     end
 

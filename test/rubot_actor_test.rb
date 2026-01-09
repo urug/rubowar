@@ -360,7 +360,7 @@ describe Rubowar::RubotActor do
     it "sets x and y coordinates" do
       actor = Rubowar::RubotActor.new(DummyBot)
 
-      actor.set_position(150.0, 250.0)
+      actor.set_position(x: 150.0, y: 250.0)
 
       _(actor.x).must_equal 150.0
       _(actor.y).must_equal 250.0
@@ -371,7 +371,7 @@ describe Rubowar::RubotActor do
     it "sets velocity components" do
       actor = Rubowar::RubotActor.new(DummyBot)
 
-      actor.set_velocity(8.0, -4.0)
+      actor.set_velocity(vx: 8.0, vy: -4.0)
 
       _(actor.velocity_x).must_equal 8.0
       _(actor.velocity_y).must_equal(-4.0)
@@ -384,7 +384,7 @@ describe Rubowar::RubotActor do
       actor.velocity_x = 5.0
       actor.velocity_y = 3.0
 
-      actor.adjust_velocity(2.0, -1.0)
+      actor.adjust_velocity(dvx: 2.0, dvy: -1.0)
 
       _(actor.velocity_x).must_equal 7.0
       _(actor.velocity_y).must_equal 2.0
@@ -397,7 +397,7 @@ describe Rubowar::RubotActor do
       actor.x = 100.0
       actor.y = 200.0
 
-      actor.adjust_position(10.0, -5.0)
+      actor.adjust_position(dx: 10.0, dy: -5.0)
 
       _(actor.x).must_equal 110.0
       _(actor.y).must_equal 195.0

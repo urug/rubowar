@@ -19,6 +19,7 @@
 # ]
 
 require_relative "rubowar/version"
+require_relative "rubowar/errors"
 require_relative "rubowar/config"
 require_relative "rubowar/sensor_calculations"
 require_relative "rubowar/rubot_state"
@@ -32,14 +33,3 @@ require_relative "rubowar/physics"
 require_relative "rubowar/arena"
 require_relative "rubowar/battle"
 require_relative "rubowar/renderers/terminal"
-
-module Rubowar
-  class Error < StandardError; end
-
-  class ConfigurationError < Error; end
-  class InvalidDimensionsError < ConfigurationError; end
-  class InvalidFrictionError < ConfigurationError; end
-  class InvalidChrononLimitError < ConfigurationError; end
-  class InsufficientRubotsError < ConfigurationError; end
-  class SpawnError < ConfigurationError; end
-end

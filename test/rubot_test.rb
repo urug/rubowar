@@ -2,6 +2,11 @@
 
 require "test_helper"
 
+# Shortcuts for Config constants used in tests
+ARENA_WIDTH = Rubowar::Config::Arena::DEFAULT_WIDTH
+ARENA_HEIGHT = Rubowar::Config::Arena::DEFAULT_HEIGHT
+ARENA_FRICTION = Rubowar::Config::Arena::DEFAULT_FRICTION
+
 class TestBot
   include Rubowar::Rubot
 
@@ -84,19 +89,19 @@ describe Rubowar::Rubot do
     it "delegates arena_width with default" do
       bot = build_bot
 
-      _(bot.arena_width).must_equal 800
+      _(bot.arena_width).must_equal ARENA_WIDTH
     end
 
     it "delegates arena_height with default" do
       bot = build_bot
 
-      _(bot.arena_height).must_equal 600
+      _(bot.arena_height).must_equal ARENA_HEIGHT
     end
 
     it "delegates friction with default" do
       bot = build_bot
 
-      _(bot.friction).must_equal 0.92
+      _(bot.friction).must_equal ARENA_FRICTION
     end
   end
 
@@ -386,7 +391,7 @@ describe Rubowar::Rubot do
     it "calculates distance to a point" do
       bot = build_bot(x: 0.0, y: 0.0)
 
-      result = bot.distance_to(3.0, 4.0)
+      result = bot.distance_to(target_x: 3.0, target_y: 4.0)
 
       _(result).must_equal 5.0
     end
@@ -394,7 +399,7 @@ describe Rubowar::Rubot do
     it "returns zero for same position" do
       bot = build_bot(x: 100.0, y: 200.0)
 
-      result = bot.distance_to(100.0, 200.0)
+      result = bot.distance_to(target_x: 100.0, target_y: 200.0)
 
       _(result).must_equal 0.0
     end
@@ -404,7 +409,7 @@ describe Rubowar::Rubot do
     it "returns 0 for point directly east" do
       bot = build_bot(x: 100.0, y: 100.0)
 
-      result = bot.angle_to(200.0, 100.0)
+      result = bot.angle_to(target_x: 200.0, target_y: 100.0)
 
       _(result).must_equal 0.0
     end
@@ -412,7 +417,7 @@ describe Rubowar::Rubot do
     it "returns 90 for point directly north" do
       bot = build_bot(x: 100.0, y: 100.0)
 
-      result = bot.angle_to(100.0, 200.0)
+      result = bot.angle_to(target_x: 100.0, target_y: 200.0)
 
       _(result).must_equal 90.0
     end
@@ -420,7 +425,7 @@ describe Rubowar::Rubot do
     it "returns 180 for point directly west" do
       bot = build_bot(x: 100.0, y: 100.0)
 
-      result = bot.angle_to(0.0, 100.0)
+      result = bot.angle_to(target_x: 0.0, target_y: 100.0)
 
       _(result).must_equal 180.0
     end
@@ -428,7 +433,7 @@ describe Rubowar::Rubot do
     it "returns -90 for point directly south" do
       bot = build_bot(x: 100.0, y: 100.0)
 
-      result = bot.angle_to(100.0, 0.0)
+      result = bot.angle_to(target_x: 100.0, target_y: 0.0)
 
       _(result).must_equal(-90.0)
     end
@@ -436,7 +441,7 @@ describe Rubowar::Rubot do
     it "returns 45 for point northeast" do
       bot = build_bot(x: 100.0, y: 100.0)
 
-      result = bot.angle_to(200.0, 200.0)
+      result = bot.angle_to(target_x: 200.0, target_y: 200.0)
 
       _(result).must_equal 45.0
     end
@@ -470,31 +475,31 @@ describe Rubowar::Rubot do
 
   describe "#near_wall?" do
     it "returns true when near left wall" do
-      bot = build_bot(x: 30.0, y: 300.0)
+      bot = build_bot(x: 30.0, y: ARENA_HEIGHT / 2.0)
 
       _(bot.near_wall?(50)).must_equal true
     end
 
     it "returns true when near right wall" do
-      bot = build_bot(x: 770.0, y: 300.0)
+      bot = build_bot(x: ARENA_WIDTH - 30.0, y: ARENA_HEIGHT / 2.0)
 
       _(bot.near_wall?(50)).must_equal true
     end
 
     it "returns true when near bottom wall" do
-      bot = build_bot(x: 400.0, y: 30.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: 30.0)
 
       _(bot.near_wall?(50)).must_equal true
     end
 
     it "returns true when near top wall" do
-      bot = build_bot(x: 400.0, y: 570.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: ARENA_HEIGHT - 30.0)
 
       _(bot.near_wall?(50)).must_equal true
     end
 
     it "returns false when in center" do
-      bot = build_bot(x: 400.0, y: 300.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: ARENA_HEIGHT / 2.0)
 
       _(bot.near_wall?(50)).must_equal false
     end
@@ -516,25 +521,25 @@ describe Rubowar::Rubot do
 
   describe "#nearest_wall" do
     it "returns :left when closest to left wall" do
-      bot = build_bot(x: 30.0, y: 300.0)
+      bot = build_bot(x: 30.0, y: ARENA_HEIGHT / 2.0)
 
       _(bot.nearest_wall).must_equal :left
     end
 
     it "returns :right when closest to right wall" do
-      bot = build_bot(x: 770.0, y: 300.0)
+      bot = build_bot(x: ARENA_WIDTH - 30.0, y: ARENA_HEIGHT / 2.0)
 
       _(bot.nearest_wall).must_equal :right
     end
 
     it "returns :bottom when closest to bottom wall" do
-      bot = build_bot(x: 400.0, y: 30.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: 30.0)
 
       _(bot.nearest_wall).must_equal :bottom
     end
 
     it "returns :top when closest to top wall" do
-      bot = build_bot(x: 400.0, y: 570.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: ARENA_HEIGHT - 30.0)
 
       _(bot.nearest_wall).must_equal :top
     end
@@ -542,23 +547,23 @@ describe Rubowar::Rubot do
 
   describe "#wall_distance" do
     it "returns distance to right wall when facing east" do
-      bot = build_bot(x: 100.0, y: 300.0)
+      bot = build_bot(x: 100.0, y: ARENA_HEIGHT / 2.0)
 
       result = bot.wall_distance(0)
 
-      _(result).must_equal 700.0
+      _(result).must_equal(ARENA_WIDTH - 100.0)
     end
 
     it "returns distance to top wall when facing north" do
-      bot = build_bot(x: 400.0, y: 100.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: 100.0)
 
       result = bot.wall_distance(90)
 
-      _(result).must_equal 500.0
+      _(result).must_equal(ARENA_HEIGHT - 100.0)
     end
 
     it "returns distance to left wall when facing west" do
-      bot = build_bot(x: 100.0, y: 300.0)
+      bot = build_bot(x: 100.0, y: ARENA_HEIGHT / 2.0)
 
       result = bot.wall_distance(180)
 
@@ -566,7 +571,7 @@ describe Rubowar::Rubot do
     end
 
     it "returns distance to bottom wall when facing south" do
-      bot = build_bot(x: 400.0, y: 100.0)
+      bot = build_bot(x: ARENA_WIDTH / 2.0, y: 100.0)
 
       result = bot.wall_distance(270)
 
@@ -596,25 +601,25 @@ describe Rubowar::Rubot do
 
   describe "#approaching_wall?" do
     it "returns true when moving toward left wall" do
-      bot = build_bot(x: 40.0, y: 300.0, velocity_x: -5.0, velocity_y: 0.0)
+      bot = build_bot(x: 40.0, y: ARENA_HEIGHT / 2.0, velocity_x: -5.0, velocity_y: 0.0)
 
       _(bot.approaching_wall?(60)).must_equal true
     end
 
     it "returns true when moving toward right wall" do
-      bot = build_bot(x: 760.0, y: 300.0, velocity_x: 5.0, velocity_y: 0.0)
+      bot = build_bot(x: ARENA_WIDTH - 40.0, y: ARENA_HEIGHT / 2.0, velocity_x: 5.0, velocity_y: 0.0)
 
       _(bot.approaching_wall?(60)).must_equal true
     end
 
     it "returns false when stationary" do
-      bot = build_bot(x: 40.0, y: 300.0, velocity_x: 0.0, velocity_y: 0.0)
+      bot = build_bot(x: 40.0, y: ARENA_HEIGHT / 2.0, velocity_x: 0.0, velocity_y: 0.0)
 
       _(bot.approaching_wall?(60)).must_equal false
     end
 
     it "returns false when moving away from wall" do
-      bot = build_bot(x: 40.0, y: 300.0, velocity_x: 5.0, velocity_y: 0.0)
+      bot = build_bot(x: 40.0, y: ARENA_HEIGHT / 2.0, velocity_x: 5.0, velocity_y: 0.0)
 
       _(bot.approaching_wall?(60)).must_equal false
     end
@@ -652,7 +657,7 @@ describe Rubowar::Rubot do
 
       result = bot.arena_diagonal
 
-      expected = Math.sqrt((800**2) + (600**2))
+      expected = Math.sqrt((ARENA_WIDTH**2) + (ARENA_HEIGHT**2))
       _(result).must_equal expected
     end
   end
@@ -661,7 +666,7 @@ describe Rubowar::Rubot do
     it "calculates speed from components" do
       bot = build_bot
 
-      result = bot.speed_from_velocity(3.0, 4.0)
+      result = bot.speed_from_velocity(velocity_x: 3.0, velocity_y: 4.0)
 
       _(result).must_equal 5.0
     end
@@ -669,7 +674,7 @@ describe Rubowar::Rubot do
     it "returns zero when velocity is nil" do
       bot = build_bot
 
-      result = bot.speed_from_velocity(nil, nil)
+      result = bot.speed_from_velocity(velocity_x: nil, velocity_y: nil)
 
       _(result).must_equal 0
     end
@@ -679,41 +684,41 @@ describe Rubowar::Rubot do
     it "returns original coordinates when inside arena" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(400.0, 300.0)
+      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, ARENA_HEIGHT / 2.0)
 
-      _(result).must_equal [400.0, 300.0]
+      _(result).must_equal [ARENA_WIDTH / 2.0, ARENA_HEIGHT / 2.0]
     end
 
     it "clamps x to left boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(-50.0, 300.0, margin: 20)
+      result = bot.clamp_to_arena(-50.0, ARENA_HEIGHT / 2.0, margin: 20)
 
-      _(result).must_equal [20.0, 300.0]
+      _(result).must_equal [20.0, ARENA_HEIGHT / 2.0]
     end
 
     it "clamps x to right boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(900.0, 300.0, margin: 20)
+      result = bot.clamp_to_arena(ARENA_WIDTH + 100.0, ARENA_HEIGHT / 2.0, margin: 20)
 
-      _(result).must_equal [780.0, 300.0]
+      _(result).must_equal [ARENA_WIDTH - 20.0, ARENA_HEIGHT / 2.0]
     end
 
     it "clamps y to bottom boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(400.0, -50.0, margin: 20)
+      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, -50.0, margin: 20)
 
-      _(result).must_equal [400.0, 20.0]
+      _(result).must_equal [ARENA_WIDTH / 2.0, 20.0]
     end
 
     it "clamps y to top boundary" do
       bot = build_bot
 
-      result = bot.clamp_to_arena(400.0, 700.0, margin: 20)
+      result = bot.clamp_to_arena(ARENA_WIDTH / 2.0, ARENA_HEIGHT + 100.0, margin: 20)
 
-      _(result).must_equal [400.0, 580.0]
+      _(result).must_equal [ARENA_WIDTH / 2.0, ARENA_HEIGHT - 20.0]
     end
   end
 
@@ -741,10 +746,10 @@ describe Rubowar::Rubot do
     it "clamps lead position to arena bounds" do
       bot = build_bot(x: 0.0, y: 0.0)
 
-      result = bot.lead_position(780.0, 0.0, 100.0, 0.0)
+      result = bot.lead_position(ARENA_WIDTH - 40.0, 0.0, 100.0, 0.0)
 
       # Should clamp to arena width - 20
-      _(result[0]).must_equal 780.0
+      _(result[0]).must_equal(ARENA_WIDTH - 20)
     end
   end
 

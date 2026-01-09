@@ -43,7 +43,7 @@ class Hunter
     end
   end
 
-  def on_hit(damage, direction)
+  def on_hit(damage:, direction:)
     shield(8) if energy > 30 && shield_level < 50
 
     # If hit while searching, find the attacker
@@ -59,7 +59,7 @@ class Hunter
 
   def on_wall
     # Bounce away from wall
-    center_angle = angle_to(arena_width / 2, arena_height / 2)
+    center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
     thrust(speed: 4, angle: center_angle)
   end
 
@@ -78,9 +78,9 @@ class Hunter
     return if rubots.empty?
 
     # Pick closest target
-    closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
+    closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
 
-    if @target.nil? || distance_to(closest[:x], closest[:y]) < distance_to(@target[:x], @target[:y])
+    if @target.nil? || distance_to(target_x: closest[:x], target_y: closest[:y]) < distance_to(target_x: @target[:x], target_y: @target[:y])
       @target = closest
       determine_tactics
     end
@@ -120,9 +120,9 @@ class Hunter
     # Opportunistically collect nearby energon while searching
     if collect_nearby_energon?
       move_to_energon
-    elsif distance_to(arena_width / 2, arena_height / 2) > 200
+    elsif distance_to(target_x: arena_width / 2, target_y: arena_height / 2) > 200
       # Patrol toward center
-      center_angle = angle_to(arena_width / 2, arena_height / 2)
+      center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
       thrust(speed: 4, angle: center_angle) if speed < 10
     else
       # Circle in center
@@ -139,7 +139,7 @@ class Hunter
     update_target
     check_for_mode_switch
 
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Close in aggressively
     if dist > HUNT_RANGE
@@ -147,11 +147,11 @@ class Hunter
       thrust(speed: 6, angle: safe_angle(pursuit_angle)) if speed < 14
     elsif dist < MIN_RANGE
       # Too close - back off slightly for better aim
-      backup_angle = (angle_to(@target[:x], @target[:y]) + 180) % 360
+      backup_angle = (angle_to(target_x: @target[:x], target_y: @target[:y]) + 180) % 360
       thrust(speed: 3, angle: backup_angle)
     else
       # Good range - maintain position
-      thrust(speed: 2, angle: angle_to(@target[:x], @target[:y])) if speed < 5
+      thrust(speed: 2, angle: angle_to(target_x: @target[:x], target_y: @target[:y])) if speed < 5
     end
 
     # Aggressive fire
@@ -165,21 +165,21 @@ class Hunter
     update_target
     check_for_mode_switch
 
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Maintain kite range
     if dist < KITE_RANGE - 30
       # Too close - back away
-      escape_angle = (angle_to(@target[:x], @target[:y]) + 180) % 360
+      escape_angle = (angle_to(target_x: @target[:x], target_y: @target[:y]) + 180) % 360
       escape_angle = safe_angle(escape_angle)
       thrust(speed: 6, angle: escape_angle) if speed < 12
     elsif dist > KITE_RANGE + 50
       # Too far - close in a bit
-      approach_angle = safe_angle(angle_to(@target[:x], @target[:y]))
+      approach_angle = safe_angle(angle_to(target_x: @target[:x], target_y: @target[:y]))
       thrust(speed: 4, angle: approach_angle) if speed < 10
     else
       # Good range - strafe to make ourselves harder to hit
-      strafe_angle = angle_to(@target[:x], @target[:y]) + 90
+      strafe_angle = angle_to(target_x: @target[:x], target_y: @target[:y]) + 90
       strafe_angle = safe_angle(strafe_angle)
       thrust(speed: 3, angle: strafe_angle) if speed < 8
     end
@@ -201,7 +201,7 @@ class Hunter
       return
     end
 
-    dist = distance_to(@target[:x], @target[:y])
+    dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Close in for the kill
     if dist > HUNT_RANGE
@@ -209,7 +209,7 @@ class Hunter
       thrust(speed: 7, angle: safe_angle(pursuit_angle)) if speed < 16
     else
       # In kill range - stay on them
-      thrust(speed: 4, angle: angle_to(@target[:x], @target[:y])) if speed < 8
+      thrust(speed: 4, angle: angle_to(target_x: @target[:x], target_y: @target[:y])) if speed < 8
     end
 
     # Maximum aggression
@@ -242,14 +242,14 @@ class Hunter
 
   def aim_at_target
     return unless @target
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-20, 20))
   end
 
   def turret_aligned?
     return false unless @target
-    target_angle = angle_to(@target[:x], @target[:y])
+    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     normalize_angle(target_angle - turret_angle).abs < 15
   end
 
@@ -264,7 +264,7 @@ class Hunter
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else
-      target_angle = angle_to(@target[:x], @target[:y])
+      target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     end
 
     turret_diff = normalize_angle(target_angle - turret_angle)
@@ -276,7 +276,7 @@ class Hunter
   end
 
   def calculate_intercept_angle
-    return angle_to(@target[:x], @target[:y]) unless @target[:velocity_x] && @target[:velocity_y]
+    return angle_to(target_x: @target[:x], target_y: @target[:y]) unless @target[:velocity_x] && @target[:velocity_y]
 
     lead_angle(
       @target[:x], @target[:y],
@@ -290,7 +290,7 @@ class Hunter
     wall_dist = wall_distance(angle)
     return angle if wall_dist > 100
 
-    center_angle = angle_to(arena_width / 2, arena_height / 2)
+    center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
     diff = normalize_angle(center_angle - angle)
     (angle + diff * 0.5) % 360
   end
@@ -316,7 +316,7 @@ class Hunter
   def move_to_energon
     return unless @nearest_energon
 
-    energon_angle = angle_to(@nearest_energon[:x], @nearest_energon[:y])
+    energon_angle = angle_to(target_x: @nearest_energon[:x], target_y: @nearest_energon[:y])
     thrust(speed: 4, angle: energon_angle) if speed < 8
   end
 end

@@ -32,7 +32,7 @@ class Coroner
     end
   end
 
-  def on_hit(_damage, direction)
+  def on_hit(damage:, direction:)
     # When hit, flee in the opposite direction
     @corner = corner_away_from(direction)
     @mode = :fleeing
@@ -55,11 +55,11 @@ class Coroner
   end
 
   def closest_corner
-    corners.min_by { |c| distance_to(c[:x], c[:y]) }
+    corners.min_by { |c| distance_to(target_x: c[:x], target_y: c[:y]) }
   end
 
   def farthest_corner
-    corners.max_by { |c| distance_to(c[:x], c[:y]) }
+    corners.max_by { |c| distance_to(target_x: c[:x], target_y: c[:y]) }
   end
 
   def corner_away_from(direction)
@@ -80,21 +80,21 @@ class Coroner
     return if rubots.empty?
 
     # Something is too close - flee!
-    closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
-    threat_angle = angle_to(closest[:x], closest[:y])
+    closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
+    threat_angle = angle_to(target_x: closest[:x], target_y: closest[:y])
     @corner = corner_away_from(threat_angle)
     @mode = :fleeing
   end
 
   def move_to_corner_action
-    dist = distance_to(@corner[:x], @corner[:y])
+    dist = distance_to(target_x: @corner[:x], target_y: @corner[:y])
 
     if dist < CORNER_BUFFER / 2
       @mode = :scanning
       return
     end
 
-    angle = angle_to(@corner[:x], @corner[:y])
+    angle = angle_to(target_x: @corner[:x], target_y: @corner[:y])
     thrust(speed: 5, angle:) if speed < 5
   end
 
@@ -116,7 +116,7 @@ class Coroner
     if scan_result
       rubots = scan_result.select { |t| t[:type] == :rubot }
       if rubots.any?
-        closest = rubots.min_by { |t| distance_to(t[:x], t[:y]) }
+        closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
         @last_target = closest
         @tracking = true
         @chronons_without_probe_hit = 0
@@ -124,7 +124,7 @@ class Coroner
     end
 
     # Sweep turret toward center
-    center_angle = angle_to(arena_width / 2.0, arena_height / 2.0)
+    center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
     turret_offset = normalize_angle(turret_angle - center_angle)
 
     if turret_offset.abs > 100
@@ -160,13 +160,13 @@ class Coroner
       target_y = @last_target[:y]
 
       if @last_target[:velocity_x] && @last_target[:velocity_y]
-        dist = distance_to(target_x, target_y)
+        dist = distance_to(target_x: target_x, target_y: target_y)
         lead_time = dist / BULLET_SPEED
         target_x += @last_target[:velocity_x] * lead_time
         target_y += @last_target[:velocity_y] * lead_time
       end
 
-      target_angle = angle_to(target_x, target_y)
+      target_angle = angle_to(target_x: target_x, target_y: target_y)
       turret_diff = normalize_angle(target_angle - turret_angle)
       rotate_turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
     end
@@ -179,7 +179,7 @@ class Coroner
   end
 
   def fleeing_action
-    dist = distance_to(@corner[:x], @corner[:y])
+    dist = distance_to(target_x: @corner[:x], target_y: @corner[:y])
 
     if dist < CORNER_BUFFER / 2
       @mode = :scanning
@@ -187,7 +187,7 @@ class Coroner
     end
 
     # MOVE: Run to corner
-    angle = angle_to(@corner[:x], @corner[:y])
+    angle = angle_to(target_x: @corner[:x], target_y: @corner[:y])
     thrust(speed: 6, angle:) if speed < 6
 
     # COMBAT: Build shields while fleeing
