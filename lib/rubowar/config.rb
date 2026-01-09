@@ -18,8 +18,8 @@
 module Rubowar
   module Config
     module Arena
-      DEFAULT_WIDTH = 800
-      DEFAULT_HEIGHT = 600
+      DEFAULT_WIDTH = 640
+      DEFAULT_HEIGHT = 640
       DEFAULT_FRICTION = 0.92
 
       # Spawn distance ratios (relative to arena dimensions)
