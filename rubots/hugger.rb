@@ -41,7 +41,7 @@ class Hugger
   def on_hit(damage:, direction:)
     @evading = 15
     @direction *= -1
-    shield(8) if energy > 25 && shield_level < 50
+    raise_shields(8) if energy > 25 && shield_level < 50
   end
 
   def on_wall
@@ -56,11 +56,11 @@ class Hugger
   def check_if_targeted
     update_juke_timer
 
-    return unless detect_result
+    return unless detect_intel.targeted?
 
-    if (detect_result[:probed] || 0).positive?
+    if detect_intel.probed.positive?
       start_evasion(8)
-    elsif (detect_result[:scanned] || 0).positive?
+    elsif detect_intel.scanned.positive?
       start_evasion(5) if rand < 0.5
     end
   end
@@ -88,25 +88,28 @@ class Hugger
 
   def scan_for_targets
     scan_opposite_corners
-    process_scan_results if scan_result
+    process_scan_echos unless scan_echo.empty?
 
     return unless @target.nil? || chronons % 16 == 0
 
     pulse(distance: 300)
-    process_pulse_results if pulse_result
+    process_pulse_echos unless pulse_echo.empty?
   end
 
-  def process_scan_results
-    bullets = scan_result.select { |t| t[:type] == :bullet }
-    check_incoming_bullets(bullets) if bullets.any?
+  def process_scan_echos
+    check_incoming_bullets(scan_echo.bullets) if scan_echo.any_bullets?
 
-    rubots = scan_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
+    if scan_echo.any_rubots?
+      closest = scan_echo.closest_rubot(to_x: x, to_y: y)
+      @target = { x: closest.x, y: closest.y, velocity_x: closest.velocity_x, velocity_y: closest.velocity_y }
+    end
   end
 
-  def process_pulse_results
-    rubots = pulse_result.select { |t| t[:type] == :rubot }
-    @target = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) } if rubots.any?
+  def process_pulse_echos
+    if pulse_echo.any_rubots?
+      closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+      @target = { x: closest.x, y: closest.y }
+    end
   end
 
   def update_safe_wall
@@ -126,12 +129,12 @@ class Hugger
   end
 
   def bullet_heading_toward_us?(bullet)
-    dist = distance_to(target_x: bullet[:x], target_y: bullet[:y])
+    dist = distance_to(target_x: bullet.x, target_y: bullet.y)
     return false if dist > 400 || dist < 20
-    return false unless bullet[:velocity_x] && bullet[:velocity_y]
+    return false unless bullet.velocity_x && bullet.velocity_y
 
-    bullet_angle = Math.atan2(bullet[:velocity_y], bullet[:velocity_x]) * 180 / Math::PI
-    angle_to_us = Math.atan2(y - bullet[:y], x - bullet[:x]) * 180 / Math::PI
+    bullet_angle = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
+    angle_to_us = Math.atan2(y - bullet.y, x - bullet.x) * 180 / Math::PI
     angle_diff = normalize_angle(bullet_angle - angle_to_us).abs
 
     angle_diff < 25
@@ -225,7 +228,7 @@ class Hugger
     end
 
     thrust(speed: 6, angle: move_angle) if speed < 10
-    shield(5) if energy > 50 && shield_level < 35
+    raise_shields(5) if energy > 50 && shield_level < 35
   end
 
   def evade_toward_wall
@@ -234,13 +237,13 @@ class Hugger
     move_angle = (base_angle + jink_offset) % 360
 
     thrust(speed: 5, angle: move_angle) if speed < 10
-    shield(6) if energy > 45 && shield_level < 40
+    raise_shields(6) if energy > 45 && shield_level < 40
   end
 
   def move_to_wall
     move_angle = angle_to(target_x: wall_target_position[0], target_y: wall_target_position[1])
     thrust(speed: 4, angle: move_angle) if speed < 8
-    shield(5) if energy > 50 && shield_level < 40
+    raise_shields(5) if energy > 50 && shield_level < 40
   end
 
   def patrol_wall
@@ -248,7 +251,7 @@ class Hugger
     move_angle = adjust_for_wall_distance(move_angle)
 
     thrust(speed: 2, angle: move_angle) if speed < 4
-    shield(3) if energy > 70 && shield_level < 20
+    raise_shields(3) if energy > 70 && shield_level < 20
   end
 
   def plant_feet
@@ -260,7 +263,7 @@ class Hugger
     end
 
     brake if speed > 1.5
-    shield(4) if energy > 60 && shield_level < 30
+    raise_shields(4) if energy > 60 && shield_level < 30
   end
 
   def brake
@@ -334,8 +337,10 @@ class Hugger
   def calculate_lead_angle
     if @target[:velocity_x] && @target[:velocity_y]
       lead_angle(
-        @target[:x], @target[:y],
-        @target[:velocity_x], @target[:velocity_y],
+        target_x: @target[:x],
+        target_y: @target[:y],
+        velocity_x: @target[:velocity_x],
+        velocity_y: @target[:velocity_y],
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else
@@ -347,10 +352,10 @@ class Hugger
     return unless energy > 15 && chronons % 10 == 0
 
     probe(:health, :shield)
-    return unless probe_result&.any?
+    return unless probe_echo.found?
 
-    @target[:health] = probe_result[:health]
-    @target[:shield] = probe_result[:shield]
+    @target[:health] = probe_echo.health
+    @target[:shield] = probe_echo.shield_level
   end
 
   def attempt_shot

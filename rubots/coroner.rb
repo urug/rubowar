@@ -74,14 +74,11 @@ class Coroner
 
     # SENSE: Pulse for nearby threats
     pulse(distance: DANGER_DISTANCE)
-    return unless pulse_result
-
-    rubots = pulse_result.select { |t| t[:type] == :rubot }
-    return if rubots.empty?
+    return unless pulse_echo.any_rubots?
 
     # Something is too close - flee!
-    closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
-    threat_angle = angle_to(target_x: closest[:x], target_y: closest[:y])
+    closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+    threat_angle = angle_to(target_x: closest.x, target_y: closest.y)
     @corner = corner_away_from(threat_angle)
     @mode = :fleeing
   end
@@ -106,21 +103,18 @@ class Coroner
     end
 
     # Build shields while camping
-    shield(3) if energy > 70 && shield_level < 25
+    raise_shields(3) if energy > 70 && shield_level < 25
   end
 
   def sweeping_action
     # SENSE: Scan for targets
     scan(angle: 70, distance: scan_distance) if energy > 20
 
-    if scan_result
-      rubots = scan_result.select { |t| t[:type] == :rubot }
-      if rubots.any?
-        closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
-        @last_target = closest
-        @tracking = true
-        @chronons_without_probe_hit = 0
-      end
+    if scan_echo.any_rubots?
+      closest = scan_echo.closest_rubot(to_x: x, to_y: y)
+      @last_target = { x: closest.x, y: closest.y, velocity_x: closest.velocity_x, velocity_y: closest.velocity_y }
+      @tracking = true
+      @chronons_without_probe_hit = 0
     end
 
     # Sweep turret toward center
@@ -143,8 +137,9 @@ class Coroner
     # SENSE: Probe for position/velocity (7 energy)
     probe(:position, :velocity) if energy > 20
 
-    if probe_result&.any?
-      @last_target = probe_result
+    if probe_echo.found?
+      @last_target = { x: probe_echo.x, y: probe_echo.y,
+                       velocity_x: probe_echo.velocity_x, velocity_y: probe_echo.velocity_y }
       @chronons_without_probe_hit = 0
     else
       @chronons_without_probe_hit = (@chronons_without_probe_hit || 0) + 1
@@ -172,7 +167,7 @@ class Coroner
     end
 
     # Fire on probe hit - bigger shot if flush with energy
-    return unless probe_result&.any? && energy > 25
+    return unless probe_echo.found? && energy > 25
 
     shot = energy > 60 ? 25 : 15
     fire(shot)
@@ -191,7 +186,7 @@ class Coroner
     thrust(speed: 6, angle:) if speed < 6
 
     # COMBAT: Build shields while fleeing
-    shield(5) if energy > 40 && shield_level < 30
+    raise_shields(5) if energy > 40 && shield_level < 30
   end
 
   def scan_distance

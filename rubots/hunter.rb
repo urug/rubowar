@@ -44,7 +44,7 @@ class Hunter
   end
 
   def on_hit(damage:, direction:)
-    shield(8) if energy > 30 && shield_level < 50
+    raise_shields(8) if energy > 30 && shield_level < 50
 
     # If hit while searching, find the attacker
     return unless @mode == :searching
@@ -72,16 +72,13 @@ class Hunter
     pulse(distance: PULSE_RANGE)
     @last_pulse = chronons
 
-    return unless pulse_result&.any?
-
-    rubots = pulse_result.select { |t| t[:type] == :rubot }
-    return if rubots.empty?
+    return unless pulse_echo.any_rubots?
 
     # Pick closest target
-    closest = rubots.min_by { |t| distance_to(target_x: t[:x], target_y: t[:y]) }
+    closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
 
-    if @target.nil? || distance_to(target_x: closest[:x], target_y: closest[:y]) < distance_to(target_x: @target[:x], target_y: @target[:y])
-      @target = closest
+    if @target.nil? || distance_to(target_x: closest.x, target_y: closest.y) < distance_to(target_x: @target[:x], target_y: @target[:y])
+      @target = { x: closest.x, y: closest.y }
       determine_tactics
     end
   end
@@ -95,10 +92,15 @@ class Hunter
     if turret_aligned? && energy > 12
       probe(:position, :velocity, :size, :health)
 
-      if probe_result&.any?
-        @target = @target.merge(probe_result)
-        @target_size = probe_result[:size]
-        @target_health = probe_result[:health]
+      if probe_echo.found?
+        @target = {
+          x: probe_echo.x || @target[:x],
+          y: probe_echo.y || @target[:y],
+          velocity_x: probe_echo.velocity_x,
+          velocity_y: probe_echo.velocity_y
+        }
+        @target_size = probe_echo.size
+        @target_health = probe_echo.health
 
         # Choose tactics based on size
         case @target_size
@@ -130,7 +132,7 @@ class Hunter
     end
 
     rotate_turret(12)
-    shield(4) if energy > 60 && shield_level < 30
+    raise_shields(4) if energy > 60 && shield_level < 30
   end
 
   def hunt_prey
@@ -156,7 +158,7 @@ class Hunter
 
     # Aggressive fire
     aim_and_fire(power: 15)
-    shield(6) if energy > 40 && shield_level < 40
+    raise_shields(6) if energy > 40 && shield_level < 40
   end
 
   def kite_prey
@@ -167,9 +169,9 @@ class Hunter
 
     dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
-    # Maintain kite range
+    # Maintain kite range - use thrust_cost to budget energy for combat
     if dist < KITE_RANGE - 30
-      # Too close - back away
+      # Too close - back away (priority escape, spend more if needed)
       escape_angle = (angle_to(target_x: @target[:x], target_y: @target[:y]) + 180) % 360
       escape_angle = safe_angle(escape_angle)
       thrust(speed: 6, angle: escape_angle) if speed < 12
@@ -179,15 +181,18 @@ class Hunter
       thrust(speed: 4, angle: approach_angle) if speed < 10
     else
       # Good range - strafe to make ourselves harder to hit
+      # Use thrust_cost to ensure we keep enough energy for fire + shields
       strafe_angle = angle_to(target_x: @target[:x], target_y: @target[:y]) + 90
       strafe_angle = safe_angle(strafe_angle)
-      thrust(speed: 3, angle: strafe_angle) if speed < 8
+      move_cost = thrust_cost(thrust_speed: 3, angle: strafe_angle)
+      # Reserve: 12 for fire + 10 for shields + buffer
+      thrust(speed: 3, angle: strafe_angle) if speed < 8 && move_cost <= energy - 30
     end
 
     # Consistent chip damage
     aim_and_fire(power: 12)
     # Higher shields when kiting - we're taking fire
-    shield(10) if energy > 35 && shield_level < 70
+    raise_shields(10) if energy > 35 && shield_level < 70
   end
 
   def finish_prey
@@ -214,7 +219,7 @@ class Hunter
 
     # Maximum aggression
     aim_and_fire(power: 20)
-    shield(5) if energy > 25 && shield_level < 40
+    raise_shields(5) if energy > 25 && shield_level < 40
   end
 
   def check_for_mode_switch
@@ -233,9 +238,14 @@ class Hunter
     # Probe periodically for health updates
     if turret_aligned? && energy > 10 && (chronons % 15 == 0)
       probe(:position, :velocity, :health)
-      if probe_result&.any?
-        @target = @target.merge(probe_result)
-        @target_health = probe_result[:health]
+      if probe_echo.found?
+        @target = {
+          x: probe_echo.x || @target[:x],
+          y: probe_echo.y || @target[:y],
+          velocity_x: probe_echo.velocity_x,
+          velocity_y: probe_echo.velocity_y
+        }
+        @target_health = probe_echo.health
       end
     end
   end
@@ -259,8 +269,10 @@ class Hunter
     # Lead moving targets
     if @target[:velocity_x] && @target[:velocity_y]
       target_angle = lead_angle(
-        @target[:x], @target[:y],
-        @target[:velocity_x], @target[:velocity_y],
+        target_x: @target[:x],
+        target_y: @target[:y],
+        velocity_x: @target[:velocity_x],
+        velocity_y: @target[:velocity_y],
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else
@@ -279,8 +291,10 @@ class Hunter
     return angle_to(target_x: @target[:x], target_y: @target[:y]) unless @target[:velocity_x] && @target[:velocity_y]
 
     lead_angle(
-      @target[:x], @target[:y],
-      @target[:velocity_x], @target[:velocity_y],
+      target_x: @target[:x],
+      target_y: @target[:y],
+      velocity_x: @target[:velocity_x],
+      velocity_y: @target[:velocity_y],
       projectile_speed: 15 # Approximate our closing speed
     )
   end

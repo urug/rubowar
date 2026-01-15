@@ -77,24 +77,24 @@ class Crusher
 
     pulse(distance: 400)
     @last_pulse = chronons
-    return unless pulse_result&.any?
-
-    rubots = pulse_result.select { |t| t[:type] == :rubot }
-    return if rubots.empty?
+    return unless pulse_echo.any_rubots?
 
     # Prioritize: corner-trapped > wall-adjacent > closest
-    @target = rubots.min_by do |t|
-      dist = distance_to(target_x: t[:x], target_y: t[:y])
-      wall_dist = wall_distance_of(t)
+    # Need to convert SenseTarget to hash for @target storage
+    best = pulse_echo.rubots.min_by do |t|
+      dist = distance_to(target_x: t.x, target_y: t.y)
+      target_hash = { x: t.x, y: t.y }
+      wall_dist = wall_distance_of(target_hash)
 
       # Huge priority for corner-trapped targets
-      corner_bonus = in_corner?(t) ? -300 : 0
+      corner_bonus = in_corner?(target_hash) ? -300 : 0
       # High priority for wall-adjacent targets
       wall_bonus = wall_dist < WALL_DANGER ? -150 : 0
 
       dist + corner_bonus + wall_bonus
     end
 
+    @target = { x: best.x, y: best.y } if best
     @mode = :positioning if @target && @mode == :hunting
   end
 
@@ -107,7 +107,7 @@ class Crusher
     end
 
     rotate_turret(15)
-    shield(5) if energy > 60 && shield_level < 30
+    raise_shields(5) if energy > 60 && shield_level < 30
   end
 
   def position_for_ram
@@ -138,7 +138,7 @@ class Crusher
     # Fire while closing
     aim_and_fire
     # Moderate shields - save energy for thrust
-    shield(8) if energy > 50 && shield_level < 60
+    raise_shields(8) if energy > 50 && shield_level < 60
   end
 
   def execute_ram
@@ -167,7 +167,7 @@ class Crusher
     # Fire while ramming
     aim_and_fire
     # Heavy shields for impact
-    shield(12) if energy > 40 && shield_level < 80
+    raise_shields(12) if energy > 40 && shield_level < 80
   end
 
   def crush_pinned_target
@@ -200,7 +200,7 @@ class Crusher
 
     # Fire at pinned target - easy hits
     aim_and_fire(aggressive: true)
-    shield(6) if energy > 35 && shield_level < 50
+    raise_shields(6) if energy > 35 && shield_level < 50
   end
 
   # Calculate angle that pushes target INTO their nearest wall
@@ -283,12 +283,12 @@ class Crusher
 
     if turret_diff < 20 && energy > 10
       probe(:position, :velocity)
-      if probe_result&.any?
+      if probe_echo.found?
         @target = {
-          x: probe_result[:x],
-          y: probe_result[:y],
-          velocity_x: probe_result[:velocity_x],
-          velocity_y: probe_result[:velocity_y]
+          x: probe_echo.x,
+          y: probe_echo.y,
+          velocity_x: probe_echo.velocity_x,
+          velocity_y: probe_echo.velocity_y
         }
       end
     end
@@ -300,8 +300,10 @@ class Crusher
     # Lead moving targets
     if @target[:velocity_x] && @target[:velocity_y]
       target_angle = lead_angle(
-        @target[:x], @target[:y],
-        @target[:velocity_x], @target[:velocity_y],
+        target_x: @target[:x],
+        target_y: @target[:y],
+        velocity_x: @target[:velocity_x],
+        velocity_y: @target[:velocity_y],
         projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
       )
     else

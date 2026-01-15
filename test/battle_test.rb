@@ -47,15 +47,15 @@ class PulseTestBot
 
   size :medium
 
-  attr_reader :pulse_results_per_tick
+  attr_reader :pulse_echos_per_tick
 
   def on_spawn
-    @pulse_results_per_tick = []
+    @pulse_echos_per_tick = []
   end
 
   def act
     # Read previous tick's result, then queue new pulse
-    @pulse_results_per_tick << (pulse_result&.dup || [])
+    @pulse_echos_per_tick << (pulse_echo&.dup || [])
     pulse(distance: 800)
   end
 end
@@ -66,15 +66,15 @@ class ProbeTestBotForBattle
 
   size :medium
 
-  attr_reader :probe_results_per_tick
+  attr_reader :probe_echos_per_tick
 
   def on_spawn
-    @probe_results_per_tick = []
+    @probe_echos_per_tick = []
   end
 
   def act
     # Read previous tick's result, then queue new probe
-    @probe_results_per_tick << probe_result&.dup
+    @probe_echos_per_tick << probe_echo&.dup
     probe(:size)
     # Rotate turret to sweep for targets
     rotate_turret(15)
@@ -87,15 +87,15 @@ class ScanTestBot
 
   size :medium
 
-  attr_reader :scan_results_per_tick
+  attr_reader :scan_echos_per_tick
 
   def on_spawn
-    @scan_results_per_tick = []
+    @scan_echos_per_tick = []
   end
 
   def act
     # Read previous tick's result, then queue new scan
-    @scan_results_per_tick << (scan_result&.dup || [])
+    @scan_echos_per_tick << (scan_echo&.dup || [])
     scan(angle: 360, distance: 500)
   end
 end
@@ -105,6 +105,54 @@ class StationaryBot
   include Rubowar::Rubot
 
   size :medium
+  def act; end
+end
+
+# Bot that times out (infinite loop in act)
+class TimeoutBot
+  include Rubowar::Rubot
+
+  size :medium
+
+  attr_reader :ticks_executed
+
+  def on_spawn
+    @ticks_executed = 0
+  end
+
+  def act
+    @ticks_executed += 1
+    sleep 1 # Exceeds CHRONON_TIMEOUT (0.1s)
+  end
+end
+
+# Bot that raises a StandardError (not Timeout)
+class ErrorBot
+  include Rubowar::Rubot
+
+  size :medium
+
+  def act
+    raise StandardError, "Intentional test error"
+  end
+end
+
+# Bot that tracks on_death calls
+class DeathTrackingBot
+  include Rubowar::Rubot
+
+  size :medium
+
+  attr_reader :death_count
+
+  def on_spawn
+    @death_count = 0
+  end
+
+  def on_death
+    @death_count += 1
+  end
+
   def act; end
 end
 
@@ -128,15 +176,15 @@ class DetectTestBot
 
   size :medium
 
-  attr_reader :detect_results_per_tick
+  attr_reader :detect_intels_per_tick
 
   def on_spawn
-    @detect_results_per_tick = []
+    @detect_intels_per_tick = []
   end
 
   def act
     # Record detect result from current tick's sense phase
-    @detect_results_per_tick << detect_result&.dup
+    @detect_intels_per_tick << detect_intel&.dup
     detect
   end
 end
@@ -213,6 +261,10 @@ describe Rubowar::Battle do
 
     it "raises error with zero chronon limit" do
       _ { Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 0) }.must_raise Rubowar::InvalidChrononLimitError
+    end
+
+    it "raises error with infinite chronon limit" do
+      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: Float::INFINITY) }.must_raise Rubowar::InvalidChrononLimitError
     end
   end
 
@@ -370,6 +422,21 @@ describe Rubowar::Battle do
 
       _(battle.winner).must_equal battle.arena.actors[0]
     end
+
+    it "returns first actor when damage dealt and HP percentage are identical" do
+      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle.run
+
+      # Both actors have identical damage dealt and HP percentage
+      battle.arena.actors[0].damage_dealt = 50
+      battle.arena.actors[0].health = 80  # 80% of 100 max
+      battle.arena.actors[1].damage_dealt = 50
+      battle.arena.actors[1].health = 80  # 80% of 100 max
+      battle.send(:determine_winner)
+
+      # max_by returns first match when values are equal
+      _(battle.winner).must_equal battle.arena.actors[0]
+    end
   end
 
   describe "sensing results persistence" do
@@ -378,10 +445,10 @@ describe Rubowar::Battle do
       battle.run
 
       pulser = battle.arena.actors.find { |r| r.instance.is_a?(PulseTestBot) }
-      results = pulser.instance.pulse_results_per_tick
+      results = pulser.instance.pulse_echos_per_tick
 
-      # Tick 1: no previous pulse, returns []
-      _(results[0]).must_equal []
+      # Tick 1: no previous pulse, returns empty PulseEcho
+      _(results[0]).must_be :empty?
 
       # Tick 2+: should have results from previous tick's pulse (if target in range)
       # At least one tick after the first should have found the target
@@ -405,13 +472,13 @@ describe Rubowar::Battle do
 
       battle.run
 
-      results = prober_actor.instance.probe_results_per_tick
+      results = prober_actor.instance.probe_echos_per_tick
 
-      # Tick 1: no previous probe, returns nil
-      _(results[0]).must_be_nil
+      # Tick 1: no previous probe, returns empty ProbeEcho
+      _(results[0]).must_be :empty?
 
       # After turret rotates past 0 degrees (east), should find target in subsequent ticks
-      found_target = results[1..].any? { |r| r&.key?(:size) }
+      found_target = results[1..].any? { |r| r.found? }
       _(found_target).must_equal true
     end
 
@@ -420,10 +487,10 @@ describe Rubowar::Battle do
       battle.run
 
       scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
-      results = scanner.instance.scan_results_per_tick
+      results = scanner.instance.scan_echos_per_tick
 
-      # Tick 1: no previous scan, returns []
-      _(results[0]).must_equal []
+      # Tick 1: no previous scan, returns empty ScanEcho
+      _(results[0]).must_be :empty?
 
       # Tick 2+: should have results from previous tick (360 degree scan finds everything)
       _(results[1]).wont_be_empty
@@ -437,7 +504,7 @@ describe Rubowar::Battle do
       battle.run
 
       scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
-      results = scanner.instance.scan_results_per_tick
+      results = scanner.instance.scan_echos_per_tick
 
       # Count how many ticks found the target (should be all ticks after the first)
       ticks_with_target = results[1..].count { |r| r.any? { |t| t[:type] == :rubot } }
@@ -518,7 +585,7 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Pulse from tick 1 should detect target at its pre-movement position
-      results = pulser.instance.pulse_results_per_tick
+      results = pulser.instance.pulse_echos_per_tick
       _(results[1]).wont_be_empty
     end
 
@@ -547,7 +614,129 @@ describe Rubowar::Battle do
       # With 15 energy: pulse takes 4, leaving 11 for fire - should succeed
       # But if fire went first: fire takes 10, leaving 5 for pulse
       # The pulse result being set proves pulse executed
-      _(bot.instance.pulse_result).wont_be_nil
+      _(bot.instance.pulse_echo).wont_be_nil
+    end
+  end
+
+  describe "error handling" do
+    it "applies timeout damage when act exceeds time limit" do
+      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 2)
+
+      timeout_bot = battle.arena.actors.find { |r| r.instance.is_a?(TimeoutBot) }
+      initial_health = timeout_bot.health
+
+      battle.run
+
+      # Bot should have taken TIMEOUT_DAMAGE (50) each chronon
+      expected_health = initial_health - (Rubowar::Config::Battle::TIMEOUT_DAMAGE * 2)
+      _(timeout_bot.health).must_equal expected_health
+    end
+
+    it "continues battle after timeout" do
+      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 3)
+
+      events = battle.run
+
+      # Battle continues until bot dies (100 HP / 50 damage per timeout = 2 chronons)
+      # or chronon limit reached - whichever comes first
+      _(battle.chronons).must_be :>=, 2
+      chronon_events = events.select { |e| e[:type] == :chronon }
+      _(chronon_events.length).must_be :>=, 2
+    end
+
+    it "emits error event on timeout" do
+      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 1)
+
+      events = battle.run
+
+      error_events = events.select { |e| e[:type] == :error }
+      _(error_events).wont_be_empty
+      _(error_events.first[:error]).must_include "timeout"
+    end
+
+    it "applies error damage when act raises StandardError" do
+      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 2)
+
+      error_bot = battle.arena.actors.find { |r| r.instance.is_a?(ErrorBot) }
+      initial_health = error_bot.health
+
+      battle.run
+
+      # Bot should have taken ERROR_DAMAGE (20) each chronon, not TIMEOUT_DAMAGE (50)
+      expected_health = initial_health - (Rubowar::Config::Battle::ERROR_DAMAGE * 2)
+      _(error_bot.health).must_equal expected_health
+    end
+
+    it "emits error event with exception on StandardError" do
+      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 1)
+
+      events = battle.run
+
+      error_events = events.select { |e| e[:type] == :error }
+      _(error_events).wont_be_empty
+      _(error_events.first[:error]).must_be_instance_of StandardError
+      _(error_events.first[:error].message).must_equal "Intentional test error"
+    end
+
+    it "continues battle after StandardError" do
+      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 3)
+
+      events = battle.run
+
+      # Battle should continue despite errors
+      _(battle.chronons).must_equal 3
+      chronon_events = events.select { |e| e[:type] == :chronon }
+      _(chronon_events.length).must_equal 3
+    end
+  end
+
+  describe "death callback" do
+    it "calls on_death exactly once when rubot dies" do
+      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+
+      death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
+
+      # Call on_spawn first to initialize the bot (sets @death_count = 0)
+      battle.send(:call_on_spawn)
+
+      # Now kill the bot after initialization
+      death_bot.health = 0
+
+      # Run remaining chronons
+      5.times { battle.send(:run_chronon) }
+
+      # on_death should be called exactly once, not every chronon
+      _(death_bot.instance.death_count).must_equal 1
+    end
+
+    it "does not call on_death for alive rubots" do
+      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 3)
+
+      death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
+
+      battle.run
+
+      # Bot never died, so on_death should never be called
+      _(death_bot.instance.death_count).must_equal 0
+    end
+
+    it "emits death event exactly once" do
+      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+
+      death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
+
+      # Call on_spawn first then kill the bot
+      battle.send(:call_on_spawn)
+      death_bot.health = 0
+
+      # Run chronons manually
+      5.times do
+        battle.instance_variable_set(:@chronons, battle.chronons + 1)
+        battle.send(:run_chronon)
+      end
+
+      death_events = battle.events.select { |e| e[:type] == :death && e[:actor] == death_bot }
+      _(death_events.length).must_equal 1
     end
   end
 
@@ -567,8 +756,8 @@ describe Rubowar::Battle do
       battle.send(:call_on_spawn)
       battle.send(:run_chronon)
 
-      # After first tick, detect_result should show zero counts
-      result = detector.instance.detect_result
+      # After first tick, detect_intel should show zero counts
+      result = detector.instance.detect_intel
       _(result).wont_be_nil
       _(result[:probed]).must_equal 0
       _(result[:scanned]).must_equal 0
@@ -593,7 +782,7 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Detector should report being probed
-      result = detector.instance.detect_result
+      result = detector.instance.detect_intel
       _(result[:probed]).must_equal 1
       _(result[:scanned]).must_equal 0
       _(result[:pulsed]).must_equal 0
@@ -616,7 +805,7 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Detector should report being scanned
-      result = detector.instance.detect_result
+      result = detector.instance.detect_intel
       _(result[:probed]).must_equal 0
       _(result[:scanned]).must_equal 1
       _(result[:pulsed]).must_equal 0
@@ -639,7 +828,7 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Detector should report being pulsed
-      result = detector.instance.detect_result
+      result = detector.instance.detect_intel
       _(result[:probed]).must_equal 0
       _(result[:scanned]).must_equal 0
       _(result[:pulsed]).must_equal 1
@@ -666,7 +855,7 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Detector should report being pulsed twice
-      result = detector.instance.detect_result
+      result = detector.instance.detect_intel
       _(result[:pulsed]).must_equal 2
     end
 
@@ -687,14 +876,14 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # First tick: pulsed
-      _(detector.instance.detect_result[:pulsed]).must_equal 1
+      _(detector.instance.detect_intel[:pulsed]).must_equal 1
 
       # Stop pulsing
       sensor.instance.do_pulse = false
       battle.send(:run_chronon)
 
       # Second tick: not pulsed (counts reset)
-      _(detector.instance.detect_result[:pulsed]).must_equal 0
+      _(detector.instance.detect_intel[:pulsed]).must_equal 0
     end
 
     it "costs 2 energy" do
@@ -720,8 +909,8 @@ describe Rubowar::Battle do
       battle.send(:call_on_spawn)
       battle.send(:run_chronon)
 
-      # detect_result should be nil (action failed)
-      _(detector.instance.detect_result).must_be_nil
+      # detect_intel should be empty (action failed, returns default empty DetectIntel)
+      _(detector.instance.detect_intel).must_be :empty?
     end
   end
 end

@@ -11,10 +11,11 @@ class Tracker
 
   def act
     # Try sensors in order: probe (precise) → scan (arc) → pulse (360°)
+    # NOTE: Sensing has 1-chronon latency - these results are from the PREVIOUS chronon
     self.target =
-      acquire_target_from_probe(probe_result) ||
-      acquire_target_from_scan(scan_result) ||
-      acquire_target_from_pulse(pulse_result)
+      acquire_target_from_probe(probe_echo) ||
+      acquire_target_from_scan(scan_echo) ||
+      acquire_target_from_pulse(pulse_echo)
 
     if target
       rotate_turret(aim_at_target(target))
@@ -22,7 +23,7 @@ class Tracker
       probe(:position, :velocity)
       @tracked_target = target
     elsif @tracked_target
-      @tracked_target = nil unless scan_result&.any? { |r| r[:type] == :rubot }
+      @tracked_target = nil unless scan_echo.any_rubots?
       # Lost target - scan forward arc where we last saw them
       scan(angle: 120, distance: arena_diagonal * 0.5, velocity: true)
     else
@@ -30,6 +31,6 @@ class Tracker
       pulse(distance: arena_diagonal * 0.6)
     end
 
-    shield(5) if energy > 50 && shield_level < 40
+    raise_shields(5) if energy > 50 && shield_level < 40
   end
 end

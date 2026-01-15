@@ -18,7 +18,7 @@ module Rubowar
     def initialize(x:, y:, angle:, damage:, owner:)
       @x = x.to_f
       @y = y.to_f
-      @damage = damage.to_f
+      @damage = damage
       @owner = owner
       @radius = Config::Combat::BULLET_RADIUS
 

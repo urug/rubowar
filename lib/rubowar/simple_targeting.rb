@@ -13,7 +13,7 @@
 # [design]
 # style = "Functional - methods take data, return results, no hidden side effects"
 # example = """
-#   self.target = acquire_target_from_probe(probe_result) || acquire_target_from_pulse(pulse_result)
+#   self.target = acquire_target_from_probe(probe_echo) || acquire_target_from_pulse(pulse_echo)
 #
 #   if target
 #     rotate_turret(aim_at_target(target))
@@ -35,7 +35,7 @@ module Rubowar
     # === Target Acquisition (pure functions) ===
 
     # Extract target from probe result
-    # @param result [Hash, nil] probe_result hash with position/velocity
+    # @param result [Hash, nil] probe_echo hash with position/velocity
     # @return [Hash, nil] normalized target or nil
     def acquire_target_from_probe(result)
       return nil unless result&.any?
@@ -44,7 +44,7 @@ module Rubowar
     end
 
     # Extract closest rubot from scan results
-    # @param result [Array, nil] scan_result array
+    # @param result [Array, nil] scan_echo array
     # @return [Hash, nil] closest rubot target or nil
     def acquire_target_from_scan(result)
       return nil unless result
@@ -53,7 +53,7 @@ module Rubowar
     end
 
     # Extract closest rubot from pulse results
-    # @param result [Array, nil] pulse_result array
+    # @param result [Array, nil] pulse_echo array
     # @return [Hash, nil] closest rubot target or nil
     def acquire_target_from_pulse(result)
       return nil unless result
@@ -97,10 +97,10 @@ module Rubowar
       return nil unless target
 
       lead_angle(
-        target[:x],
-        target[:y],
-        target[:velocity_x],
-        target[:velocity_y],
+        target_x: target[:x],
+        target_y: target[:y],
+        velocity_x: target[:velocity_x],
+        velocity_y: target[:velocity_y],
         projectile_speed: targeting_config(:bullet_speed)
       )
     end
@@ -112,10 +112,10 @@ module Rubowar
       return nil unless target
 
       lead_position(
-        target[:x],
-        target[:y],
-        target[:velocity_x],
-        target[:velocity_y],
+        target_x: target[:x],
+        target_y: target[:y],
+        velocity_x: target[:velocity_x],
+        velocity_y: target[:velocity_y],
         projectile_speed: targeting_config(:bullet_speed),
         max_lead_chronons: targeting_config(:max_lead_chronons)
       )
@@ -150,6 +150,14 @@ module Rubowar
 
     # === Configuration ===
 
+    TARGETING_DEFAULTS = {
+      bullet_speed: Config::Targeting::BULLET_SPEED,
+      max_lead_chronons: Config::Targeting::MAX_LEAD_CHRONONS,
+      alignment_tolerance: Config::Targeting::ALIGNMENT_TOLERANCE,
+      max_turret_turn: Config::Targeting::MAX_TURRET_TURN,
+      target_timeout: Config::Targeting::TARGET_TIMEOUT
+    }.freeze
+
     # Get targeting config value (can be overridden per-class)
     # @param key [Symbol] config key
     # @return [Numeric]
@@ -157,13 +165,7 @@ module Rubowar
       if defined?(self.class::TARGETING_CONFIG) && self.class::TARGETING_CONFIG[key]
         self.class::TARGETING_CONFIG[key]
       else
-        case key
-        when :bullet_speed then Config::Targeting::BULLET_SPEED
-        when :max_lead_chronons then Config::Targeting::MAX_LEAD_CHRONONS
-        when :alignment_tolerance then Config::Targeting::ALIGNMENT_TOLERANCE
-        when :max_turret_turn then Config::Targeting::MAX_TURRET_TURN
-        when :target_timeout then Config::Targeting::TARGET_TIMEOUT
-        end
+        TARGETING_DEFAULTS[key]
       end
     end
 

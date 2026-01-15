@@ -19,9 +19,9 @@
 - [x] State accessors: `chronons`, `damage_dealt`, `damage_taken`
 - [x] State accessors: `energons`, `size`
 - [x] Action method: `thrust(speed:, angle:)` - world coordinates, mass-based cost
-- [x] Action method: `turret(degrees)`
+- [x] Action method: `rotate_turret(degrees)`
 - [x] Action method: `fire(energy)`
-- [x] Action method: `shield(energy)`
+- [x] Action method: `raise_shields(energy)`
 - [x] Action method: `probe(*attributes)` - attribute-based costs
 - [x] Action queuing system
 
@@ -191,30 +191,31 @@
 ### Sizes
 | Size | Radius | HP | Regen | Mass |
 |------|--------|-----|-------|------|
-| Small | 15 | 80 | 8 | 0.56 |
+| Small | 16 | 80 | 8 | 0.64 |
 | Medium | 20 | 100 | 10 | 1.0 |
-| Large | 25 | 120 | 12 | 1.56 |
+| Large | 24 | 120 | 12 | 1.44 |
 
 ### Combat
 - `FIRE_DAMAGE_MULTIPLIER = 1.5`
 - `MAX_SHIELD = max_health` (80/100/120 by size)
 - `SHIELD_DECAY_RATE = 0.12` (12% per chronon)
+- `TURRET_TURN_DIVISOR = 24.0`
 
 ### Movement
-- `MAX_SPEED = 30`
 - `THRUST_MULTIPLIER = 1.5`
-- `DEFAULT_FRICTION = 0.95`
+- `DEFAULT_FRICTION = 0.92`
+- No MAX_SPEED cap (friction and collisions naturally limit velocity)
 
 ### Collisions
 - `COLLISION_BASE_DAMAGE = 2`
-- `COLLISION_VELOCITY_MULTIPLIER = 0.5` (rubot)
-- `WALL_VELOCITY_MULTIPLIER = 0.75` (wall damage)
-- `WALL_BOUNCE_COEFFICIENT = 0.12` (velocity retention = mass x 0.12)
+- `COLLISION_VELOCITY_MULTIPLIER = 0.5` (rubot-rubot)
+- `COLLISION_ELASTICITY = 0.5` (bot-bot bounce)
+- `WALL_ELASTICITY = 0.2` (wall bounce - sticky walls)
+- `WALL_MASS = 24.0`
 
 ### Sensing
-- `TURRET_TURN_DIVISOR = 30.0`
-- `PROBE_BASE_COST = 1`
-- `PROBE_COSTS = { size: 1, position: 4, velocity: 3, turret_angle: 2, shield: 2, health: 3, energy: 3 }`
+- `PROBE_BASE_COST = 0`
+- `PROBE_ATTRIBUTE_COSTS = { size: 1, position: 4, velocity: 3, turret_angle: 2, shield: 2, health: 3, energy: 3 }`
 - `SCAN_BASE_COST = 3`
 - `SCAN_ANGLE_DIVISOR = 20.0`
 - `SCAN_DISTANCE_DIVISOR = 100.0`
@@ -226,15 +227,15 @@
 - `DETECT_COST = 2`
 
 ### Energons
-- `ENERGON_SPAWN_INTERVAL = 80`
+- `ENERGON_SPAWN_INTERVAL = 50`
 - `ENERGON_WALL_BUFFER_RATIO = 0.15`
 - `ENERGON_INITIAL_VALUE = 1`
 - `ENERGON_GROWTH_RATE = 1.0`
 - `ENERGON_RADIUS = 8`
 
 ### Bullets
-- `SPEED = 18`
-- `RADIUS = 3`
+- `BULLET_SPEED = 18`
+- `BULLET_RADIUS = 3`
 
 ---
 

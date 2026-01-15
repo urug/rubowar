@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # [file]
-# purpose = "Immutable snapshot of arena state passed to rubots each chronons"
+# purpose = "Immutable snapshot of arena state passed to rubots each chronon"
 # responsibility = "Read-only view of arena dimensions, energons, and game state"
 # pattern = "Value Object (Data.define)"
 #
@@ -26,7 +26,13 @@ module Rubowar
       energon_spawn_interval: Config::Arena::ENERGON_SPAWN_INTERVAL,
       energon_growth_rate: Config::Energon::GROWTH_RATE
     )
-      super
+      # Ensure energons array and its contents are frozen for immutability
+      frozen_energons = energons.map { |e| e.frozen? ? e : e.dup.freeze }.freeze
+      super(
+        arena_width:, arena_height:, friction:, chronons:,
+        energons: frozen_energons, live_rubot_count:,
+        energon_spawn_interval:, energon_growth_rate:
+      )
     end
   end
 end

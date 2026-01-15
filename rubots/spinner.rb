@@ -14,6 +14,6 @@ class Spinner
     rotate_turret(7)
 
     # COMBAT: Fire if previous probe detected a target
-    fire(10) if probe_result&.any? && energy > 20
+    fire(10) if probe_echo.found? && energy > 20
   end
 end

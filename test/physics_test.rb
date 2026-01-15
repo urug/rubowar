@@ -265,6 +265,38 @@ describe Rubowar::Physics do
       total_separation = (result[:a_x] - result[:b_x]).abs
       _(total_separation).must_be_close_to 8, 0.001
     end
+
+    it "handles zero distance using velocity to determine separation" do
+      result = Rubowar::Physics.collision_separation(
+        a_x: 100, a_y: 100,
+        b_x: 100, b_y: 100,
+        distance: 0,
+        overlap: 40,
+        a_vx: 5, a_vy: 0,
+        b_vx: -5, b_vy: 0
+      )
+
+      # Should separate along relative velocity direction (x-axis)
+      _(result[:a_x]).must_be :>, 0
+      _(result[:b_x]).must_be :<, 0
+      _(result[:a_y]).must_be_close_to 0, 0.001
+      _(result[:b_y]).must_be_close_to 0, 0.001
+    end
+
+    it "handles zero distance with both stationary using arbitrary direction" do
+      result = Rubowar::Physics.collision_separation(
+        a_x: 100, a_y: 100,
+        b_x: 100, b_y: 100,
+        distance: 0,
+        overlap: 40,
+        a_vx: 0, a_vy: 0,
+        b_vx: 0, b_vy: 0
+      )
+
+      # Should separate along arbitrary axis (x-axis by default)
+      total_separation = (result[:a_x] - result[:b_x]).abs + (result[:a_y] - result[:b_y]).abs
+      _(total_separation).must_be_close_to 40, 0.001
+    end
   end
 
   describe ".thrust_direction_multiplier" do

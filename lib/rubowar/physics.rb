@@ -2,13 +2,19 @@
 
 # [file]
 # purpose = "Pure physics calculations for the Rubowar battle arena"
-# responsibility = "Collision damage, bounce velocities, mass calculations"
+# responsibility = "Collision damage, bounce velocities, mass calculations, separation directions"
 # pattern = "Module Functions (stateless calculations)"
 #
 # [module.Physics]
 # purpose = "Provides pure physics calculations as module functions"
 # usage = "Physics.mass_factor(radius), Physics.collision_damage(...), etc."
 # note = "All methods are stateless and take primitive values as input"
+#
+# [key_methods]
+# collision = ["collision_damage", "collision_bounce", "collision_separation", "separation_direction"]
+# walls = ["wall_damage", "wall_bounce"]
+# thrust = ["thrust_direction_multiplier", "thrust_cost", "thrust_speed_from_energy", "thrust_velocity"]
+# utilities = ["mass_factor", "distance"]
 
 module Rubowar
   module Physics
@@ -23,6 +29,12 @@ module Rubowar
     # Euclidean distance between two points
     def distance(x1:, y1:, x2:, y2:)
       Math.sqrt(((x1 - x2)**2) + ((y1 - y2)**2))
+    end
+
+    # Normalize angle to -180..180 range (180 is preferred over -180)
+    def normalize_angle(angle)
+      result = ((angle + 180) % 360) - 180
+      result == -180 ? 180 : result
     end
 
     # Calculate damage from collision based on relative velocity
@@ -88,9 +100,13 @@ module Rubowar
 
     # Calculate position separation for overlapping bots
     # Returns { a_x:, a_y:, b_x:, b_y: } - deltas to add to positions
-    def collision_separation(a_x:, a_y:, b_x:, b_y:, distance:, overlap:)
-      dx = (a_x - b_x) / distance
-      dy = (a_y - b_y) / distance
+    # When distance is zero, uses velocity vectors to determine separation direction
+    def collision_separation(a_x:, a_y:, b_x:, b_y:, distance:, overlap:,
+                             a_vx: 0.0, a_vy: 0.0, b_vx: 0.0, b_vy: 0.0)
+      dx, dy = separation_direction(
+        a_x:, a_y:, b_x:, b_y:, distance:,
+        a_vx:, a_vy:, b_vx:, b_vy:
+      )
 
       {
         a_x: dx * overlap / 2,
@@ -100,14 +116,37 @@ module Rubowar
       }
     end
 
+    # Determine separation direction unit vector
+    # Falls back to velocity-based or arbitrary direction if positions coincide
+    def separation_direction(a_x:, a_y:, b_x:, b_y:, distance:, a_vx:, a_vy:, b_vx:, b_vy:)
+      # Normal case: use position difference
+      if distance > Config::Sensing::MIN_MEASURABLE_DISTANCE
+        return [(a_x - b_x) / distance, (a_y - b_y) / distance]
+      end
+
+      # Zero distance: try using relative velocity to separate
+      rel_vx = a_vx - b_vx
+      rel_vy = a_vy - b_vy
+      rel_speed = Math.sqrt((rel_vx**2) + (rel_vy**2))
+
+      if rel_speed > Config::Sensing::MIN_MEASURABLE_DISTANCE
+        return [rel_vx / rel_speed, rel_vy / rel_speed]
+      end
+
+      # Edge case: both stationary at exact same position (extremely rare - requires
+      # pixel-perfect spawn overlap). Use deterministic X-axis separation to ensure
+      # consistent behavior. This is acceptable since spawn positioning prevents this
+      # in practice, and collision separation will push them apart after one chronon.
+      [1.0, 0.0]
+    end
+
     # Calculate thrust energy cost multiplier based on direction change
     # Thrusting against current momentum costs more
     def thrust_direction_multiplier(vx:, vy:, thrust_angle:, speed:)
       return 1.0 if speed < Config::Physics::STATIONARY_SPEED_THRESHOLD
 
       current_angle = Math.atan2(vy, vx) * 180 / Math::PI
-      angle_diff = (thrust_angle - current_angle).abs % 360
-      angle_diff = 360 - angle_diff if angle_diff > 180
+      angle_diff = normalize_angle(thrust_angle - current_angle).abs
 
       # 0° diff = 1.0x, 90° diff = 1.5x, 180° diff = 2.0x
       1.0 + (angle_diff / 180.0)

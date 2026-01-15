@@ -73,7 +73,7 @@ end
 
 # Good - related properties of one result
 it "creates a bullet with correct properties" do
-  bullet = Rubowar::Bullet.new(x: 100, y: 200, angle: 45, damage: 15, owner: runner)
+  bullet = Rubowar::Bullet.new(x: 100, y: 200, angle: 45, damage: 15, owner: actor)
   _(bullet.x).must_equal 100
   _(bullet.y).must_equal 200
   _(bullet.damage).must_equal 15
@@ -104,7 +104,7 @@ Actions are organized into three phases: `sense`, `move`, and `combat`. Each pha
 |--------|-------|-------------|
 | `probe`, `scan`, `pulse`, `detect` | `:sense` | Sensing actions |
 | `thrust`, `rotate_turret` | `:move` | Movement actions |
-| `fire`, `shield` | `:combat` | Combat actions |
+| `fire`, `raise_shields` | `:combat` | Combat actions |
 
 ### Testing Action Queueing
 
@@ -141,7 +141,7 @@ it "processes sensing before movement" do
   battle.run
 
   # Verify sensing happened at pre-movement positions
-  sensor = battle.arena.runners.find { |r| r.instance.is_a?(SensingBot) }
+  sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
   _(sensor.instance.sensed_positions).wont_be_empty
 end
 ```
@@ -154,9 +154,9 @@ Each phase should be testable in isolation via Arena's `process_action`:
 it "processes rotate_turret action" do
   arena = build_arena
   actor = build_actor(turret_angle: 0)
-  arena.runners = [actor]
+  arena.actors = [actor]
 
-  result = arena.process_action(runner: actor, action: { type: :rotate_turret, degrees: 45 })
+  result = arena.process_action(actor: actor, action: { type: :rotate_turret, degrees: 45 })
 
   _(result).must_equal true
   _(actor.turret_angle).must_equal 45.0

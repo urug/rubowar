@@ -134,8 +134,9 @@ describe Rubowar::Arena do
 
       arena.spawn_rubots([ProbeTestBot])
 
-      _(arena.actors[0].turret_angle).must_be :>=, 0
-      _(arena.actors[0].turret_angle).must_be :<, 360
+      # Turret angles are normalized to -180..180 range
+      _(arena.actors[0].turret_angle).must_be :>=, -180
+      _(arena.actors[0].turret_angle).must_be :<=, 180
     end
   end
 
@@ -303,6 +304,36 @@ describe Rubowar::Arena do
       _(result).must_equal false
       _(arena.bullets).must_be_empty
     end
+
+    it "rejects NaN energy" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100, turret_angle: 0)
+      arena.actors = [actor]
+
+      assert_raises(Rubowar::InvalidActionError) do
+        arena.process_fire(actor:, energy: Float::NAN)
+      end
+    end
+
+    it "rejects Infinity energy" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100, turret_angle: 0)
+      arena.actors = [actor]
+
+      assert_raises(Rubowar::InvalidActionError) do
+        arena.process_fire(actor:, energy: Float::INFINITY)
+      end
+    end
+
+    it "rejects non-positive energy" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100, turret_angle: 0)
+      arena.actors = [actor]
+
+      assert_raises(Rubowar::InvalidActionError) do
+        arena.process_fire(actor:, energy: 0)
+      end
+    end
   end
 
   describe "#check_bullet_hit" do
@@ -377,46 +408,83 @@ describe Rubowar::Arena do
 
       _(result).must_equal false
     end
+
+    it "returns false when bullet at exact collision boundary" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100)
+      shooter = build_actor(x: 300, y: 300)
+      # Position bullet exactly at collision boundary: distance = bullet.radius + actor.radius
+      # Medium actor radius = 20, bullet radius = 3, so boundary = 23
+      # Place bullet 23 units to the right of actor center
+      bullet = Rubowar::Bullet.new(x: 100 + 23, y: 100, angle: 180, damage: 15, owner: shooter)
+      arena.actors = [actor, shooter]
+
+      # Distance is exactly 23 which equals bullet.radius (3) + actor.radius (20)
+      # This should NOT be a hit since check uses distance < sum of radii (strict less than)
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal false
+    end
+
+    it "returns true when bullet just inside collision boundary" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100)
+      shooter = build_actor(x: 300, y: 300)
+      # Position bullet just inside collision boundary (22.9 < 23)
+      bullet = Rubowar::Bullet.new(x: 100 + 22.9, y: 100, angle: 180, damage: 15, owner: shooter)
+      arena.actors = [actor, shooter]
+
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal true
+    end
+
+    it "returns false when bullet just outside collision boundary" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100)
+      shooter = build_actor(x: 300, y: 300)
+      # Position bullet just outside collision boundary (23.1 > 23)
+      bullet = Rubowar::Bullet.new(x: 100 + 23.1, y: 100, angle: 180, damage: 15, owner: shooter)
+      arena.actors = [actor, shooter]
+
+      result = arena.check_bullet_hit(bullet)
+
+      _(result).must_equal false
+    end
   end
 
-  describe "#check_rubot_collisions" do
+  describe "CollisionSystem.process_rubot_collisions" do
     it "separates overlapping actors" do
-      arena = build_arena
       actor_a = build_actor(x: 100, y: 100)
       actor_b = build_actor(x: 110, y: 100) # Overlapping (distance < sum of radii)
-      arena.actors = [actor_a, actor_b]
 
-      arena.check_rubot_collisions
+      Rubowar::CollisionSystem.process_rubot_collisions([actor_a, actor_b])
 
       distance = Math.sqrt(((actor_a.x - actor_b.x)**2) + ((actor_a.y - actor_b.y)**2))
       _(distance).must_be :>=, actor_a.radius + actor_b.radius - 1
     end
 
     it "applies collision damage" do
-      arena = build_arena
       actor_a = build_actor(x: 100, y: 100)
       actor_b = build_actor(x: 110, y: 100)
       actor_a.velocity_x = 5.0
       actor_b.velocity_x = -5.0
       initial_health_a = actor_a.health
       initial_health_b = actor_b.health
-      arena.actors = [actor_a, actor_b]
 
-      arena.check_rubot_collisions
+      Rubowar::CollisionSystem.process_rubot_collisions([actor_a, actor_b])
 
       _(actor_a.health).must_be :<, initial_health_a
       _(actor_b.health).must_be :<, initial_health_b
     end
 
     it "ignores dead actors" do
-      arena = build_arena
       actor_a = build_actor(x: 100, y: 100)
       actor_b = build_actor(x: 110, y: 100)
       actor_a.health = 0
       initial_health_b = actor_b.health
-      arena.actors = [actor_a, actor_b]
 
-      arena.check_rubot_collisions
+      Rubowar::CollisionSystem.process_rubot_collisions([actor_a, actor_b])
 
       _(actor_b.health).must_equal initial_health_b
     end
@@ -499,7 +567,7 @@ describe Rubowar::Arena do
     end
   end
 
-  describe "#check_wall_collision" do
+  describe "CollisionSystem.process_wall_collision" do
     it "bounces more for small bots and less for large bots" do
       arena = build_arena
       small = build_actor(x: 10, y: 100, klass: SmallProbeTestBot)
@@ -509,9 +577,12 @@ describe Rubowar::Arena do
         actor.velocity_x = -10.0
         actor.velocity_y = 0.0
       end
-      arena.actors = [small, medium, large]
 
-      [small, medium, large].each { |r| arena.check_wall_collision(r) }
+      [small, medium, large].each do |actor|
+        Rubowar::CollisionSystem.process_wall_collision(
+          actor:, arena_width: arena.width, arena_height: arena.height
+        )
+      end
 
       # Wall mass = 24, wall restitution = 0.2 (sticky walls)
       # Small (0.64): bounces at ~1.69
@@ -530,9 +601,10 @@ describe Rubowar::Arena do
       actor = build_actor(x: 10, y: 100)
       actor.velocity_x = -10.0
       actor.velocity_y = 0.0
-      arena.actors = [actor]
 
-      arena.check_wall_collision(actor)
+      Rubowar::CollisionSystem.process_wall_collision(
+        actor:, arena_width: arena.width, arena_height: arena.height
+      )
 
       _(actor.velocity_x).must_be :>, 0 # Reversed from negative to positive
     end
@@ -542,9 +614,10 @@ describe Rubowar::Arena do
       actor = build_actor(x: 10, y: 100)
       actor.velocity_x = -10.0
       actor.velocity_y = 5.0
-      arena.actors = [actor]
 
-      arena.check_wall_collision(actor)
+      Rubowar::CollisionSystem.process_wall_collision(
+        actor:, arena_width: arena.width, arena_height: arena.height
+      )
 
       _(actor.velocity_x).must_be :>, 0 # Bounced
       _(actor.velocity_y).must_equal 5.0 # Unchanged
@@ -555,9 +628,10 @@ describe Rubowar::Arena do
       actor = build_actor(x: 10, y: 10)
       actor.velocity_x = -10.0
       actor.velocity_y = -10.0
-      arena.actors = [actor]
 
-      arena.check_wall_collision(actor)
+      Rubowar::CollisionSystem.process_wall_collision(
+        actor:, arena_width: arena.width, arena_height: arena.height
+      )
 
       _(actor.velocity_x).must_be :>, 0 # Bounced
       _(actor.velocity_y).must_be :>, 0 # Bounced
@@ -826,7 +900,7 @@ describe Rubowar::Arena do
     end
   end
 
-  describe "#build_probe_result" do
+  describe "#build_probe_echo" do
     it "returns empty hash with no attributes" do
       arena = build_arena
       target = build_actor(x: 200, y: 150)
@@ -835,7 +909,7 @@ describe Rubowar::Arena do
       target.health = 80
       target.energy = 60
 
-      result = arena.build_probe_result(target:, attributes: [])
+      result = arena.build_probe_echo(target:, attributes: [])
 
       _(result.key?(:x)).must_equal false
       _(result.key?(:y)).must_equal false
@@ -850,7 +924,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_actor(x: 200, y: 150)
 
-      result = arena.build_probe_result(target:, attributes: [:position])
+      result = arena.build_probe_echo(target:, attributes: [:position])
 
       _(result[:x]).must_equal 200
       _(result[:y]).must_equal 150
@@ -861,7 +935,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_actor(x: 200, y: 150)
 
-      result = arena.build_probe_result(target:, attributes: [:size])
+      result = arena.build_probe_echo(target:, attributes: [:size])
 
       _(result[:size]).must_equal :medium
       _(result.key?(:velocity_x)).must_equal false
@@ -873,7 +947,7 @@ describe Rubowar::Arena do
       target.velocity_x = 5.0
       target.velocity_y = -3.0
 
-      result = arena.build_probe_result(target:, attributes: [:velocity])
+      result = arena.build_probe_echo(target:, attributes: [:velocity])
 
       _(result[:velocity_x]).must_equal 5.0
       _(result[:velocity_y]).must_equal(-3.0)
@@ -885,7 +959,7 @@ describe Rubowar::Arena do
       arena = build_arena
       target = build_actor(x: 200, y: 150, turret_angle: 45)
 
-      result = arena.build_probe_result(target:, attributes: [:turret_angle])
+      result = arena.build_probe_echo(target:, attributes: [:turret_angle])
 
       _(result[:turret_angle]).must_equal 45
       _(result.key?(:x)).must_equal false
@@ -896,7 +970,7 @@ describe Rubowar::Arena do
       target = build_actor(x: 200, y: 150)
       target.shield_level = 25
 
-      result = arena.build_probe_result(target:, attributes: [:shield])
+      result = arena.build_probe_echo(target:, attributes: [:shield])
 
       _(result[:shield_level]).must_equal 25
       _(result.key?(:health)).must_equal false
@@ -907,7 +981,7 @@ describe Rubowar::Arena do
       target = build_actor(x: 200, y: 150)
       target.health = 75
 
-      result = arena.build_probe_result(target:, attributes: [:health])
+      result = arena.build_probe_echo(target:, attributes: [:health])
 
       _(result[:health]).must_equal 75
       _(result.key?(:energy)).must_equal false
@@ -918,7 +992,7 @@ describe Rubowar::Arena do
       target = build_actor(x: 200, y: 150)
       target.energy = 45
 
-      result = arena.build_probe_result(target:, attributes: [:energy])
+      result = arena.build_probe_echo(target:, attributes: [:energy])
 
       _(result[:energy]).must_equal 45
     end
@@ -930,7 +1004,7 @@ describe Rubowar::Arena do
       target.velocity_y = -3.0
       target.health = 75
 
-      result = arena.build_probe_result(target:, attributes: %i[position velocity health])
+      result = arena.build_probe_echo(target:, attributes: %i[position velocity health])
 
       _(result[:x]).must_equal 200
       _(result[:y]).must_equal 150
@@ -952,20 +1026,20 @@ describe Rubowar::Arena do
 
       arena.process_probe(actor: shooter, attributes: [:position])
 
-      result = shooter.instance.probe_result
+      result = shooter.instance.probe_echo
       _(result).wont_be_nil
       _(result[:x]).must_equal 200
     end
 
-    it "sets probe result to empty hash when no target found" do
+    it "sets probe result to empty ProbeEcho when no target found" do
       arena = build_arena
       shooter = build_actor(x: 100, y: 100, turret_angle: 0)
       arena.actors = [shooter]
 
       arena.process_probe(actor: shooter, attributes: [:size])
 
-      result = shooter.instance.probe_result
-      _(result).must_equal({})
+      result = shooter.instance.probe_echo
+      _(result).must_be :empty?
     end
 
     it "spends zero energy with no attributes" do
@@ -1031,12 +1105,12 @@ describe Rubowar::Arena do
       arena.actors = [shooter, target]
 
       arena.process_probe(actor: shooter, attributes: [:size])
-      first_result = shooter.instance.probe_result
+      first_result = shooter.instance.probe_echo
       _(first_result).wont_be_empty
 
       target.y = 200
       arena.process_probe(actor: shooter, attributes: [:size])
-      second_result = shooter.instance.probe_result
+      second_result = shooter.instance.probe_echo
 
       _(second_result).must_be_empty
     end
@@ -1047,13 +1121,13 @@ describe Rubowar::Arena do
       arena.actors = [shooter]
 
       arena.process_probe(actor: shooter, attributes: [:position])
-      first_result = shooter.instance.probe_result
+      first_result = shooter.instance.probe_echo
       _(first_result).must_be_empty
 
       target = build_actor(x: 200, y: 100)
       arena.actors = [shooter, target]
       arena.process_probe(actor: shooter, attributes: [:position])
-      second_result = shooter.instance.probe_result
+      second_result = shooter.instance.probe_echo
 
       _(second_result).wont_be_empty
       _(second_result[:x]).must_equal 200
@@ -1066,7 +1140,7 @@ describe Rubowar::Arena do
       arena.actors = [shooter, small_target]
 
       arena.process_probe(actor: shooter, attributes: [:size])
-      result = shooter.instance.probe_result
+      result = shooter.instance.probe_echo
 
       _(result[:size]).must_equal :small
     end
@@ -1078,9 +1152,9 @@ describe Rubowar::Arena do
       arena.actors = [shooter, target]
 
       arena.process_probe(actor: shooter, attributes: [])
-      result = shooter.instance.probe_result
+      result = shooter.instance.probe_echo
 
-      _(result.key?(:size)).must_equal false
+      _(result.size).must_be_nil
     end
   end
 
@@ -1240,16 +1314,16 @@ describe Rubowar::Arena do
       _(scanner.energy).must_equal 89
     end
 
-    it "returns empty array when no targets in arc" do
+    it "returns empty ScanEcho when no targets in arc" do
       arena = build_arena
       scanner = build_actor(x: 100, y: 100, turret_angle: 0)
       target = build_actor(x: 100, y: 300) # North, not in east-facing arc
       arena.actors = [scanner, target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "returns rubot in arc" do
@@ -1259,7 +1333,7 @@ describe Rubowar::Arena do
       arena.actors = [scanner, target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result.length).must_equal 1
       _(result[0][:x]).must_equal 200
@@ -1275,7 +1349,7 @@ describe Rubowar::Arena do
       arena.actors = [scanner, target1, target2]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 300, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result.length).must_equal 2
       _(result.all? { |r| r[:type] == :rubot }).must_equal true
@@ -1287,9 +1361,9 @@ describe Rubowar::Arena do
       arena.actors = [scanner]
 
       arena.process_scan(actor: scanner, angle: 360, distance: 500, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "does not include dead rubots" do
@@ -1300,9 +1374,9 @@ describe Rubowar::Arena do
       arena.actors = [scanner, dead_target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "includes velocity when requested" do
@@ -1314,7 +1388,7 @@ describe Rubowar::Arena do
       arena.actors = [scanner, target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: true, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result[0][:velocity_x]).must_equal 5.0
       _(result[0][:velocity_y]).must_equal(-3.0)
@@ -1328,9 +1402,9 @@ describe Rubowar::Arena do
       arena.actors = [scanner, target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
-      _(result[0].key?(:velocity_x)).must_equal false
+      _(result[0].velocity_x).must_be_nil
     end
 
     it "detects bullets in arc" do
@@ -1341,7 +1415,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result.length).must_equal 1
       _(result[0][:type]).must_equal :bullet
@@ -1355,10 +1429,10 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: true, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
-      _(result[0].key?(:velocity_x)).must_equal true
-      _(result[0].key?(:velocity_y)).must_equal true
+      _(result[0].velocity_x).wont_be_nil
+      _(result[0].velocity_y).wont_be_nil
     end
 
     it "returns both rubots and bullets in arc" do
@@ -1370,7 +1444,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 300, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result.length).must_equal 2
       types = result.map { |r| r[:type] }
@@ -1411,7 +1485,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: true)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       bullet_result = result.find { |r| r[:type] == :bullet }
       _(bullet_result[:owner]).must_equal "ProbeTestBot"
@@ -1424,7 +1498,7 @@ describe Rubowar::Arena do
       arena.actors = [scanner, target]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: true)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       _(result[0][:owner]).must_be_nil
     end
@@ -1438,10 +1512,25 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: false)
-      result = scanner.instance.scan_result
+      result = scanner.instance.scan_echo
 
       bullet_result = result.find { |r| r[:type] == :bullet }
-      _(bullet_result.key?(:owner)).must_equal false
+      # When owner is not requested, the owner field is nil
+      _(bullet_result.owner).must_be_nil
+    end
+
+    it "handles bullet with nil owner (dead rubot)" do
+      arena = build_arena
+      scanner = build_actor(x: 100, y: 100, turret_angle: 0)
+      bullet = Rubowar::Bullet.new(x: 200, y: 100, angle: 180, damage: 10, owner: nil)
+      arena.actors = [scanner]
+      arena.bullets = [bullet]
+
+      arena.process_scan(actor: scanner, angle: 30, distance: 200, velocity: false, owner: true)
+      result = scanner.instance.scan_echo
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result[:owner]).must_be_nil
     end
   end
 
@@ -1513,16 +1602,16 @@ describe Rubowar::Arena do
       _(actor.energy).must_equal 95
     end
 
-    it "returns empty array when no targets in range" do
+    it "returns empty PulseEcho when no targets in range" do
       arena = build_arena
       actor = build_actor(x: 100, y: 100)
       target = build_actor(x: 500, y: 500) # Far away
       arena.actors = [actor, target]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "returns rubot in range" do
@@ -1532,7 +1621,7 @@ describe Rubowar::Arena do
       arena.actors = [actor, target]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result.length).must_equal 1
       _(result[0][:x]).must_equal 150
@@ -1548,7 +1637,7 @@ describe Rubowar::Arena do
       arena.actors = [actor, target1, target2]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result.length).must_equal 2
       _(result.all? { |r| r[:type] == :rubot }).must_equal true
@@ -1560,9 +1649,9 @@ describe Rubowar::Arena do
       arena.actors = [actor]
 
       arena.process_pulse(actor:, distance: 500, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "does not include dead rubots" do
@@ -1573,9 +1662,9 @@ describe Rubowar::Arena do
       arena.actors = [actor, dead_target]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
-      _(result).must_equal []
+      _(result).must_be :empty?
     end
 
     it "detects bullets in range" do
@@ -1586,7 +1675,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result.length).must_equal 1
       _(result[0][:type]).must_equal :bullet
@@ -1601,7 +1690,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result.length).must_equal 2
       types = result.map { |r| r[:type] }
@@ -1618,10 +1707,10 @@ describe Rubowar::Arena do
       arena.actors = [actor, target]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
-      _(result[0].key?(:velocity_x)).must_equal false
-      _(result[0].key?(:velocity_y)).must_equal false
+      _(result[0].velocity_x).must_be_nil
+      _(result[0].velocity_y).must_be_nil
     end
 
     it "returns false and drains energy when insufficient" do
@@ -1646,7 +1735,7 @@ describe Rubowar::Arena do
       arena.actors = [actor, north, south, east, west]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result.length).must_equal 4
     end
@@ -1672,7 +1761,7 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_pulse(actor:, distance: 100, owner: true)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       bullet_result = result.find { |r| r[:type] == :bullet }
       _(bullet_result[:owner]).must_equal "ProbeTestBot"
@@ -1685,7 +1774,7 @@ describe Rubowar::Arena do
       arena.actors = [actor, target]
 
       arena.process_pulse(actor:, distance: 100, owner: true)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       _(result[0][:owner]).must_be_nil
     end
@@ -1699,10 +1788,25 @@ describe Rubowar::Arena do
       arena.bullets = [bullet]
 
       arena.process_pulse(actor:, distance: 100, owner: false)
-      result = actor.instance.pulse_result
+      result = actor.instance.pulse_echo
 
       bullet_result = result.find { |r| r[:type] == :bullet }
-      _(bullet_result.key?(:owner)).must_equal false
+      # When owner is not requested, the owner field is nil
+      _(bullet_result.owner).must_be_nil
+    end
+
+    it "handles bullet with nil owner (dead rubot)" do
+      arena = build_arena
+      actor = build_actor(x: 100, y: 100)
+      bullet = Rubowar::Bullet.new(x: 150, y: 100, angle: 180, damage: 10, owner: nil)
+      arena.actors = [actor]
+      arena.bullets = [bullet]
+
+      arena.process_pulse(actor:, distance: 100, owner: true)
+      result = actor.instance.pulse_echo
+
+      bullet_result = result.find { |r| r[:type] == :bullet }
+      _(bullet_result[:owner]).must_be_nil
     end
   end
 

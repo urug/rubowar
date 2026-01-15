@@ -5,12 +5,12 @@
 # responsibility = "Single source of truth for probe, scan, and pulse energy costs"
 # pattern = "Module Functions (stateless calculations)"
 #
-# [module.SensorCalculations]
+# [module.SensorCalculator]
 # purpose = "Provides cost calculations used by both Rubot (upfront checks) and Arena (execution)"
-# usage = "SensorCalculations.probe_cost(attributes), SensorCalculations.scan_cost(...), etc."
+# usage = "SensorCalculator.probe_cost(attributes), SensorCalculator.scan_cost(...), etc."
 
 module Rubowar
-  module SensorCalculations
+  module SensorCalculator
     module_function
 
     def probe_cost(attributes)
