@@ -119,7 +119,7 @@ srand(options[:seed]) if options[:seed]
 # Run battles
 results = []
 options[:battles].times do |i|
-  battle = Rubowar::Battle.new(
+  battle = Rubowar::Battle.local(
     rubot_classes,
     width: options[:width],
     height: options[:height],

@@ -189,11 +189,11 @@
 ## Current Balance Constants
 
 ### Sizes
-| Size | Radius | HP | Regen | Mass |
-|------|--------|-----|-------|------|
-| Small | 16 | 80 | 8 | 0.64 |
-| Medium | 20 | 100 | 10 | 1.0 |
-| Large | 24 | 120 | 12 | 1.44 |
+| Size   | Radius | HP  | Regen | Mass |
+|--------|--------|-----|-------|------|
+| Small  | 16     | 80  | 8     | 0.64 |
+| Medium | 20     | 100 | 10    | 1.0  |
+| Large  | 24     | 120 | 12    | 1.44 |
 
 ### Combat
 - `FIRE_DAMAGE_MULTIPLIER = 1.5`

@@ -100,11 +100,11 @@ Actions are organized into three phases: `sense`, `move`, and `combat`. Each pha
 
 ### Action Phase Mapping
 
-| Method | Phase | Action Type |
-|--------|-------|-------------|
-| `probe`, `scan`, `pulse`, `detect` | `:sense` | Sensing actions |
-| `thrust`, `rotate_turret` | `:move` | Movement actions |
-| `fire`, `raise_shields` | `:combat` | Combat actions |
+| Method                             | Phase     | Action Type     |
+|------------------------------------|-----------|-----------------|
+| `probe`, `scan`, `pulse`, `detect` | `:sense`  | Sensing actions |
+| `thrust`, `rotate_turret`          | `:move`   | Movement actions|
+| `fire`, `raise_shields`            | `:combat` | Combat actions  |
 
 ### Testing Action Queueing
 
@@ -136,7 +136,7 @@ When testing that phases execute in the correct order, use integration tests:
 
 ```ruby
 it "processes sensing before movement" do
-  battle = Rubowar::Battle.new([SensingBot, TargetBot], chronon_limit: 2)
+  battle = Rubowar::Battle.local([SensingBot, TargetBot], chronon_limit: 2)
 
   battle.run
 

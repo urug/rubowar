@@ -2,7 +2,7 @@
 
 Study these bots in order to learn rubowar strategy and implementation techniques.
 
-## 1. Spinner (19 lines) - **Start Here**
+## 1. Spinner - **Start Here**
 **File:** `robots/spinner.rb`
 **Complexity:** ⭐ Beginner
 
@@ -18,7 +18,7 @@ The simplest complete rubot. Great first bot to study.
 
 ---
 
-## 2. Tracker (36 lines)
+## 2. Tracker
 **File:** `robots/tracker.rb`
 **Complexity:** ⭐⭐ Beginner+
 
@@ -36,7 +36,7 @@ Introduces proper target tracking using the SimpleTargeting mixin.
 
 ---
 
-## 3. Coroner (200 lines)
+## 3. Coroner
 **File:** `robots/coroner.rb`
 **Complexity:** ⭐⭐⭐ Intermediate
 
@@ -55,7 +55,7 @@ A defensive sniper that demonstrates movement and state machines.
 
 ---
 
-## 4. Evader (213 lines)
+## 4. Evader
 **File:** `robots/evader.rb`
 **Complexity:** ⭐⭐⭐ Intermediate+
 
@@ -74,7 +74,7 @@ A patient assassin with counter-intelligence and evasion tactics.
 
 ---
 
-## 5. Crusher (323 lines)
+## 5. Crusher
 **File:** `robots/crusher.rb`
 **Complexity:** ⭐⭐⭐⭐ Advanced
 
@@ -93,7 +93,7 @@ A wall-ramming specialist designed to counter corner campers.
 
 ---
 
-## 6. Hunter (326 lines)
+## 6. Hunter
 **File:** `robots/hunter.rb`
 **Complexity:** ⭐⭐⭐⭐ Advanced
 
@@ -112,7 +112,7 @@ An adaptive predator that adjusts tactics based on prey characteristics.
 
 ---
 
-## 7. Hugger (452 lines) - **Most Complex**
+## 7. Hugger - **Most Complex**
 **File:** `robots/hugger.rb`
 **Complexity:** ⭐⭐⭐⭐⭐ Expert
 
