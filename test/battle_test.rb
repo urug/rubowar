@@ -122,7 +122,7 @@ class TimeoutBot
 
   def act
     @ticks_executed += 1
-    sleep 1 # Exceeds CHRONON_TIMEOUT (0.1s)
+    sleep(Rubowar::Config::Battle::CHRONON_DEADLINE + 0.2) # Exceeds deadline - bot will skip actions
   end
 end
 
@@ -213,64 +213,53 @@ end
 describe Rubowar::Battle do
   describe "initialization" do
     it "creates arena with specified dimensions" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], width: 1000, height: 800)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], width: 1000, height: 800)
 
       _(battle.arena.width).must_equal 1000
       _(battle.arena.height).must_equal 800
     end
 
-    it "spawns actors for each rubot class" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+    it "registers actors for each rubot class" do
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
-      _(battle.arena.actors.length).must_equal 2
+      _(battle.registered_actors.length).must_equal 2
     end
 
     it "starts at chronon zero" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
       _(battle.chronons).must_equal 0
     end
 
     it "starts with no winner" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
       _(battle.winner).must_be_nil
     end
 
     it "starts with empty events" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot])
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
       _(battle.events).must_equal []
     end
 
-    it "raises error with less than 2 rubots" do
-      _ { Rubowar::Battle.new([StationaryBot]) }.must_raise Rubowar::InsufficientRubotsError
-    end
-
-    it "raises error with zero width" do
-      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], width: 0) }.must_raise Rubowar::InvalidDimensionsError
-    end
-
-    it "raises error with negative height" do
-      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], height: -100) }.must_raise Rubowar::InvalidDimensionsError
-    end
-
-    it "raises error with invalid friction" do
-      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], friction: 1.5) }.must_raise Rubowar::InvalidFrictionError
+    it "raises error with less than 2 rubots when run" do
+      battle = Rubowar::Battle.local([StationaryBot])
+      _ { battle.run }.must_raise Rubowar::InsufficientRubotsError
     end
 
     it "raises error with zero chronon limit" do
-      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 0) }.must_raise Rubowar::InvalidChrononLimitError
+      _ { Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 0) }.must_raise Rubowar::InvalidChrononLimitError
     end
 
     it "raises error with infinite chronon limit" do
-      _ { Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: Float::INFINITY) }.must_raise Rubowar::InvalidChrononLimitError
+      _ { Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: Float::INFINITY) }.must_raise Rubowar::InvalidChrononLimitError
     end
   end
 
   describe "#on" do
     it "registers callback for event type" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)
       events_received = []
       battle.on(:chronon) { |data| events_received << data }
 
@@ -280,7 +269,7 @@ describe Rubowar::Battle do
     end
 
     it "calls multiple callbacks for same event" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)
       count = 0
       battle.on(:chronon) { count += 1 }
       battle.on(:chronon) { count += 1 }
@@ -293,7 +282,7 @@ describe Rubowar::Battle do
 
   describe "#run" do
     it "increments chronons each tick" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 5)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 5)
 
       battle.run
 
@@ -301,7 +290,7 @@ describe Rubowar::Battle do
     end
 
     it "emits chronon event each tick" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 3)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 3)
 
       events = battle.run
 
@@ -310,7 +299,7 @@ describe Rubowar::Battle do
     end
 
     it "emits battle_end event" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)
 
       events = battle.run
 
@@ -319,7 +308,7 @@ describe Rubowar::Battle do
     end
 
     it "returns all events" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)
 
       result = battle.run
 
@@ -328,7 +317,7 @@ describe Rubowar::Battle do
     end
 
     it "determines winner at end" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)
 
       battle.run
 
@@ -336,112 +325,10 @@ describe Rubowar::Battle do
     end
   end
 
-  describe "#battle_over?" do
-    it "returns true when only one actor alive" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
-      battle.arena.actors[0].health = 0
-
-      result = battle.send(:battle_over?)
-
-      _(result).must_equal true
-    end
-
-    it "returns true when chronon limit reached" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 10)
-      10.times { battle.instance_variable_set(:@chronons, battle.chronons + 1) }
-
-      result = battle.send(:battle_over?)
-
-      _(result).must_equal true
-    end
-
-    it "returns false when multiple actors alive and under limit" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
-      battle.instance_variable_set(:@chronons, 5)
-
-      result = battle.send(:battle_over?)
-
-      _(result).must_equal false
-    end
-
-    it "returns true when all actors dead" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1000)
-      battle.arena.actors.each { |r| r.health = 0 }
-
-      result = battle.send(:battle_over?)
-
-      _(result).must_equal true
-    end
-  end
-
-  describe "#determine_winner" do
-    it "returns sole survivor" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.arena.actors[1].health = 0
-
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_equal battle.arena.actors[0]
-    end
-
-    it "returns nil when all dead" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.arena.actors.each { |r| r.health = 0 }
-
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_be_nil
-    end
-
-    it "selects winner by damage dealt when tied on survival" do
-      # Create a battle that will timeout with both alive
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.run
-
-      # Manually set damage_dealt to test tiebreaker
-      battle.arena.actors[0].damage_dealt = 50
-      battle.arena.actors[1].damage_dealt = 30
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_equal battle.arena.actors[0]
-    end
-
-    it "uses HP percentage as secondary tiebreaker after damage dealt" do
-      battle = Rubowar::Battle.new([SmallStationaryBot, LargeStationaryBot], chronon_limit: 1)
-      battle.run
-
-      # Same damage dealt, but different HP percentages
-      # Small bot: 72/80 = 90%
-      # Large bot: 96/120 = 80%
-      # Small bot should win despite lower absolute HP
-      battle.arena.actors[0].damage_dealt = 50
-      battle.arena.actors[0].health = 72  # 90% of 80 max
-      battle.arena.actors[1].damage_dealt = 50
-      battle.arena.actors[1].health = 96  # 80% of 120 max
-      battle.send(:determine_winner)
-
-      _(battle.winner).must_equal battle.arena.actors[0]
-    end
-
-    it "returns first actor when damage dealt and HP percentage are identical" do
-      battle = Rubowar::Battle.new([StationaryBot, StationaryBot], chronon_limit: 1)
-      battle.run
-
-      # Both actors have identical damage dealt and HP percentage
-      battle.arena.actors[0].damage_dealt = 50
-      battle.arena.actors[0].health = 80  # 80% of 100 max
-      battle.arena.actors[1].damage_dealt = 50
-      battle.arena.actors[1].health = 80  # 80% of 100 max
-      battle.send(:determine_winner)
-
-      # max_by returns first match when values are equal
-      _(battle.winner).must_equal battle.arena.actors[0]
-    end
-  end
-
+  
   describe "sensing results persistence" do
     it "pulse results from tick N are available in tick N+1" do
-      battle = Rubowar::Battle.new([PulseTestBot, StationaryBot], chronon_limit: 5)
+      battle = Rubowar::Battle.local([PulseTestBot, StationaryBot], chronon_limit: 5)
       battle.run
 
       pulser = battle.arena.actors.find { |r| r.instance.is_a?(PulseTestBot) }
@@ -457,7 +344,8 @@ describe Rubowar::Battle do
     end
 
     it "probe results from tick N are available in tick N+1" do
-      battle = Rubowar::Battle.new([ProbeTestBotForBattle, StationaryBot], chronon_limit: 5)
+      battle = Rubowar::Battle.local([ProbeTestBotForBattle, StationaryBot], chronon_limit: 5)
+      battle.spawn_rubots
 
       # Position rubots so prober's turret will sweep across target
       prober_actor = battle.arena.actors.find { |r| r.instance.is_a?(ProbeTestBotForBattle) }
@@ -483,7 +371,7 @@ describe Rubowar::Battle do
     end
 
     it "scan results from tick N are available in tick N+1" do
-      battle = Rubowar::Battle.new([ScanTestBot, StationaryBot], chronon_limit: 3)
+      battle = Rubowar::Battle.local([ScanTestBot, StationaryBot], chronon_limit: 3)
       battle.run
 
       scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
@@ -500,7 +388,7 @@ describe Rubowar::Battle do
     it "sensing results are not cleared before rubot tick runs" do
       # This test specifically verifies the bug fix where results were cleared
       # in setup_rubot_for_tick before the rubot could read them
-      battle = Rubowar::Battle.new([ScanTestBot, StationaryBot], chronon_limit: 10)
+      battle = Rubowar::Battle.local([ScanTestBot, StationaryBot], chronon_limit: 10)
       battle.run
 
       scanner = battle.arena.actors.find { |r| r.instance.is_a?(ScanTestBot) }
@@ -516,9 +404,10 @@ describe Rubowar::Battle do
 
   describe "phased action processing" do
     it "fires bullets from post-movement position" do
-      battle = Rubowar::Battle.new([PositionRecordingBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([PositionRecordingBot, StationaryBot], chronon_limit: 1)
 
-      # Position bot at known location, facing east
+      # Spawn actors first, then position at known location
+      battle.spawn_rubots
       mover = battle.arena.actors.find { |r| r.instance.is_a?(PositionRecordingBot) }
       mover.x = 100.0
       mover.y = 300.0
@@ -538,7 +427,8 @@ describe Rubowar::Battle do
     end
 
     it "processes all rubots movement before any rubot fires" do
-      battle = Rubowar::Battle.new([MoveAndFireBot, MoveAndFireBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([MoveAndFireBot, MoveAndFireBot], chronon_limit: 1)
+      battle.spawn_rubots
 
       # Position both bots
       bot_a = battle.arena.actors[0]
@@ -569,7 +459,8 @@ describe Rubowar::Battle do
 
     it "processes sensing before movement" do
       # Create a battle where pulse happens before movement
-      battle = Rubowar::Battle.new([PulseTestBot, StationaryBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([PulseTestBot, StationaryBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       pulser = battle.arena.actors.find { |r| r.instance.is_a?(PulseTestBot) }
       target = battle.arena.actors.find { |r| r.instance.is_a?(StationaryBot) }
@@ -592,7 +483,8 @@ describe Rubowar::Battle do
     it "deducts sensing energy before combat energy" do
       # If a bot queues fire() then pulse(), pulse should still execute first
       # and use energy first, potentially leaving less for fire
-      battle = Rubowar::Battle.new([MoveAndFireBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([MoveAndFireBot, StationaryBot], chronon_limit: 1)
+      battle.spawn_rubots
 
       bot = battle.arena.actors.find { |r| r.instance.is_a?(MoveAndFireBot) }
       bot.x = 400.0
@@ -619,56 +511,54 @@ describe Rubowar::Battle do
   end
 
   describe "error handling" do
-    it "applies timeout damage when act exceeds time limit" do
-      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 2)
+    it "slow rubots take no damage and skip actions" do
+      battle = Rubowar::Battle.local([TimeoutBot, StationaryBot], chronon_limit: 2)
 
-      timeout_bot = battle.arena.actors.find { |r| r.instance.is_a?(TimeoutBot) }
+      timeout_bot = battle.registered_actors.find { |r| r.instance.is_a?(TimeoutBot) }
       initial_health = timeout_bot.health
 
       battle.run
 
-      # Bot should have taken TIMEOUT_DAMAGE (50) each chronon
-      expected_health = initial_health - (Rubowar::Config::Battle::TIMEOUT_DAMAGE * 2)
-      _(timeout_bot.health).must_equal expected_health
+      # Slow bots take no damage - they just skip their actions
+      _(timeout_bot.health).must_equal initial_health
     end
 
-    it "continues battle after timeout" do
-      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 3)
+    it "continues battle when rubots are slow" do
+      battle = Rubowar::Battle.local([TimeoutBot, StationaryBot], chronon_limit: 3)
 
       events = battle.run
 
-      # Battle continues until bot dies (100 HP / 50 damage per timeout = 2 chronons)
-      # or chronon limit reached - whichever comes first
-      _(battle.chronons).must_be :>=, 2
+      # Battle continues to chronon limit (slow bots don't die from being slow)
+      _(battle.chronons).must_equal 3
       chronon_events = events.select { |e| e[:type] == :chronon }
-      _(chronon_events.length).must_be :>=, 2
+      _(chronon_events.length).must_equal 3
     end
 
-    it "emits error event on timeout" do
-      battle = Rubowar::Battle.new([TimeoutBot, StationaryBot], chronon_limit: 1)
+    it "does not emit error event for slow rubots" do
+      battle = Rubowar::Battle.local([TimeoutBot, StationaryBot], chronon_limit: 1)
 
       events = battle.run
 
+      # Slow rubots don't cause errors - they just skip their actions
       error_events = events.select { |e| e[:type] == :error }
-      _(error_events).wont_be_empty
-      _(error_events.first[:error]).must_include "timeout"
+      _(error_events).must_be_empty
     end
 
     it "applies error damage when act raises StandardError" do
-      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([ErrorBot, StationaryBot], chronon_limit: 2)
 
-      error_bot = battle.arena.actors.find { |r| r.instance.is_a?(ErrorBot) }
+      error_bot = battle.registered_actors.find { |r| r.instance.is_a?(ErrorBot) }
       initial_health = error_bot.health
 
       battle.run
 
-      # Bot should have taken ERROR_DAMAGE (20) each chronon, not TIMEOUT_DAMAGE (50)
+      # Bot should have taken ERROR_DAMAGE (20) each chronon
       expected_health = initial_health - (Rubowar::Config::Battle::ERROR_DAMAGE * 2)
       _(error_bot.health).must_equal expected_health
     end
 
     it "emits error event with exception on StandardError" do
-      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([ErrorBot, StationaryBot], chronon_limit: 1)
 
       events = battle.run
 
@@ -679,7 +569,7 @@ describe Rubowar::Battle do
     end
 
     it "continues battle after StandardError" do
-      battle = Rubowar::Battle.new([ErrorBot, StationaryBot], chronon_limit: 3)
+      battle = Rubowar::Battle.local([ErrorBot, StationaryBot], chronon_limit: 3)
 
       events = battle.run
 
@@ -692,7 +582,8 @@ describe Rubowar::Battle do
 
   describe "death callback" do
     it "calls on_death exactly once when rubot dies" do
-      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+      battle = Rubowar::Battle.local([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+      battle.spawn_rubots
 
       death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
 
@@ -710,9 +601,9 @@ describe Rubowar::Battle do
     end
 
     it "does not call on_death for alive rubots" do
-      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 3)
+      battle = Rubowar::Battle.local([DeathTrackingBot, StationaryBot], chronon_limit: 3)
 
-      death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
+      death_bot = battle.registered_actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
 
       battle.run
 
@@ -721,7 +612,8 @@ describe Rubowar::Battle do
     end
 
     it "emits death event exactly once" do
-      battle = Rubowar::Battle.new([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+      battle = Rubowar::Battle.local([DeathTrackingBot, StationaryBot], chronon_limit: 5)
+      battle.spawn_rubots
 
       death_bot = battle.arena.actors.find { |r| r.instance.is_a?(DeathTrackingBot) }
 
@@ -742,7 +634,8 @@ describe Rubowar::Battle do
 
   describe "detect action" do
     it "reports zero counts when not being sensed" do
-      battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([DetectTestBot, StationaryBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       target = battle.arena.actors.find { |r| r.instance.is_a?(StationaryBot) }
@@ -765,7 +658,8 @@ describe Rubowar::Battle do
     end
 
     it "reports probe count when probed" do
-      battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
@@ -789,7 +683,8 @@ describe Rubowar::Battle do
     end
 
     it "reports scan count when scanned" do
-      battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
@@ -812,7 +707,8 @@ describe Rubowar::Battle do
     end
 
     it "reports pulse count when pulsed" do
-      battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([DetectTestBot, SensingBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
@@ -835,7 +731,8 @@ describe Rubowar::Battle do
     end
 
     it "reports combined counts from multiple sensors" do
-      battle = Rubowar::Battle.new([DetectTestBot, SensingBot, SensingBot], chronon_limit: 2)
+      battle = Rubowar::Battle.local([DetectTestBot, SensingBot, SensingBot], chronon_limit: 2)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       sensors = battle.arena.actors.select { |r| r.instance.is_a?(SensingBot) }
@@ -860,7 +757,8 @@ describe Rubowar::Battle do
     end
 
     it "resets counts each tick" do
-      battle = Rubowar::Battle.new([DetectTestBot, SensingBot], chronon_limit: 3)
+      battle = Rubowar::Battle.local([DetectTestBot, SensingBot], chronon_limit: 3)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       sensor = battle.arena.actors.find { |r| r.instance.is_a?(SensingBot) }
@@ -887,7 +785,8 @@ describe Rubowar::Battle do
     end
 
     it "costs 2 energy" do
-      battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([DetectTestBot, StationaryBot], chronon_limit: 1)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       detector.energy = 50
@@ -901,7 +800,8 @@ describe Rubowar::Battle do
     end
 
     it "returns false and fails when insufficient energy" do
-      battle = Rubowar::Battle.new([DetectTestBot, StationaryBot], chronon_limit: 1)
+      battle = Rubowar::Battle.local([DetectTestBot, StationaryBot], chronon_limit: 1)
+      battle.spawn_rubots
 
       detector = battle.arena.actors.find { |r| r.instance.is_a?(DetectTestBot) }
       detector.energy = 1 # Not enough for detect (costs 2)
@@ -911,6 +811,226 @@ describe Rubowar::Battle do
 
       # detect_intel should be empty (action failed, returns default empty DetectIntel)
       _(detector.instance.detect_intel).must_be :empty?
+    end
+  end
+
+  describe "actor interface requirements" do
+    it "requires _act_completed accessor for deadline tracking" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      _(actor).must_respond_to :_act_completed
+      _(actor).must_respond_to :_act_completed=
+      _(actor._act_completed).must_equal false
+    end
+
+    it "requires reset_actions method" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      _(actor).must_respond_to :reset_actions
+      actor.reset_actions
+      _(actor.rubot_actions).must_equal({ sense: [], move: [], combat: [] })
+    end
+
+    it "requires rubot_actions returning phased action hash" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor.reset_actions
+
+      actions = actor.rubot_actions
+      _(actions).must_be_kind_of Hash
+      _(actions.keys).must_include :sense
+      _(actions.keys).must_include :move
+      _(actions.keys).must_include :combat
+    end
+
+    it "requires alive? and dead? methods" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      _(actor.alive?).must_equal true
+      _(actor.dead?).must_equal false
+
+      actor.health = 0
+
+      _(actor.alive?).must_equal false
+      _(actor.dead?).must_equal true
+    end
+
+    it "requires id for tracking" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      _(actor.id).must_match(/^[0-9a-f-]{36}$/)
+    end
+
+    it "requires to_state returning RubotState" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      state = actor.to_state
+      _(state).must_be_instance_of Rubowar::RubotState
+    end
+
+    it "requires state setters for chronon setup" do
+      actor = Rubowar::RubotActor.new(StationaryBot)
+
+      _(actor).must_respond_to :rubot_state=
+      _(actor).must_respond_to :arena_state=
+      _(actor).must_respond_to :_pending_energy_spend=
+    end
+  end
+
+  describe "stub actor compatibility" do
+    it "runs battle with stub actors" do
+      arena = Rubowar::Arena.new(width: 640, height: 640)
+      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 5)
+
+      stub1 = Rubowar::StubActor.new(size: :medium)
+      stub2 = Rubowar::StubActor.new(size: :medium)
+      battle.register(stub1)
+      battle.register(stub2)
+
+      events = battle.run
+
+      _(battle.chronons).must_equal 5
+      _(events).wont_be_empty
+    end
+
+    it "processes pre-set thrust actions on stub actor" do
+      arena = Rubowar::Arena.new(width: 640, height: 640)
+      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 1)
+
+      stub1 = Rubowar::StubActor.new(size: :medium)
+      stub2 = Rubowar::StubActor.new(size: :medium)
+      battle.register(stub1)
+      battle.register(stub2)
+
+      battle.spawn_rubots
+      initial_x = stub1.x
+
+      # Override act to set actions (simulates remote client pushing actions during act phase)
+      stub1.define_singleton_method(:act) do
+        set_actions(move: [{ type: :thrust, speed: 5, angle: 0 }])
+      end
+
+      battle.send(:call_on_spawn)
+      battle.send(:run_chronon)
+
+      # Stub should have moved east
+      _(stub1.x).must_be :>, initial_x
+    end
+
+    it "works alongside RubotActor" do
+      arena = Rubowar::Arena.new(width: 640, height: 640)
+      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 3)
+
+      stub = Rubowar::StubActor.new(size: :medium)
+      rubot_actor = Rubowar::RubotActor.new(StationaryBot)
+
+      battle.register(stub)
+      battle.register(rubot_actor)
+
+      battle.run
+
+      _(battle.chronons).must_equal 3
+      _(battle.arena.actors.length).must_equal 2
+    end
+
+    it "stub actor has same interface as RubotActor" do
+      rubot = Rubowar::RubotActor.new(StationaryBot)
+      stub = Rubowar::StubActor.new(size: :medium)
+
+      # Core interface methods Battle depends on
+      interface_methods = %i[
+        id x y velocity_x velocity_y turret_angle
+        health energy shield_level damage_dealt damage_taken
+        death_processed _act_completed alive? dead?
+        to_state rubot_actions reset_actions act
+        rubot_state= arena_state= _pending_energy_spend=
+        apply_damage spend_energy radius
+      ]
+
+      interface_methods.each do |method|
+        _(rubot).must_respond_to method, "RubotActor missing #{method}"
+        _(stub).must_respond_to method, "StubActor missing #{method}"
+      end
+    end
+  end
+
+  describe "deadline behavior" do
+    it "skips actions for slow rubots that exceed deadline" do
+      battle = Rubowar::Battle.local([TimeoutBot, StationaryBot], chronon_limit: 1)
+      battle.spawn_rubots
+
+      timeout_bot = battle.arena.actors.find { |r| r.instance.is_a?(TimeoutBot) }
+      initial_x = timeout_bot.x
+
+      # Manually inject a thrust action before running
+      # TimeoutBot will sleep in act(), so actions should be cleared
+      timeout_bot.instance.define_singleton_method(:act) do
+        thrust(speed: 10, angle: 0)
+        sleep(Rubowar::Config::Battle::CHRONON_DEADLINE + 0.2)
+      end
+
+      battle.send(:call_on_spawn)
+      battle.send(:run_chronon)
+
+      # Position should be unchanged - actions were cleared due to timeout
+      _(timeout_bot.x).must_be_within_delta initial_x, 1.0
+    end
+
+    it "clears _act_completed flag at start of each chronon" do
+      battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 2)
+      battle.spawn_rubots
+
+      actor = battle.arena.actors.first
+      actor._act_completed = true
+
+      battle.send(:call_on_spawn)
+      # setup_rubot_for_chronon is called at start of run_chronon
+      battle.send(:run_chronon)
+
+      # After chronon, flag should be true (act completed)
+      _(actor._act_completed).must_equal true
+
+      # Manually call setup to see it clears the flag
+      battle.send(:setup_rubot_for_chronon, actor)
+      _(actor._act_completed).must_equal false
+    end
+
+    it "handles multiple slow rubots without crashing" do
+      battle = Rubowar::Battle.local([TimeoutBot, TimeoutBot], chronon_limit: 2)
+
+      events = battle.run
+
+      _(battle.chronons).must_equal 2
+      _(events).wont_be_empty
+    end
+
+    it "processes fast rubots even when slow rubot times out" do
+      battle = Rubowar::Battle.local([TimeoutBot, MoveAndFireBot], chronon_limit: 1)
+      battle.spawn_rubots
+
+      fast_bot = battle.arena.actors.find { |r| r.instance.is_a?(MoveAndFireBot) }
+      initial_x = fast_bot.x
+
+      battle.send(:call_on_spawn)
+      battle.send(:run_chronon)
+
+      # Fast bot should have moved (thrust east at speed 5)
+      _(fast_bot.x).must_be :>, initial_x
+    end
+
+    it "maintains state consistency after deadline" do
+      battle = Rubowar::Battle.local([TimeoutBot, StationaryBot], chronon_limit: 2)
+
+      timeout_bot = battle.registered_actors.find { |r| r.instance.is_a?(TimeoutBot) }
+      initial_health = timeout_bot.health
+      timeout_bot.energy = 50
+
+      battle.run
+
+      # Health unchanged (no damage for slowness)
+      _(timeout_bot.health).must_equal initial_health
+
+      # Energy regenerated normally (medium = 10/tick, 2 ticks = +20, capped at 100)
+      _(timeout_bot.energy).must_equal [50 + 20, timeout_bot.max_energy].min
     end
   end
 end

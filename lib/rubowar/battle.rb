@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-require "set"
-require "timeout"
+require "concurrent"
 
 # [file]
 # purpose = "Game loop orchestration for rubot battles"
@@ -45,20 +44,35 @@ module Rubowar
   class Battle
     attr_reader :arena, :chronons, :winner, :events
 
-    def initialize(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
+    # Convenience constructor for local battles
+    def self.local(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
                    friction: Config::Arena::DEFAULT_FRICTION, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
-      validate_rubot_classes!(rubot_classes)
-      validate_dimensions!(width, height)
-      validate_friction!(friction)
+      arena = Arena.new(width:, height:, friction:)
+      battle = new(arena:, chronon_limit:)
+      rubot_classes.each { |klass| battle.register(RubotActor.new(klass)) }
+      battle
+    end
+
+    def initialize(arena:, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
       validate_chronon_limit!(chronon_limit)
 
-      @arena = Arena.new(width:, height:, friction:)
-      @arena.spawn_rubots(rubot_classes)
+      @arena = arena
       @chronons_limit = chronon_limit
       @chronons = 0
       @winner = nil
       @events = []
       @callbacks = Hash.new { |h, k| h[k] = Set.new }
+      @registered_actors = []
+    end
+
+    attr_accessor :registered_actors
+
+    def register(actor)
+      registered_actors << actor
+    end
+
+    def spawn_rubots
+      arena.spawn_rubots(registered_actors)
     end
 
     def on(event_type, &block)
@@ -66,6 +80,10 @@ module Rubowar
     end
 
     def run
+      spawn_rubots if arena.actors.empty?
+
+      raise InsufficientRubotsError, "need at least 2 rubots for a battle" if arena.actors.size < 2
+
       call_on_spawn
 
       loop do
@@ -83,8 +101,6 @@ module Rubowar
       @events
     end
 
-    private
-
     def call_on_spawn
       @arena.actors.each do |actor|
         setup_rubot_for_chronon(actor)
@@ -92,36 +108,31 @@ module Rubowar
       end
     end
 
+    private
+
     def run_chronon
       # Cache arena state once per chronon (same for all actors)
       cached_arena_state = @arena.to_state(@chronons)
 
-      # 1. Set up state and call each rubot's act to queue actions
-      @arena.actors.each do |actor|
-        next if actor.dead?
+      # 1. Set up state for all living rubots
+      living_actors = @arena.actors.reject(&:dead?)
+      living_actors.each { |actor| setup_rubot_for_chronon(actor, cached_arena_state) }
 
-        setup_rubot_for_chronon(actor, cached_arena_state)
+      # 2. Run all act() calls concurrently
+      run_acts_concurrently(living_actors)
 
-        begin
-          Timeout.timeout(Config::Battle::CHRONON_TIMEOUT) do
-            actor.act
-          end
-        rescue Timeout::Error
-          actor.apply_damage(Config::Battle::TIMEOUT_DAMAGE)
-          emit(:error, { actor:, error: "Chronon timeout exceeded #{Config::Battle::CHRONON_TIMEOUT}s" })
-        rescue StandardError => e
-          actor.apply_damage(Config::Battle::ERROR_DAMAGE)
-          emit(:error, { actor:, error: e })
-        end
+      # 3. Clear actions for actors that didn't complete in time
+      living_actors.each do |actor|
+        actor.reset_actions unless actor._act_completed
       end
 
-      # 2. Process actions in phases for fairness (no spawn-order advantage)
-      execute_phases
+      # 4. Process actions in phases (incomplete actors have empty actions)
+      execute_phases(living_actors)
 
-      # 3. Regenerate energy and degrade shields
+      # 5. Regenerate energy and degrade shields
       @arena.regenerate_and_degrade
 
-      # 4. Check for deaths (only process newly dead rubots)
+      # 6. Check for deaths (only process newly dead rubots)
       @arena.actors.each do |actor|
         next unless actor.dead? && !actor.death_processed
 
@@ -131,8 +142,32 @@ module Rubowar
       end
     end
 
-    def execute_phases
-      actors = @arena.actors
+    def run_acts_concurrently(actors)
+      return if actors.empty?
+
+      latch = Concurrent::CountDownLatch.new(actors.size)
+
+      actors.each do |actor|
+        Concurrent::Future.execute do
+          actor.act
+          actor._act_completed = true
+        rescue StandardError => e
+          actor.apply_damage(Config::Battle::ERROR_DAMAGE)
+          # Thread safety: emit() appends to @events array from worker thread.
+          # Safe because latch.wait below ensures all threads complete before
+          # the main thread continues, preventing concurrent read/write.
+          emit(:error, { actor:, error: e })
+        ensure
+          latch.count_down
+        end
+      end
+
+      # Wait for all to complete OR deadline expires
+      latch.wait(Config::Battle::CHRONON_DEADLINE)
+    end
+
+    def execute_phases(actors)
+      # Actors that didn't complete in time have empty actions (no-op)
 
       # Phase 1: Sensing (probe, scan, pulse, then detect last)
       Phases::Sense.execute(arena: @arena, actors:).each do |failure|
@@ -152,7 +187,7 @@ module Rubowar
         emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
       end
 
-      # Phase 4: Energon collection and spawning
+      # Phase 4: Energon collection and spawning (uses all actors for collection check)
       energon_result = Phases::Energon.execute(arena: @arena, chronon: @chronons)
 
       energon_result[:collections].each do |collection|
@@ -175,6 +210,7 @@ module Rubowar
       actor.rubot_state = actor.to_state
       actor.arena_state = arena_state || @arena.to_state(@chronons)
       actor.reset_actions
+      actor._act_completed = false
       # Reset pending energy spend for this chronon's upfront energy checks
       actor._pending_energy_spend = 0
       # NOTE: Do NOT clear probe_echo, scan_echo, pulse_echo here.
@@ -212,19 +248,6 @@ module Rubowar
       event = { type: event_type, **data }
       @events << event
       @callbacks[event_type].each { |callback| callback.call(data) }
-    end
-
-    def validate_rubot_classes!(rubot_classes)
-      raise InsufficientRubotsError, "need at least 2 rubots for a battle" if rubot_classes.size < 2
-    end
-
-    def validate_dimensions!(width, height)
-      raise InvalidDimensionsError, "width must be positive" unless width.positive?
-      raise InvalidDimensionsError, "height must be positive" unless height.positive?
-    end
-
-    def validate_friction!(friction)
-      raise InvalidFrictionError, "friction must be between 0 and 1" unless (0..1).cover?(friction)
     end
 
     def validate_chronon_limit!(chronon_limit)

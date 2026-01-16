@@ -60,14 +60,15 @@ module Rubowar
       (arena_diagonal * Config::Arena::SPAWN_MAX_DISTANCE_RATIO).round
     end
 
-    def spawn_rubots(rubot_classes)
-      @actors = rubot_classes.map { |klass| RubotActor.new(klass) }
+    def spawn_rubots(actors)
+      actors.each { |actor| place_actor(actor) }
+    end
 
-      @actors.each do |actor|
-        position = find_spawn_position(actor.radius)
-        actor.set_position(x: position[:x], y: position[:y])
-        actor.set_turret_angle(rand(360))
-      end
+    def place_actor(actor)
+      position = find_spawn_position(actor.radius)
+      actor.set_position(x: position[:x], y: position[:y])
+      actor.set_turret_angle(rand(360))
+      @actors << actor
     end
 
     def to_state(chronons)
