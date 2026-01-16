@@ -106,10 +106,11 @@ describe Rubowar::Arena do
   end
 
   describe "#spawn_rubots" do
-    it "creates actors from rubot classes" do
+    it "places actors in arena" do
       arena = build_arena
+      actors = [Rubowar::RubotActor.new(ProbeTestBot), Rubowar::RubotActor.new(SmallProbeTestBot)]
 
-      arena.spawn_rubots([ProbeTestBot, SmallProbeTestBot])
+      arena.spawn_rubots(actors)
 
       _(arena.actors.length).must_equal 2
       _(arena.actors[0].instance).must_be_instance_of ProbeTestBot
@@ -118,8 +119,9 @@ describe Rubowar::Arena do
 
     it "positions actors within arena bounds" do
       arena = build_arena
+      actors = [Rubowar::RubotActor.new(ProbeTestBot), Rubowar::RubotActor.new(ProbeTestBot)]
 
-      arena.spawn_rubots([ProbeTestBot, ProbeTestBot])
+      arena.spawn_rubots(actors)
 
       arena.actors.each do |actor|
         _(actor.x).must_be :>, actor.radius
@@ -131,8 +133,9 @@ describe Rubowar::Arena do
 
     it "sets random turret angles" do
       arena = build_arena
+      actors = [Rubowar::RubotActor.new(ProbeTestBot)]
 
-      arena.spawn_rubots([ProbeTestBot])
+      arena.spawn_rubots(actors)
 
       # Turret angles are normalized to -180..180 range
       _(arena.actors[0].turret_angle).must_be :>=, -180

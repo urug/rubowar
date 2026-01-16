@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "forwardable"
+require "securerandom"
 
 # [file]
 # purpose = "Internal mutable state tracker for the game engine"
@@ -34,8 +35,8 @@ module Rubowar
   class RubotActor
     extend Forwardable
     attr_accessor :x, :y, :velocity_x, :velocity_y, :turret_angle, :health, :energy, :shield_level, :damage_dealt,
-                  :damage_taken, :death_processed
-    attr_reader :size, :rubot_class, :instance, :detection_counts, :position_set
+                  :damage_taken, :death_processed, :_act_completed
+    attr_reader :id, :size, :rubot_class, :instance, :detection_counts, :position_set
     def_delegators :@instance, :act, :rubot_state=, :arena_state=, :_pending_energy_spend=
     def_delegator :@instance, :actions, :rubot_actions
 
@@ -44,6 +45,7 @@ module Rubowar
       size = rubot_class.size
       validate_size!(size, rubot_class)
 
+      @id = SecureRandom.uuid
       @rubot_class = rubot_class
       @size = size
       @x = 0.0
@@ -59,6 +61,7 @@ module Rubowar
       @detection_counts = { probed: 0, scanned: 0, pulsed: 0 }
       @position_set = false
       @death_processed = false
+      @_act_completed = false
       @instance = rubot_class.new
     end
 

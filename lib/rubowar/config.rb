@@ -133,12 +133,14 @@ module Rubowar
 
     module Battle
       # Match length limit to prevent infinite stalemates
-      DEFAULT_CHRONON_LIMIT = 10_000 # Enough for multiple engagements; ~1000 sec worst-case (with timeouts)
+      DEFAULT_CHRONON_LIMIT = 10_000 # Enough for multiple engagements
 
       # Penalties for rubot code errors
       ERROR_DAMAGE = 20                  # Damage for exceptions in act() or callbacks
-      CHRONON_TIMEOUT = 0.1              # Seconds allowed per act() call
-      TIMEOUT_DAMAGE = 50                # Severe penalty for timeout (likely infinite loop)
+
+      # Concurrent execution: max time to wait for all rubots to complete act()
+      # Rubots that don't respond in time simply skip their actions (no penalty)
+      CHRONON_DEADLINE = 0.5             # Seconds to wait for all act() calls (lenient)
     end
 
     module Sensing
