@@ -8,8 +8,8 @@
 # [hierarchy]
 # Error = "Base class for all Rubowar errors"
 # ConfigurationError = "Errors in battle/arena configuration"
-#   - InvalidDimensionsError, InvalidFrictionError, InvalidChrononLimitError
-#   - InsufficientRubotsError, InvalidRubotSizeError, InvalidSpawnConstraintsError
+#   - InvalidChrononLimitError, InsufficientRubotsError
+#   - InvalidRubotSizeError, InvalidSpawnConstraintsError
 # GameplayError = "Errors during gameplay execution"
 #   - SpawnError, InvalidActionError
 
@@ -19,8 +19,6 @@ module Rubowar
 
   # Configuration errors (invalid setup parameters)
   class ConfigurationError < Error; end
-  class InvalidDimensionsError < ConfigurationError; end
-  class InvalidFrictionError < ConfigurationError; end
   class InvalidChrononLimitError < ConfigurationError; end
   class InsufficientRubotsError < ConfigurationError; end
   class InvalidRubotSizeError < ConfigurationError; end

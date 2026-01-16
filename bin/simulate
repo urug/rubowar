@@ -74,7 +74,7 @@ end.parse!
 
 # Load rubot files
 rubot_files = if ARGV.empty?
-                Dir.glob(File.join(__dir__, "..", "robots", "*.rb"))
+                Dir.glob(File.join(__dir__, "..", "rubots", "*.rb"))
               else
                 ARGV.map { |f| File.expand_path(f) }
               end

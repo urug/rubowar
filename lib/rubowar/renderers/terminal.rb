@@ -73,7 +73,7 @@ module Rubowar
         print_separator
         if winner
           puts "🏆 WINNER: #{winner.rubot_class.name}"
-          puts "   Health: #{winner.health}/#{winner.to_state.health}"
+          puts "   Health: #{winner.health}/#{winner.max_health}"
           puts "   Damage dealt: #{winner.damage_dealt}"
           puts "   Damage taken: #{winner.damage_taken}"
         else
