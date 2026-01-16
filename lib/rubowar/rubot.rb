@@ -23,7 +23,7 @@
 # return_values = "All action methods return true if queued, false if invalid params or insufficient energy"
 #
 # sense_phase = [
-#   "probe(*attributes) -> bool - Check turret line for target (1-16 energy)",
+#   "probe(*attributes) -> bool - Check turret line for target (1-18 energy)",
 #   "scan(angle:, distance:) -> bool - Arc scan from turret direction",
 #   "pulse(distance:) -> bool - 360° radar ping around self",
 #   "detect -> bool - Counter-intel: who scanned you this chronon (processed last)"

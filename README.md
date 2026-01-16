@@ -16,7 +16,7 @@ class HelloBot
 end
 
 # Run a battle
-battle = Rubowar::Battle.new([HelloBot, HelloBot])
+battle = Rubowar::Battle.local([HelloBot, HelloBot])
 battle.run
 puts "Winner: #{battle.winner.rubot_class.name}"
 ```
@@ -27,13 +27,13 @@ This bot spins and shoots when it has energy. Medium size regenerates 10 energy/
 
 **New to Rubowar?** Start with the [Tutorial](TUTORIAL.md) for a hands-on introduction, then study the sample bots in order of complexity:
 
-1. **Spinner** (19 lines) - Stationary turret, learn the basics
-2. **Tracker** (36 lines) - Target tracking with SimpleTargeting mixin
-3. **Coroner** (200 lines) - Corner camping with state machines
-4. **Evader** (213 lines) - Counter-intelligence and evasion tactics
-5. **Crusher** (323 lines) - Wall-ramming specialist
-6. **Hunter** (326 lines) - Adaptive predator with size-based tactics
-7. **Hugger** (452 lines) - Expert wall-hugging minimal movement
+1. **Spinner** - Stationary turret, learn the basics
+2. **Tracker** - Target tracking with SimpleTargeting mixin
+3. **Coroner** - Corner camping with state machines
+4. **Evader**  - Counter-intelligence and evasion tactics
+5. **Crusher** - Wall-ramming specialist
+6. **Hunter**  - Adaptive predator with size-based tactics
+7. **Hugger**  - Expert wall-hugging minimal movement
 
 See [`SAMPLE_BOTS.md`](SAMPLE_BOTS.md) for detailed explanations of each bot and what you'll learn.
 
@@ -60,33 +60,33 @@ end
 
 ### State Accessors (read-only)
 
-| Method | Description |
-|--------|-------------|
-| `x`, `y` | Position in arena |
-| `velocity_x`, `velocity_y` | Current velocity |
-| `speed` | Velocity magnitude |
-| `turret_angle` | Turret direction (0-360, world coordinates) |
-| `health` | Current HP (varies by size) |
-| `energy` | Current energy (max 100) |
-| `shield_level` | Shield strength (0 to max_health, decays 12%/chronon) |
-| `arena_width`, `arena_height` | Arena dimensions |
-| `friction` | Arena friction (default 0.92) |
-| `chronons` | Current game tick |
-| `damage_dealt`, `damage_taken` | Match stats |
-| `energons` | All energon positions `[{x:, y:}]` (free) |
-| `size` | Rubot size (:small, :medium, :large) |
-| `live_rubot_count` | Number of rubots still alive |
-| `energon_spawn_interval` | Ticks between energon spawns (default 50) |
-| `energon_growth_rate` | Energy growth per chronon (default 1.0) |
+| Method                         | Description                                       |
+|--------------------------------|---------------------------------------------------|
+| `x`, `y`                       | Position in arena                                 |
+| `velocity_x`, `velocity_y`     | Current velocity                                  |
+| `speed`                        | Velocity magnitude                                |
+| `turret_angle`                 | Turret direction (0-360, world coordinates)       |
+| `health`                       | Current HP (varies by size)                       |
+| `energy`                       | Current energy (max 100)                          |
+| `shield_level`                 | Shield strength (0 to max_health, decays 12%/chronon) |
+| `arena_width`, `arena_height`  | Arena dimensions                                  |
+| `friction`                     | Arena friction (default 0.92)                     |
+| `chronons`                     | Current game tick                                 |
+| `damage_dealt`, `damage_taken` | Match stats                                       |
+| `energons`                     | All energon positions `[{x:, y:}]` (free)         |
+| `size`                         | Rubot size (:small, :medium, :large)              |
+| `live_rubot_count`             | Number of rubots still alive                      |
+| `energon_spawn_interval`       | Ticks between energon spawns (default 50)         |
+| `energon_growth_rate`          | Energy growth per chronon (default 1.0)           |
 
 ### Actions
 
-| Method | Cost | Effect |
-|--------|------|--------|
-| `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction | Add velocity in world direction |
-| `rotate_turret(degrees)` | ceil(\|degrees\|/24) | Rotate turret |
-| `fire(energy)` | energy | Damage = 1.5 x energy, bullet speed 18 |
-| `raise_shields(energy)` | energy | Add to shield (max = HP cap, decays 12%/chronon) |
+| Method                   | Cost                              | Effect                                        |
+|--------------------------|-----------------------------------|-----------------------------------------------|
+| `thrust(speed:, angle:)` | (speed/1.5)^2 x mass x direction  | Add velocity in world direction               |
+| `rotate_turret(degrees)` | ceil(\|degrees\|/24)              | Rotate turret                                 |
+| `fire(energy)`           | energy                            | Damage = 1.5 x energy, bullet speed 18        |
+| `raise_shields(energy)`  | energy                            | Add to shield (max = HP cap, decays 12%/chronon) |
 
 ### Action Processing Order
 
@@ -147,26 +147,31 @@ The `thrust` method reserves minimum cost (assumes 1.0x multiplier) to allow que
 
 ### Sensing
 
-| Method | Cost | Returns |
-|--------|------|---------|
-| `probe(*attributes)` | sum of attribute costs | Line scan in turret direction |
-| `scan(angle:, distance:, velocity:, owner:)` | 3 + area cost [+2] [+1] | Arc scan for all targets |
-| `pulse(distance:, owner:)` | 2 + ceil(distance/75) [+1] | Omnidirectional radar ping |
-| `detect` | 2 | Counter-intelligence: how many times you were sensed |
+| Method                                       | Cost                      | Returns                                       |
+|----------------------------------------------|---------------------------|-----------------------------------------------|
+| `probe(*attributes)`                         | sum of attribute costs    | Line scan in turret direction                 |
+| `scan(angle:, distance:, velocity:, owner:)` | 3 + area cost [+2] [+1]   | Arc scan for all targets                      |
+| `pulse(distance:, owner:)`                   | 2 + ceil(distance/75) [+1]| Omnidirectional radar ping                    |
+| `detect`                                     | 2                         | Counter-intelligence: how many times you were sensed |
 
 **probe() - Single target, detailed info:**
-- Base: 1 energy (returns `:size` - detection ping)
-- `:position`: +4 energy (x, y coordinates)
-- `:velocity`: +3 energy (velocity_x, velocity_y)
-- `:turret_angle`: +2 energy
-- `:shield`: +2 energy (shield_level)
-- `:health`: +3 energy
-- `:energy`: +3 energy
+
+Cost is the sum of requested attributes (1-18 energy total):
+| Attribute       | Cost | Returns                 |
+|-----------------|------|-------------------------|
+| `:size`         | 1    | size category           |
+| `:position`     | 4    | x, y coordinates        |
+| `:velocity`     | 3    | velocity_x, velocity_y  |
+| `:turret_angle` | 2    | turret angle in degrees |
+| `:shield`       | 2    | shield_level            |
+| `:health`       | 3    | current health          |
+| `:energy`       | 3    | current energy          |
 
 ```ruby
-probe                        # 1 energy  -> ProbeEcho with size only
-probe(:position)             # 5 energy  -> ProbeEcho with size, x, y
-probe(:position, :velocity)  # 8 energy  -> ProbeEcho with size, x, y, velocity_x, velocity_y
+probe                        # 1 energy  -> defaults to :size
+probe(:position)             # 4 energy  -> x, y
+probe(:size, :position)      # 5 energy  -> size, x, y
+probe(:position, :velocity)  # 7 energy  -> x, y, velocity_x, velocity_y
 
 # Check results next chronon:
 probe_echo.found?            # true if target detected
@@ -313,11 +318,11 @@ def on_energon(amount)         # Collected energon
 
 ### Rubot Sizes
 
-| Size | Radius | HP | Energy Regen | Mass |
-|------|--------|-----|--------------|------|
-| `:small` | 16 | 80 | +8/chronon | 0.64 |
-| `:medium` | 20 | 100 | +10/chronon | 1.0 |
-| `:large` | 24 | 120 | +12/chronon | 1.44 |
+| Size      | Radius | HP  | Energy Regen | Mass |
+|-----------|--------|-----|--------------|------|
+| `:small`  | 16     | 80  | +8/chronon   | 0.64 |
+| `:medium` | 20     | 100 | +10/chronon  | 1.0  |
+| `:large`  | 24     | 120 | +12/chronon  | 1.44 |
 
 **Tradeoffs:**
 - **Small**: Harder to hit, cheapest thrust, but least HP
@@ -380,12 +385,113 @@ Energy power-ups that spawn periodically and grow in value over time.
 - Late collection = big reward, more competition
 - Spawns away from corners to discourage camping
 
+## Custom Actors
+
+For advanced use cases (web interfaces, AI training, network play), you can create custom actors that control rubots externally.
+
+### Battle Registration Model
+
+Battles use a registration model where actors are registered before the battle starts:
+
+```ruby
+# Convenience method for local rubot classes (most common)
+battle = Rubowar::Battle.local([MyBot, OpponentBot])
+battle.run
+
+# Low-level API for custom actors
+arena = Rubowar::Arena.new(width: 640, height: 640)
+battle = Rubowar::Battle.new(arena:)
+battle.register(Rubowar::LocalActor.new(MyBot))
+battle.register(my_custom_actor)
+battle.run
+```
+
+### Actor Interface
+
+All actors must implement the duck type interface that `Battle` expects. The easiest way is to include the `RubotActor` and `RubotPhysics` modules:
+
+```ruby
+class WebActor
+  include Rubowar::RubotActor
+  include Rubowar::RubotPhysics
+
+  attr_reader :rubot_class
+
+  def initialize(size: :medium, name: "WebPlayer")
+    initialize_actor(size:)
+    @rubot_class = Class.new { define_singleton_method(:name) { name } }
+    @_actions = { sense: [], move: [], combat: [] }
+  end
+
+  def instance = self
+  def rubot_actions = @_actions
+  def reset_actions = @_actions = { sense: [], move: [], combat: [] }
+  def rubot_state=(state) = @_rubot_state = state
+  def arena_state=(state) = @_arena_state = state
+  def _pending_energy_spend=(val) = @_pending = val
+
+  # Called each chronon - for external actors, this is a no-op
+  # Actions are set externally via set_actions before the deadline
+  def act; end
+
+  # External control: set actions before Battle's chronon deadline (0.5s)
+  def set_actions(sense: [], move: [], combat: [])
+    @_actions = { sense:, move:, combat: }
+  end
+
+  # Sensing results storage and accessors.
+  # LocalActor delegates these to the Rubot instance, but custom actors
+  # must implement their own storage since there's no rubot instance.
+  def set_sensing_results(probe: nil, scan: nil, pulse: nil, detect: nil)
+    @probe_echo = Rubowar::ProbeEcho.from_hash(probe) unless probe.nil?
+    @scan_echo = Rubowar::ScanEcho.new(scan) unless scan.nil?
+    @pulse_echo = Rubowar::PulseEcho.new(pulse) unless pulse.nil?
+    @detect_intel = Rubowar::DetectIntel.from_hash(detect) unless detect.nil?
+  end
+
+  attr_reader :probe_echo, :scan_echo, :pulse_echo, :detect_intel
+
+  # Callbacks (override as needed)
+  def call_safely = block_given? ? yield(self) : nil
+  def call_on_death; end
+  def on_spawn; end
+  def on_hit(damage:, direction:); end
+  def on_wall; end
+  def on_collision(other_state); end
+  def on_energon(amount); end
+  def on_death; end
+end
+```
+
+### Using Custom Actors
+
+```ruby
+# Create battle with custom actor
+arena = Rubowar::Arena.new
+battle = Rubowar::Battle.new(arena:, chronon_limit: 1000)
+
+web_player = WebActor.new(size: :medium, name: "Player1")
+battle.register(web_player)
+battle.register(Rubowar::LocalActor.new(Spinner))
+
+# In a separate thread/process, set actions before each chronon deadline
+web_player.set_actions(
+  sense: [{ type: :probe, attributes: [:position] }],
+  move: [{ type: :thrust, speed: 5, angle: 90 }],
+  combat: [{ type: :fire, energy: 10 }]
+)
+
+battle.run
+```
+
+See `BasicActor` in the source for a minimal reference implementation.
+
 ## Renderer Interface
 
 The engine emits events for any renderer:
 
 ```ruby
-battle = Rubowar::Battle.new([Spinner, Tracker])
+battle = Rubowar::Battle.local([Spinner, Tracker])
 
 # Block-based (real-time)
 battle.on(:chronon) { |state| render_frame(state) }
@@ -418,7 +524,9 @@ rubowar/
 │   │   ├── rubot.rb              # Module participants include
 │   │   ├── arena.rb              # Physics, collisions
 │   │   ├── battle.rb             # Game loop
-│   │   ├── rubot_actor.rb        # Mutable state tracking
+│   │   ├── rubot_actor.rb        # Shared actor state/behavior module
+│   │   ├── local_actor.rb        # Actor wrapping local Rubot instance
+│   │   ├── basic_actor.rb        # Minimal actor for testing/external control
 │   │   ├── rubot_state.rb        # Immutable state snapshots
 │   │   ├── arena_state.rb        # Arena state snapshots
 │   │   ├── bullet.rb             # Projectile tracking

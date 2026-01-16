@@ -171,11 +171,11 @@ Arena friction is 0.92 - you lose 8% speed each chronon. Without thrust, you'll 
 
 ### Three Sensing Modes
 
-| Method  | Coverage | Returns | Best For |
-|---------|----------|---------|----------|
-| `probe` | Line (turret direction) | Single target, detailed info | Precise targeting |
-| `scan`  | Arc (cone)    | Multiple targets, positions | Searching an area |
-| `pulse` | Circle (360°) | Multiple targets, positions | Situational awareness |
+| Method  | Coverage                | Returns                      | Best For              |
+|---------|-------------------------|------------------------------|-----------------------|
+| `probe` | Line (turret direction) | Single target, detailed info | Precise targeting     |
+| `scan`  | Arc (cone)              | Multiple targets, positions  | Searching an area     |
+| `pulse` | Circle (360°)           | Multiple targets, positions  | Situational awareness |
 
 ### Probe - Precision Targeting
 
@@ -402,11 +402,11 @@ end
 
 ## Part 8: Size Strategy
 
-| Size | HP | Regen | Movement Cost | Playstyle |
-|------|-----|-------|-------------|-----------|
-| `:small`  | 80  | 8/chronon  | Cheapest  | Agile dodger, hard to hit |
-| `:medium` | 100 | 10/chronon | Medium    | Balanced |
-| `:large`  | 120 | 12/chronon | Expensive | Tanky, high firepower |
+| Size      | HP  | Regen       | Movement Cost | Playstyle                 |
+|-----------|-----|-------------|---------------|---------------------------|
+| `:small`  | 80  | 8/chronon   | Cheapest      | Agile dodger, hard to hit |
+| `:medium` | 100 | 10/chronon  | Medium        | Balanced                  |
+| `:large`  | 120 | 12/chronon  | Expensive     | Tanky, high firepower     |
 
 Choose based on your strategy:
 - **Small**: Evasion-focused, hit-and-run
@@ -425,30 +425,30 @@ Remember: The best bot depends on what you're fighting against. Adapt!
 ## Quick Reference
 
 ### Actions
-| Action | Cost | Effect |
-|--------|------|--------|
+| Action                    | Cost                        | Effect       |
+|---------------------------|-----------------------------|--------------|
 | `thrust(speed:, angle:)`  | `(speed/1.5)² × mass × dir` | Add velocity |
-| `rotate_turret(degrees)`  | `ceil(\|degrees\|/24)` | Turn turret |
-| `fire(energy)` | `energy` | Shoot (damage = 1.5×) |
-| `raise_shields(energy)`   | `energy` | Add shield |
+| `rotate_turret(degrees)`  | `ceil(\|degrees\|/24)`      | Turn turret  |
+| `fire(energy)`            | `energy`                    | Shoot (damage = 1.5×) |
+| `raise_shields(energy)`   | `energy`                    | Add shield   |
 
 ### Sensing
-| Sensor | Cost | Delay | Returns |
-|--------|------|-------|---------|
+| Sensor                    | Cost | Delay     | Returns                 |
+|---------------------------|------|-----------|-------------------------|
 | `probe(*attrs)`           | 1-18 | 1 chronon | Single target, detailed |
 | `scan(angle:, distance:)` | 5-15 | 1 chronon | Multiple targets in arc |
 | `pulse(distance:)`        | 3-6  | 1 chronon | All targets in radius   |
 | `detect`                  | 2    | 1 chronon | Counter-intel counts    |
 
 ### Utility Methods
-| Method | Purpose |
-|--------|---------|
-| `distance_to(target_x:, target_y:)`  | Distance to point |
-| `angle_to(target_x:, target_y:)`     | Angle to point |
-| `normalize_angle(angle)`             | Clamp to -180..180 |
-| `lead_position(...)`                 | Predict target position |
+| Method                               | Purpose                      |
+|--------------------------------------|------------------------------|
+| `distance_to(target_x:, target_y:)`  | Distance to point            |
+| `angle_to(target_x:, target_y:)`     | Angle to point               |
+| `normalize_angle(angle)`             | Clamp to -180..180           |
+| `lead_position(...)`                 | Predict target position      |
 | `thrust_cost(thrust_speed:, angle:)` | Calculate thrust energy cost |
-| `near_wall?(buffer)`                 | Check if near arena edge |
-| `velocity_angle`                     | Current movement direction |
+| `near_wall?(buffer)`                 | Check if near arena edge     |
+| `velocity_angle`                     | Current movement direction   |
 
 Good luck, and happy hunting!
