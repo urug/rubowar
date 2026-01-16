@@ -67,7 +67,7 @@ module Rubowar
     def place_actor(actor)
       position = find_spawn_position(actor.radius)
       actor.set_position(x: position[:x], y: position[:y])
-      actor.set_turret_angle(rand(360))
+      actor.turret_angle = rand(360)
       @actors << actor
     end
 
@@ -145,7 +145,7 @@ module Rubowar
       SpawnPositionCalculator.find_rubot_position(
         width: @width,
         height: @height,
-        radius: radius,
+        radius:,
         existing_positions: placed_positions,
         wall_buffer: spawn_wall_buffer,
         min_distance: spawn_min_distance,
@@ -188,12 +188,10 @@ module Rubowar
 
       # Self-damage doesn't count toward damage_dealt (for tiebreaker fairness)
       # Dead rubots don't accumulate damage stats
-      if bullet.owner&.alive? && actor != bullet.owner
-        bullet.owner.add_damage_dealt(bullet.damage)
-      end
+      bullet.owner.add_damage_dealt(bullet.damage) if bullet.owner&.alive? && actor != bullet.owner
 
       direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
-      actor.call_safely { |bot| bot.on_hit(damage: bullet.damage, direction: direction) }
+      actor.call_safely { |bot| bot.on_hit(damage: bullet.damage, direction:) }
     end
 
     def process_fire(actor:, energy:)
@@ -223,7 +221,7 @@ module Rubowar
       result = target ? build_probe_echo(target:, attributes:) : {}
 
       # Track that this target was probed
-      target.increment_detection(:probed) if target
+      target&.increment_detection(:probed)
 
       actor.set_sensing_results(probe: result)
       true
@@ -323,7 +321,7 @@ module Rubowar
           result[:velocity_x] = other.velocity_x
           result[:velocity_y] = other.velocity_y
         end
-        # Note: rubots don't have an :owner field (only bullets do)
+        # NOTE: rubots don't have an :owner field (only bullets do)
         results << result
       end
 
@@ -381,7 +379,7 @@ module Rubowar
         other.increment_detection(:pulsed)
 
         result = { x: other.x, y: other.y, type: :rubot }
-        # Note: rubots don't have an :owner field (only bullets do)
+        # NOTE: rubots don't have an :owner field (only bullets do)
         results << result
       end
 
@@ -447,8 +445,8 @@ module Rubowar
       SpawnPositionCalculator.find_energon_position(
         width: @width,
         height: @height,
-        rubot_positions: rubot_positions,
-        wall_buffer: wall_buffer
+        rubot_positions:,
+        wall_buffer:
       )
     end
 

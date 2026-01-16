@@ -155,13 +155,13 @@ class Coroner
       target_y = @last_target[:y]
 
       if @last_target[:velocity_x] && @last_target[:velocity_y]
-        dist = distance_to(target_x: target_x, target_y: target_y)
+        dist = distance_to(target_x:, target_y:)
         lead_time = dist / BULLET_SPEED
         target_x += @last_target[:velocity_x] * lead_time
         target_y += @last_target[:velocity_y] * lead_time
       end
 
-      target_angle = angle_to(target_x: target_x, target_y: target_y)
+      target_angle = angle_to(target_x:, target_y:)
       turret_diff = normalize_angle(target_angle - turret_angle)
       rotate_turret(turret_diff.clamp(-10, 10)) if turret_diff.abs > 3
     end

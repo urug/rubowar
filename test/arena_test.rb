@@ -28,7 +28,7 @@ def build_arena
 end
 
 def build_actor(x:, y:, turret_angle: 0, klass: ProbeTestBot)
-  actor = Rubowar::RubotActor.new(klass)
+  actor = Rubowar::LocalActor.new(klass)
   actor.x = x
   actor.y = y
   actor.turret_angle = turret_angle
@@ -108,7 +108,7 @@ describe Rubowar::Arena do
   describe "#spawn_rubots" do
     it "places actors in arena" do
       arena = build_arena
-      actors = [Rubowar::RubotActor.new(ProbeTestBot), Rubowar::RubotActor.new(SmallProbeTestBot)]
+      actors = [Rubowar::LocalActor.new(ProbeTestBot), Rubowar::LocalActor.new(SmallProbeTestBot)]
 
       arena.spawn_rubots(actors)
 
@@ -119,7 +119,7 @@ describe Rubowar::Arena do
 
     it "positions actors within arena bounds" do
       arena = build_arena
-      actors = [Rubowar::RubotActor.new(ProbeTestBot), Rubowar::RubotActor.new(ProbeTestBot)]
+      actors = [Rubowar::LocalActor.new(ProbeTestBot), Rubowar::LocalActor.new(ProbeTestBot)]
 
       arena.spawn_rubots(actors)
 
@@ -133,7 +133,7 @@ describe Rubowar::Arena do
 
     it "sets random turret angles" do
       arena = build_arena
-      actors = [Rubowar::RubotActor.new(ProbeTestBot)]
+      actors = [Rubowar::LocalActor.new(ProbeTestBot)]
 
       arena.spawn_rubots(actors)
 
@@ -579,9 +579,7 @@ describe Rubowar::Arena do
       [small, medium, large].each do |actor|
         actor.velocity_x = -10.0
         actor.velocity_y = 0.0
-      end
 
-      [small, medium, large].each do |actor|
         Rubowar::CollisionSystem.process_wall_collision(
           actor:, arena_width: arena.width, arena_height: arena.height
         )

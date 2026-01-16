@@ -190,11 +190,11 @@ end
 
 describe Rubowar::ScanEcho do
   def build_rubot_target(x: 100, y: 100)
-    Rubowar::SenseTarget.new(x: x, y: y, type: :rubot, velocity_x: nil, velocity_y: nil, owner: nil)
+    Rubowar::SenseTarget.new(x:, y:, type: :rubot, velocity_x: nil, velocity_y: nil, owner: nil)
   end
 
   def build_bullet_target(x: 100, y: 100)
-    Rubowar::SenseTarget.new(x: x, y: y, type: :bullet, velocity_x: nil, velocity_y: nil, owner: "TestBot")
+    Rubowar::SenseTarget.new(x:, y:, type: :bullet, velocity_x: nil, velocity_y: nil, owner: "TestBot")
   end
 
   describe ".empty" do
@@ -333,11 +333,11 @@ end
 
 describe Rubowar::PulseEcho do
   def build_rubot_target(x: 100, y: 100)
-    Rubowar::SenseTarget.new(x: x, y: y, type: :rubot, velocity_x: nil, velocity_y: nil, owner: nil)
+    Rubowar::SenseTarget.new(x:, y:, type: :rubot, velocity_x: nil, velocity_y: nil, owner: nil)
   end
 
   def build_bullet_target(x: 100, y: 100)
-    Rubowar::SenseTarget.new(x: x, y: y, type: :bullet, velocity_x: nil, velocity_y: nil, owner: "TestBot")
+    Rubowar::SenseTarget.new(x:, y:, type: :bullet, velocity_x: nil, velocity_y: nil, owner: "TestBot")
   end
 
   describe ".empty" do

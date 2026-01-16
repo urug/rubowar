@@ -44,7 +44,8 @@
 #
 # [utilities]
 # geometry = ["distance_to", "angle_to", "normalize_angle", "lead_position", "lead_angle"]
-# awareness = ["near_wall?", "nearest_wall_distance", "nearest_wall", "wall_distance", "approaching_wall?", "arena_diagonal", "find_nearest_energon", "energon_still_exists?"]
+# awareness = ["near_wall?", "nearest_wall_distance", "nearest_wall", "wall_distance",
+#              "approaching_wall?", "arena_diagonal", "find_nearest_energon", "energon_still_exists?"]
 # momentum = ["velocity_angle", "momentum_aligned?"]
 # energy = ["thrust_cost"]
 #
@@ -480,9 +481,9 @@ module Rubowar
     def thrust_cost(thrust_speed:, angle:)
       mass = Physics.mass_factor(Config::Rubot::SIZES[size][:radius])
       direction_multiplier = Physics.thrust_direction_multiplier(
-        vx: velocity_x, vy: velocity_y, thrust_angle: angle, speed: speed
+        vx: velocity_x, vy: velocity_y, thrust_angle: angle, speed:
       )
-      Physics.thrust_cost(speed: thrust_speed, mass: mass, direction_multiplier: direction_multiplier)
+      Physics.thrust_cost(speed: thrust_speed, mass:, direction_multiplier:)
     end
 
     private

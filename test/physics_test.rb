@@ -393,9 +393,9 @@ describe Rubowar::Physics do
       mass = 1.0
       direction_multiplier = 1.5
 
-      cost = Rubowar::Physics.thrust_cost(speed: original_speed, mass: mass, direction_multiplier: direction_multiplier)
+      cost = Rubowar::Physics.thrust_cost(speed: original_speed, mass:, direction_multiplier:)
       recovered_speed = Rubowar::Physics.thrust_speed_from_energy(
-        energy: cost, mass: mass, direction_multiplier: direction_multiplier
+        energy: cost, mass:, direction_multiplier:
       )
 
       _(recovered_speed).must_be_close_to original_speed, 0.1

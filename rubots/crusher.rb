@@ -58,8 +58,8 @@ class Crusher
 
     attacker_angle = (direction + 180) % 360
     @target = {
-      x: x + Math.cos(attacker_angle * Math::PI / 180) * 150,
-      y: y + Math.sin(attacker_angle * Math::PI / 180) * 150
+      x: x + (Math.cos(attacker_angle * Math::PI / 180) * 150),
+      y: y + (Math.sin(attacker_angle * Math::PI / 180) * 150)
     }
     @mode = :positioning
   end
@@ -102,9 +102,7 @@ class Crusher
     # No target - patrol toward center, scan around
     center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
 
-    if distance_to(target_x: arena_width / 2, target_y: arena_height / 2) > 150
-      thrust(speed: 4, angle: center_angle) if speed < 8
-    end
+    thrust(speed: 4, angle: center_angle) if (distance_to(target_x: arena_width / 2, target_y: arena_height / 2) > 150) && (speed < 8)
 
     rotate_turret(15)
     raise_shields(5) if energy > 60 && shield_level < 30
@@ -130,9 +128,9 @@ class Crusher
       # Far away - close distance directly first
       approach_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
       thrust(speed: 5, angle: approach_angle) if speed < 12
-    else
+    elsif speed < 14
       # In range - position for wall ram
-      thrust(speed: 6, angle: ram_angle) if speed < 14
+      thrust(speed: 6, angle: ram_angle)
     end
 
     # Fire while closing
@@ -271,6 +269,7 @@ class Crusher
 
   def target_pinned?
     return false unless @target
+
     wall_distance_of(@target) < PIN_THRESHOLD
   end
 
@@ -281,34 +280,34 @@ class Crusher
     target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle).abs
 
-    if turret_diff < 20 && energy > 10
-      probe(:position, :velocity)
-      if probe_echo.found?
-        @target = {
-          x: probe_echo.x,
-          y: probe_echo.y,
-          velocity_x: probe_echo.velocity_x,
-          velocity_y: probe_echo.velocity_y
-        }
-      end
-    end
+    return unless turret_diff < 20 && energy > 10
+
+    probe(:position, :velocity)
+    return unless probe_echo.found?
+
+    @target = {
+      x: probe_echo.x,
+      y: probe_echo.y,
+      velocity_x: probe_echo.velocity_x,
+      velocity_y: probe_echo.velocity_y
+    }
   end
 
   def aim_and_fire(aggressive: false)
     return unless @target
 
     # Lead moving targets
-    if @target[:velocity_x] && @target[:velocity_y]
-      target_angle = lead_angle(
-        target_x: @target[:x],
-        target_y: @target[:y],
-        velocity_x: @target[:velocity_x],
-        velocity_y: @target[:velocity_y],
-        projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
-      )
-    else
-      target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
-    end
+    target_angle = if @target[:velocity_x] && @target[:velocity_y]
+                     lead_angle(
+                       target_x: @target[:x],
+                       target_y: @target[:y],
+                       velocity_x: @target[:velocity_x],
+                       velocity_y: @target[:velocity_y],
+                       projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+                     )
+                   else
+                     angle_to(target_x: @target[:x], target_y: @target[:y])
+                   end
 
     turret_diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-15, 15))

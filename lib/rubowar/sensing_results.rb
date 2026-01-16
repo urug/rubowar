@@ -16,7 +16,7 @@ module Rubowar
   ProbeEcho = Data.define(
     :size,         # :small, :medium, :large
     :x, :y,        # position (if :position requested)
-    :velocity_x, :velocity_y,  # velocity (if :velocity requested)
+    :velocity_x, :velocity_y, # velocity (if :velocity requested)
     :turret_angle, # turret direction (if :turret_angle requested)
     :shield_level, # shield amount (if :shield requested)
     :health,       # current HP (if :health requested)
@@ -50,7 +50,6 @@ module Rubowar
       when :shield_level, :shield then shield_level
       when :health then health
       when :energy then energy
-      else nil
       end
     end
 
@@ -97,7 +96,6 @@ module Rubowar
       when :velocity_x then velocity_x
       when :velocity_y then velocity_y
       when :owner then owner
-      else nil
       end
     end
 
@@ -113,8 +111,8 @@ module Rubowar
     end
   end
 
-  # Result from scan() - multiple targets in arc from turret direction
-  class ScanEcho
+  # Base class for scan/pulse results - collection of sense targets
+  class SenseResultCollection
     include Enumerable
 
     def initialize(targets = [])
@@ -124,8 +122,8 @@ module Rubowar
       freeze
     end
 
-    def each(&block)
-      @targets.each(&block)
+    def each(&)
+      @targets.each(&)
     end
 
     def empty?
@@ -179,74 +177,12 @@ module Rubowar
       new([])
     end
   end
+
+  # Result from scan() - multiple targets in arc from turret direction
+  class ScanEcho < SenseResultCollection; end
 
   # Result from pulse() - multiple targets in radius around rubot
-  # Same structure as ScanEcho but separate class for clarity
-  class PulseEcho
-    include Enumerable
-
-    def initialize(targets = [])
-      @targets = targets.map do |t|
-        t.is_a?(SenseTarget) ? t : SenseTarget.from_hash(t)
-      end.freeze
-      freeze
-    end
-
-    def each(&block)
-      @targets.each(&block)
-    end
-
-    def empty?
-      @targets.empty?
-    end
-
-    def size
-      @targets.size
-    end
-    alias length size
-
-    def [](index)
-      @targets[index]
-    end
-
-    # Filter to only rubots (returns frozen array)
-    def rubots
-      @targets.select(&:rubot?).freeze
-    end
-
-    # Filter to only bullets (returns frozen array)
-    def bullets
-      @targets.select(&:bullet?).freeze
-    end
-
-    # Quick checks
-    def any_rubots?
-      @targets.any?(&:rubot?)
-    end
-
-    def any_bullets?
-      @targets.any?(&:bullet?)
-    end
-
-    # Find closest rubot to a position
-    def closest_rubot(to_x:, to_y:)
-      rubots.min_by { |t| Math.sqrt(((t.x - to_x)**2) + ((t.y - to_y)**2)) }
-    end
-
-    # Find closest bullet to a position
-    def closest_bullet(to_x:, to_y:)
-      bullets.min_by { |t| Math.sqrt(((t.x - to_x)**2) + ((t.y - to_y)**2)) }
-    end
-
-    # Find closest target (any type) to a position
-    def closest(to_x:, to_y:)
-      @targets.min_by { |t| Math.sqrt(((t.x - to_x)**2) + ((t.y - to_y)**2)) }
-    end
-
-    def self.empty
-      new([])
-    end
-  end
+  class PulseEcho < SenseResultCollection; end
 
   # Result from detect() - counter-intelligence on who sensed you
   DetectIntel = Data.define(:probed, :scanned, :pulsed) do
@@ -266,7 +202,6 @@ module Rubowar
       when :probed then probed
       when :scanned then scanned
       when :pulsed then pulsed
-      else nil
       end
     end
 

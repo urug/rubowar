@@ -33,7 +33,7 @@ def run_battle(rubot_classes, iterations)
   results = Hash.new(0)
 
   iterations.times do
-    battle = Rubowar::Battle.new(
+    battle = Rubowar::Battle.local(
       rubot_classes,
       width: 800,
       height: 600,
@@ -140,7 +140,8 @@ puts "|#{"-" * 14}|#{"-" * 12}|#{"-" * 14}|#{"-" * 16}|#{"-" * 14}|"
 sorted_rubots = RUBOTS.sort_by { |r| -grand_totals[r.name] }
 sorted_rubots.each do |rubot|
   name = rubot.name
-  puts format("| %-12s | %10d | %12d | %14d | %12d |", name, scores["1v1"][name], scores["1v1v1"][name], scores["1v1v1v1"][name], grand_totals[name])
+  puts format("| %-12<name>s | %10<v1>d | %12<v1v1>d | %14<v1v1v1>d | %12<total>d |",
+              name:, v1: scores["1v1"][name], v1v1: scores["1v1v1"][name], v1v1v1: scores["1v1v1v1"][name], total: grand_totals[name])
 end
 
 puts

@@ -10,11 +10,12 @@ describe Rubowar::Phases::Combat do
   def build_actor(x: 100.0, y: 100.0, turret_angle: 0.0, energy: 100)
     klass = Class.new do
       include Rubowar::Rubot
+
       def act; end
     end
-    actor = Rubowar::RubotActor.new(klass)
+    actor = Rubowar::LocalActor.new(klass)
     actor.set_position(x:, y:)
-    actor.set_turret_angle(turret_angle)
+    actor.turret_angle = turret_angle
     actor.instance_variable_set(:@energy, energy)
     actor.reset_actions
     actor
@@ -169,7 +170,7 @@ describe Rubowar::Phases::Combat do
       actor = build_actor(x: 300.0, y: 300.0, turret_angle: 0.0, energy: 50)
       arena.actors = [actor]
 
-      # Note: In actual game flow, move phase happens before combat phase
+      # NOTE: In actual game flow, move phase happens before combat phase
       # This test just verifies that fire uses current position
       actor.set_position(x: 350.0, y: 300.0)
 

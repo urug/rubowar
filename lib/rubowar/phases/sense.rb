@@ -27,7 +27,7 @@ module Rubowar
         # 1. Reset detection counts (prepare for this chronon's sensing)
         actors.each(&:reset_detection_counts)
 
-        # 2. Process probe/scan/pulse (increments detection counts on targets)
+        # 2. Process probe/scan/pulse for ALL actors (increments detection counts on targets)
         actors.each do |actor|
           next if actor.dead?
 
@@ -44,7 +44,9 @@ module Rubowar
           end
         end
 
-        # 3. Process detect actions last (reports this chronon's detection counts)
+        # 3. Process detect actions for ALL actors (reports this chronon's detection counts)
+        # Must be a separate loop so all probe/scan/pulse from ALL actors complete first
+        # rubocop:disable Style/CombinableLoops
         actors.each do |actor|
           next if actor.dead?
 
@@ -60,6 +62,7 @@ module Rubowar
             end
           end
         end
+        # rubocop:enable Style/CombinableLoops
 
         failed_actions
       end

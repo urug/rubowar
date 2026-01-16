@@ -120,18 +120,14 @@ module Rubowar
     # Falls back to velocity-based or arbitrary direction if positions coincide
     def separation_direction(a_x:, a_y:, b_x:, b_y:, distance:, a_vx:, a_vy:, b_vx:, b_vy:)
       # Normal case: use position difference
-      if distance > Config::Sensing::MIN_MEASURABLE_DISTANCE
-        return [(a_x - b_x) / distance, (a_y - b_y) / distance]
-      end
+      return [(a_x - b_x) / distance, (a_y - b_y) / distance] if distance > Config::Sensing::MIN_MEASURABLE_DISTANCE
 
       # Zero distance: try using relative velocity to separate
       rel_vx = a_vx - b_vx
       rel_vy = a_vy - b_vy
       rel_speed = Math.sqrt((rel_vx**2) + (rel_vy**2))
 
-      if rel_speed > Config::Sensing::MIN_MEASURABLE_DISTANCE
-        return [rel_vx / rel_speed, rel_vy / rel_speed]
-      end
+      return [rel_vx / rel_speed, rel_vy / rel_speed] if rel_speed > Config::Sensing::MIN_MEASURABLE_DISTANCE
 
       # Edge case: both stationary at exact same position (extremely rare - requires
       # pixel-perfect spawn overlap). Use deterministic X-axis separation to ensure
