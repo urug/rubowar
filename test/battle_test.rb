@@ -312,7 +312,7 @@ describe Rubowar::Battle do
 
       result = battle.run
 
-      _(result).must_be_instance_of Array
+      _(result).must_be_kind_of Array
       _(result).wont_be_empty
     end
 
@@ -325,7 +325,6 @@ describe Rubowar::Battle do
     end
   end
 
-  
   describe "sensing results persistence" do
     it "pulse results from tick N are available in tick N+1" do
       battle = Rubowar::Battle.local([PulseTestBot, StationaryBot], chronon_limit: 5)
@@ -366,7 +365,7 @@ describe Rubowar::Battle do
       _(results[0]).must_be :empty?
 
       # After turret rotates past 0 degrees (east), should find target in subsequent ticks
-      found_target = results[1..].any? { |r| r.found? }
+      found_target = results[1..].any?(&:found?)
       _(found_target).must_equal true
     end
 
@@ -816,7 +815,7 @@ describe Rubowar::Battle do
 
   describe "actor interface requirements" do
     it "requires _act_completed accessor for deadline tracking" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       _(actor).must_respond_to :_act_completed
       _(actor).must_respond_to :_act_completed=
@@ -824,7 +823,7 @@ describe Rubowar::Battle do
     end
 
     it "requires reset_actions method" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       _(actor).must_respond_to :reset_actions
       actor.reset_actions
@@ -832,7 +831,7 @@ describe Rubowar::Battle do
     end
 
     it "requires rubot_actions returning phased action hash" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
       actor.reset_actions
 
       actions = actor.rubot_actions
@@ -843,7 +842,7 @@ describe Rubowar::Battle do
     end
 
     it "requires alive? and dead? methods" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       _(actor.alive?).must_equal true
       _(actor.dead?).must_equal false
@@ -855,20 +854,20 @@ describe Rubowar::Battle do
     end
 
     it "requires id for tracking" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       _(actor.id).must_match(/^[0-9a-f-]{36}$/)
     end
 
     it "requires to_state returning RubotState" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       state = actor.to_state
       _(state).must_be_instance_of Rubowar::RubotState
     end
 
     it "requires state setters for chronon setup" do
-      actor = Rubowar::RubotActor.new(StationaryBot)
+      actor = Rubowar::LocalActor.new(StationaryBot)
 
       _(actor).must_respond_to :rubot_state=
       _(actor).must_respond_to :arena_state=
@@ -879,10 +878,10 @@ describe Rubowar::Battle do
   describe "stub actor compatibility" do
     it "runs battle with stub actors" do
       arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 5)
+      battle = Rubowar::Battle.new(arena:, chronon_limit: 5)
 
-      stub1 = Rubowar::StubActor.new(size: :medium)
-      stub2 = Rubowar::StubActor.new(size: :medium)
+      stub1 = Rubowar::BasicActor.new(size: :medium)
+      stub2 = Rubowar::BasicActor.new(size: :medium)
       battle.register(stub1)
       battle.register(stub2)
 
@@ -894,10 +893,10 @@ describe Rubowar::Battle do
 
     it "processes pre-set thrust actions on stub actor" do
       arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 1)
+      battle = Rubowar::Battle.new(arena:, chronon_limit: 1)
 
-      stub1 = Rubowar::StubActor.new(size: :medium)
-      stub2 = Rubowar::StubActor.new(size: :medium)
+      stub1 = Rubowar::BasicActor.new(size: :medium)
+      stub2 = Rubowar::BasicActor.new(size: :medium)
       battle.register(stub1)
       battle.register(stub2)
 
@@ -918,10 +917,10 @@ describe Rubowar::Battle do
 
     it "works alongside RubotActor" do
       arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena: arena, chronon_limit: 3)
+      battle = Rubowar::Battle.new(arena:, chronon_limit: 3)
 
-      stub = Rubowar::StubActor.new(size: :medium)
-      rubot_actor = Rubowar::RubotActor.new(StationaryBot)
+      stub = Rubowar::BasicActor.new(size: :medium)
+      rubot_actor = Rubowar::LocalActor.new(StationaryBot)
 
       battle.register(stub)
       battle.register(rubot_actor)
@@ -933,8 +932,8 @@ describe Rubowar::Battle do
     end
 
     it "stub actor has same interface as RubotActor" do
-      rubot = Rubowar::RubotActor.new(StationaryBot)
-      stub = Rubowar::StubActor.new(size: :medium)
+      rubot = Rubowar::LocalActor.new(StationaryBot)
+      stub = Rubowar::BasicActor.new(size: :medium)
 
       # Core interface methods Battle depends on
       interface_methods = %i[
@@ -948,7 +947,7 @@ describe Rubowar::Battle do
 
       interface_methods.each do |method|
         _(rubot).must_respond_to method, "RubotActor missing #{method}"
-        _(stub).must_respond_to method, "StubActor missing #{method}"
+        _(stub).must_respond_to method, "BasicActor missing #{method}"
       end
     end
   end

@@ -25,29 +25,17 @@ module Rubowar
     # @return [Numeric] The validated value
     # @raise [InvalidActionError] If validation fails
     def validate!(value, name:, positive: false, non_negative: false, max: nil)
-      unless value.is_a?(Numeric)
-        raise InvalidActionError, "#{name} must be a number, got #{value.class}"
-      end
+      raise InvalidActionError, "#{name} must be a number, got #{value.class}" unless value.is_a?(Numeric)
 
-      if value.respond_to?(:nan?) && value.nan?
-        raise InvalidActionError, "#{name} cannot be NaN"
-      end
+      raise InvalidActionError, "#{name} cannot be NaN" if value.respond_to?(:nan?) && value.nan?
 
-      if value.respond_to?(:infinite?) && value.infinite?
-        raise InvalidActionError, "#{name} cannot be Infinity"
-      end
+      raise InvalidActionError, "#{name} cannot be Infinity" if value.respond_to?(:infinite?) && value.infinite?
 
-      if positive && value <= 0
-        raise InvalidActionError, "#{name} must be positive, got #{value}"
-      end
+      raise InvalidActionError, "#{name} must be positive, got #{value}" if positive && value <= 0
 
-      if non_negative && value.negative?
-        raise InvalidActionError, "#{name} must be non-negative, got #{value}"
-      end
+      raise InvalidActionError, "#{name} must be non-negative, got #{value}" if non_negative && value.negative?
 
-      if max && value > max
-        raise InvalidActionError, "#{name} must be <= #{max}, got #{value}"
-      end
+      raise InvalidActionError, "#{name} must be <= #{max}, got #{value}" if max && value > max
 
       value
     end

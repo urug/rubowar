@@ -90,7 +90,7 @@ class Hugger
     scan_opposite_corners
     process_scan_echos unless scan_echo.empty?
 
-    return unless @target.nil? || chronons % 16 == 0
+    return unless @target.nil? || (chronons % 16).zero?
 
     pulse(distance: 300)
     process_pulse_echos unless pulse_echo.empty?
@@ -99,17 +99,17 @@ class Hugger
   def process_scan_echos
     check_incoming_bullets(scan_echo.bullets) if scan_echo.any_bullets?
 
-    if scan_echo.any_rubots?
-      closest = scan_echo.closest_rubot(to_x: x, to_y: y)
-      @target = { x: closest.x, y: closest.y, velocity_x: closest.velocity_x, velocity_y: closest.velocity_y }
-    end
+    return unless scan_echo.any_rubots?
+
+    closest = scan_echo.closest_rubot(to_x: x, to_y: y)
+    @target = { x: closest.x, y: closest.y, velocity_x: closest.velocity_x, velocity_y: closest.velocity_y }
   end
 
   def process_pulse_echos
-    if pulse_echo.any_rubots?
-      closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
-      @target = { x: closest.x, y: closest.y }
-    end
+    return unless pulse_echo.any_rubots?
+
+    closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+    @target = { x: closest.x, y: closest.y }
   end
 
   def update_safe_wall
@@ -181,13 +181,13 @@ class Hugger
     bottom_half = @target[:y] < arena_height / 2
 
     if left_half && bottom_half
-      (y < arena_height / 2) ? :top : :right
+      y < arena_height / 2 ? :top : :right
     elsif !left_half && bottom_half
-      (y < arena_height / 2) ? :top : :left
+      y < arena_height / 2 ? :top : :left
     elsif left_half && !bottom_half
-      (y > arena_height / 2) ? :bottom : :right
+      y > arena_height / 2 ? :bottom : :right
     else
-      (y > arena_height / 2) ? :bottom : :left
+      y > arena_height / 2 ? :bottom : :left
     end
   end
 
@@ -223,7 +223,7 @@ class Hugger
     else
       # Micro-dodge: small slip perpendicular to wall
       move_angle = directed_wall_parallel_angle
-      slip_offset = (chronons % 4 < 2) ? 15 : -15
+      slip_offset = chronons % 4 < 2 ? 15 : -15
       move_angle = (move_angle + slip_offset) % 360
     end
 
@@ -233,7 +233,7 @@ class Hugger
 
   def evade_toward_wall
     base_angle = angle_to(target_x: wall_target_position[0], target_y: wall_target_position[1])
-    jink_offset = (chronons % 6 < 3) ? 25 : -25
+    jink_offset = chronons % 6 < 3 ? 25 : -25
     move_angle = (base_angle + jink_offset) % 360
 
     thrust(speed: 5, angle: move_angle) if speed < 10
@@ -267,9 +267,9 @@ class Hugger
   end
 
   def brake
-    return if speed < 0.1
+    return unless velocity_angle  # stationary, no need to brake
 
-    reverse_angle = (Math.atan2(velocity_y, velocity_x) * 180 / Math::PI + 180) % 360
+    reverse_angle = (velocity_angle + 180) % 360
     thrust(speed: 1, angle: reverse_angle)
   end
 
@@ -349,7 +349,7 @@ class Hugger
   end
 
   def probe_target_health
-    return unless energy > 15 && chronons % 10 == 0
+    return unless energy > 15 && (chronons % 10).zero?
 
     probe(:health, :shield)
     return unless probe_echo.found?
@@ -439,17 +439,6 @@ class Hugger
     (angle + diff.clamp(-degrees, degrees)) % 360
   end
 
-  def nearest_wall
-    distances = {
-      left: x,
-      right: arena_width - x,
-      bottom: y,
-      top: arena_height - y
-    }
-    distances.min_by { |_, d| d }.first
-  end
-
-  def nearest_wall_distance
-    [x, arena_width - x, y, arena_height - y].min
-  end
+  # Uses nearest_wall from Rubot module
+  # Uses nearest_wall_distance from Rubot module
 end

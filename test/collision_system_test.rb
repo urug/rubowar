@@ -24,7 +24,7 @@ class LargeCollisionBot
 end
 
 def build_collision_actor(x:, y:, klass: CollisionTestBot)
-  actor = Rubowar::RubotActor.new(klass)
+  actor = Rubowar::LocalActor.new(klass)
   actor.x = x
   actor.y = y
   actor

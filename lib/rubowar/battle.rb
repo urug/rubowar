@@ -42,14 +42,14 @@ require "concurrent"
 
 module Rubowar
   class Battle
-    attr_reader :arena, :chronons, :winner, :events
+    attr_reader :arena, :chronons, :winner, :events, :registered_actors
 
     # Convenience constructor for local battles
     def self.local(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
                    friction: Config::Arena::DEFAULT_FRICTION, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
       arena = Arena.new(width:, height:, friction:)
       battle = new(arena:, chronon_limit:)
-      rubot_classes.each { |klass| battle.register(RubotActor.new(klass)) }
+      rubot_classes.each { |klass| battle.register(LocalActor.new(klass)) }
       battle
     end
 
@@ -60,12 +60,10 @@ module Rubowar
       @chronons_limit = chronon_limit
       @chronons = 0
       @winner = nil
-      @events = []
+      @events = Concurrent::Array.new
       @callbacks = Hash.new { |h, k| h[k] = Set.new }
       @registered_actors = []
     end
-
-    attr_accessor :registered_actors
 
     def register(actor)
       registered_actors << actor
@@ -142,6 +140,12 @@ module Rubowar
       end
     end
 
+    # Run all rubot act() calls concurrently with deadline enforcement.
+    #
+    # THREAD SAFETY:
+    # Worker threads call emit() which appends to @events (Concurrent::Array).
+    # Using Concurrent::Array ensures thread safety across all Ruby implementations
+    # (CRuby, JRuby, TruffleRuby) without relying on GVL behavior.
     def run_acts_concurrently(actors)
       return if actors.empty?
 
@@ -153,9 +157,6 @@ module Rubowar
           actor._act_completed = true
         rescue StandardError => e
           actor.apply_damage(Config::Battle::ERROR_DAMAGE)
-          # Thread safety: emit() appends to @events array from worker thread.
-          # Safe because latch.wait below ensures all threads complete before
-          # the main thread continues, preventing concurrent read/write.
           emit(:error, { actor:, error: e })
         ensure
           latch.count_down

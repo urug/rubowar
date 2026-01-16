@@ -5,10 +5,11 @@ require "test_helper"
 def build_test_actor(x: 100, y: 100, vx: 0, vy: 0)
   klass = Class.new do
     include Rubowar::Rubot
+
     size :medium
     def act; end
   end
-  actor = Rubowar::RubotActor.new(klass)
+  actor = Rubowar::LocalActor.new(klass)
   actor.x = x
   actor.y = y
   actor.velocity_x = vx

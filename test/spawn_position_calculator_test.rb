@@ -77,14 +77,14 @@ describe Rubowar::SpawnPositionCalculator do
       # Create impossible constraints: min distance larger than arena
       existing = [{ x: 400, y: 300 }]
 
-      _(-> {
+      _(lambda {
         Rubowar::SpawnPositionCalculator.find_rubot_position(
           width: 200,
           height: 200,
           radius: 20,
           existing_positions: existing,
           wall_buffer: 50,
-          min_distance: 500  # Impossible constraint
+          min_distance: 500 # Impossible constraint
         )
       }).must_raise Rubowar::SpawnError
     end

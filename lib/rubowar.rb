@@ -13,7 +13,8 @@
 #   "Phases::Sense/Move/Combat/Energon - Phase execution modules",
 #   "Rubot - Module players include in their rubot classes",
 #   "SimpleTargeting - Optional mixin for target tracking and aiming",
-#   "RubotActor - Internal mutable state tracker for game engine",
+#   "RubotActor - State container and resource management for actors",
+#   "RubotPhysics - Physics mutations (thrust, movement, turret)",
 #   "RubotState/ArenaState/CollisionResponse - Immutable Data objects",
 #   "SpawnPositionCalculator - Spawn position algorithms",
 #   "Bullet - Projectile tracking",
@@ -29,7 +30,9 @@ require_relative "rubowar/sensing_results"
 require_relative "rubowar/rubot_state"
 require_relative "rubowar/arena_state"
 require_relative "rubowar/rubot_actor"
-require_relative "rubowar/stub_actor"
+require_relative "rubowar/rubot_physics"
+require_relative "rubowar/local_actor"
+require_relative "rubowar/basic_actor"
 require_relative "rubowar/rubot"
 require_relative "rubowar/simple_targeting"
 require_relative "rubowar/bullet"

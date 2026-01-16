@@ -51,8 +51,8 @@ class Hunter
 
     attacker_angle = (direction + 180) % 360
     @target = {
-      x: x + Math.cos(attacker_angle * Math::PI / 180) * 150,
-      y: y + Math.sin(attacker_angle * Math::PI / 180) * 150
+      x: x + (Math.cos(attacker_angle * Math::PI / 180) * 150),
+      y: y + (Math.sin(attacker_angle * Math::PI / 180) * 150)
     }
     @mode = :hunting # Default to hunting until we know their size
   end
@@ -77,10 +77,10 @@ class Hunter
     # Pick closest target
     closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
 
-    if @target.nil? || distance_to(target_x: closest.x, target_y: closest.y) < distance_to(target_x: @target[:x], target_y: @target[:y])
-      @target = { x: closest.x, y: closest.y }
-      determine_tactics
-    end
+    return unless @target.nil? || distance_to(target_x: closest.x, target_y: closest.y) < distance_to(target_x: @target[:x], target_y: @target[:y])
+
+    @target = { x: closest.x, y: closest.y }
+    determine_tactics
   end
 
   def determine_tactics
@@ -103,14 +103,14 @@ class Hunter
         @target_health = probe_echo.health
 
         # Choose tactics based on size
-        case @target_size
-        when :small
-          @mode = :hunting   # Aggressive - they're fragile
-        when :large
-          @mode = @target_health && @target_health < WEAK_THRESHOLD ? :finishing : :kiting
-        else
-          @mode = :hunting   # Medium - standard aggression
-        end
+        @mode = case @target_size
+                when :small
+                  :hunting   # Aggressive - they're fragile
+                when :large
+                  @target_health && @target_health < WEAK_THRESHOLD ? :finishing : :kiting
+                else
+                  :hunting   # Medium - standard aggression
+                end
       end
     end
 
@@ -126,9 +126,9 @@ class Hunter
       # Patrol toward center
       center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
       thrust(speed: 4, angle: center_angle) if speed < 10
-    else
+    elsif speed < 6
       # Circle in center
-      thrust(speed: 3, angle: (chronons * 3) % 360) if speed < 6
+      thrust(speed: 3, angle: (chronons * 3) % 360)
     end
 
     rotate_turret(12)
@@ -151,9 +151,9 @@ class Hunter
       # Too close - back off slightly for better aim
       backup_angle = (angle_to(target_x: @target[:x], target_y: @target[:y]) + 180) % 360
       thrust(speed: 3, angle: backup_angle)
-    else
+    elsif speed < 5
       # Good range - maintain position
-      thrust(speed: 2, angle: angle_to(target_x: @target[:x], target_y: @target[:y])) if speed < 5
+      thrust(speed: 2, angle: angle_to(target_x: @target[:x], target_y: @target[:y]))
     end
 
     # Aggressive fire
@@ -212,9 +212,9 @@ class Hunter
     if dist > HUNT_RANGE
       pursuit_angle = calculate_intercept_angle
       thrust(speed: 7, angle: safe_angle(pursuit_angle)) if speed < 16
-    else
+    elsif speed < 8
       # In kill range - stay on them
-      thrust(speed: 4, angle: angle_to(target_x: @target[:x], target_y: @target[:y])) if speed < 8
+      thrust(speed: 4, angle: angle_to(target_x: @target[:x], target_y: @target[:y]))
     end
 
     # Maximum aggression
@@ -236,22 +236,23 @@ class Hunter
     return unless @target
 
     # Probe periodically for health updates
-    if turret_aligned? && energy > 10 && (chronons % 15 == 0)
-      probe(:position, :velocity, :health)
-      if probe_echo.found?
-        @target = {
-          x: probe_echo.x || @target[:x],
-          y: probe_echo.y || @target[:y],
-          velocity_x: probe_echo.velocity_x,
-          velocity_y: probe_echo.velocity_y
-        }
-        @target_health = probe_echo.health
-      end
-    end
+    return unless turret_aligned? && energy > 10 && (chronons % 15).zero?
+
+    probe(:position, :velocity, :health)
+    return unless probe_echo.found?
+
+    @target = {
+      x: probe_echo.x || @target[:x],
+      y: probe_echo.y || @target[:y],
+      velocity_x: probe_echo.velocity_x,
+      velocity_y: probe_echo.velocity_y
+    }
+    @target_health = probe_echo.health
   end
 
   def aim_at_target
     return unless @target
+
     target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     turret_diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-20, 20))
@@ -259,6 +260,7 @@ class Hunter
 
   def turret_aligned?
     return false unless @target
+
     target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
     normalize_angle(target_angle - turret_angle).abs < 15
   end
@@ -267,23 +269,24 @@ class Hunter
     return unless @target
 
     # Lead moving targets
-    if @target[:velocity_x] && @target[:velocity_y]
-      target_angle = lead_angle(
-        target_x: @target[:x],
-        target_y: @target[:y],
-        velocity_x: @target[:velocity_x],
-        velocity_y: @target[:velocity_y],
-        projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
-      )
-    else
-      target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
-    end
+    target_angle = if @target[:velocity_x] && @target[:velocity_y]
+                     lead_angle(
+                       target_x: @target[:x],
+                       target_y: @target[:y],
+                       velocity_x: @target[:velocity_x],
+                       velocity_y: @target[:velocity_y],
+                       projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+                     )
+                   else
+                     angle_to(target_x: @target[:x], target_y: @target[:y])
+                   end
 
     turret_diff = normalize_angle(target_angle - turret_angle)
     rotate_turret(turret_diff.clamp(-20, 20))
 
     # Fire when aligned
     return unless turret_diff.abs < 18 && energy > power + 10
+
     fire(power)
   end
 
@@ -306,7 +309,7 @@ class Hunter
 
     center_angle = angle_to(target_x: arena_width / 2, target_y: arena_height / 2)
     diff = normalize_angle(center_angle - angle)
-    (angle + diff * 0.5) % 360
+    (angle + (diff * 0.5)) % 360
   end
 
   def search_mode

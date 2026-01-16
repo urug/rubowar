@@ -121,7 +121,6 @@ describe Rubowar::Rubot do
 
       _(bot.actions[:move].first[:angle]).must_equal 40
     end
-
   end
 
   describe "#rotate_turret" do
@@ -168,7 +167,6 @@ describe Rubowar::Rubot do
 
       _(bot.actions[:combat]).must_equal [{ type: :fire, energy: 15 }]
     end
-
   end
 
   describe "#raise_shields" do
@@ -289,7 +287,6 @@ describe Rubowar::Rubot do
 
       _(bot.scan_echo).must_equal [{ x: 100, y: 200, type: :rubot }]
     end
-
   end
 
   describe "#pulse" do

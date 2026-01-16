@@ -26,13 +26,11 @@ module Rubowar
           next if actor.dead?
 
           actor.rubot_actions[:move].each do |action|
-            begin
-              success = arena.process_action(actor:, action:)
-              failed_actions << { actor:, action: } unless success
-            rescue Rubowar::InvalidActionError => e
-              actor.apply_damage(Rubowar::Config::Battle::ERROR_DAMAGE)
-              failed_actions << { actor:, action:, error: e }
-            end
+            success = arena.process_action(actor:, action:)
+            failed_actions << { actor:, action: } unless success
+          rescue InvalidActionError => e
+            actor.apply_damage(Config::Battle::ERROR_DAMAGE)
+            failed_actions << { actor:, action:, error: e }
           end
         end
 

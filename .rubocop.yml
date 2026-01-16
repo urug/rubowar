@@ -2,6 +2,13 @@ AllCops:
   TargetRubyVersion: 3.2
   NewCops: enable
   SuggestExtensions: false
+  Exclude:
+    - "rubots/**/*"
+
+# Allow variable names like value_at_100 in tests
+Naming/VariableNumber:
+  Exclude:
+    - "test/**/*"
 
 Style/StringLiterals:
   EnforcedStyle: double_quotes
@@ -17,7 +24,6 @@ Metrics/AbcSize:
   Exclude:
     - "lib/rubowar/arena.rb"
     - "lib/rubowar/renderers/**/*"
-    - "rubots/**/*"
 
 Naming/MethodParameterName:
   Enabled: false
@@ -30,30 +36,25 @@ Naming/PredicateMethod:
 
 Metrics/MethodLength:
   Max: 20
-  Exclude:
-    - "lib/rubowar/arena.rb"
-    - "robots/**/*"
 
 Metrics/CyclomaticComplexity:
+  Max: 10
   Exclude:
     - "lib/rubowar/arena.rb"
     - "lib/rubowar/battle.rb"
-    - "robots/**/*"
 
 Metrics/PerceivedComplexity:
   Exclude:
     - "lib/rubowar/arena.rb"
     - "lib/rubowar/battle.rb"
-    - "robots/**/*"
 
 Metrics/ClassLength:
   Max: 200
   Exclude:
     - "lib/rubowar/arena.rb"
-    - "robots/**/*"
 
 Metrics/ModuleLength:
-  Max: 150
+  Max: 220
 
 Metrics/ParameterLists:
   CountKeywordArgs: false
