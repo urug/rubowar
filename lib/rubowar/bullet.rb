@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 # [file]
 # purpose = "Projectile tracking for fired bullets"
 # responsibility = "Position updates, collision detection, ownership"
@@ -13,9 +15,10 @@
 
 module Rubowar
   class Bullet
-    attr_reader :x, :y, :velocity_x, :velocity_y, :damage, :owner, :radius
+    attr_reader :id, :x, :y, :velocity_x, :velocity_y, :damage, :owner, :radius
 
     def initialize(x:, y:, angle:, damage:, owner:)
+      @id = "#{Config::Ids::BULLET_PREFIX}-#{SecureRandom.hex(4)}"
       @x = x.to_f
       @y = y.to_f
       @damage = damage

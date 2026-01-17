@@ -37,10 +37,10 @@ def build_targeting_state(health: 100, energy: 100, x: 100, y: 100, turret_angle
   )
 end
 
-def build_targeting_arena(chronons: 1)
+def build_targeting_arena(chronon: 1)
   Rubowar::ArenaState.new(
     arena_width: 800, arena_height: 600,
-    friction: 0.95, chronons:,
+    friction: 0.95, chronon:,
     energons: [], live_rubot_count: 2,
     energon_spawn_interval: 80, energon_growth_rate: 1.0
   )
@@ -153,24 +153,24 @@ describe Rubowar::SimpleTargeting do
     it "tracks target age via target_chronon" do
       bot = TargetingTestBot.new
       bot.rubot_state = build_targeting_state
-      bot.arena_state = build_targeting_arena(chronons: 10)
+      bot.arena_state = build_targeting_arena(chronon: 10)
       bot.target_chronon = 10
 
       _(bot.target_age).must_equal 0
 
-      bot.arena_state = build_targeting_arena(chronons: 15)
+      bot.arena_state = build_targeting_arena(chronon: 15)
       _(bot.target_age).must_equal 5
     end
 
     it "marks target as stale after timeout" do
       bot = TargetingTestBot.new
       bot.rubot_state = build_targeting_state
-      bot.arena_state = build_targeting_arena(chronons: 10)
+      bot.arena_state = build_targeting_arena(chronon: 10)
       bot.target_chronon = 10
 
       _(bot.target_stale?).must_equal false
 
-      bot.arena_state = build_targeting_arena(chronons: 50)
+      bot.arena_state = build_targeting_arena(chronon: 50)
       _(bot.target_stale?).must_equal true
     end
   end

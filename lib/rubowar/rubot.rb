@@ -79,7 +79,7 @@ module Rubowar
 
       # Delegate arena state accessors
       klass.def_delegators :arena_state,
-                           :arena_width, :arena_height, :friction, :chronons, :energons, :live_rubot_count,
+                           :arena_width, :arena_height, :friction, :chronon, :energons, :live_rubot_count,
                            :energon_spawn_interval, :energon_growth_rate
     end
 

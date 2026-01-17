@@ -75,10 +75,10 @@ module Rubowar
       def build_frame(tick_state)
         {
           type: "tick",
-          chronon: tick_state[:chronons],
+          chronon: tick_state[:chronon],
           rubots: tick_state[:actors].each_with_index.map { |state, i| serialize_rubot_state(state, i) },
           bullets: tick_state[:bullets].map { |bullet| serialize_bullet(bullet) },
-          energons: @arena.energons.map { |energon| serialize_energon(energon, tick_state[:chronons]) }
+          energons: @arena.energons.map { |energon| serialize_energon(energon, tick_state[:chronon]) }
         }
       end
 

@@ -4,7 +4,7 @@ require "test_helper"
 
 describe Rubowar::Phases::Combat do
   def build_arena(width: 640, height: 640)
-    Rubowar::Arena.new(width:, height:)
+    Rubowar::Arena.new(width:, height:, event_bus: Rubowar::EventBus.new)
   end
 
   def build_actor(x: 100.0, y: 100.0, turret_angle: 0.0, energy: 100)

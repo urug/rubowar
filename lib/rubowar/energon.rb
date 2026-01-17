@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "securerandom"
+
 # [file]
 # purpose = "Collectible energy pickups that spawn in the arena"
 # responsibility = "Track position and calculate value based on age"
@@ -12,7 +14,15 @@
 # collection = "Rubot touches energon -> gains value as energy"
 
 module Rubowar
-  Energon = Data.define(:x, :y, :spawn_chronon) do
+  Energon = Data.define(:id, :x, :y, :spawn_chronon) do
+    def self.spawn(x:, y:, spawn_chronon:)
+      new(
+        id: "#{Config::Ids::ENERGON_PREFIX}-#{SecureRandom.hex(4)}",
+        x: x,
+        y: y,
+        spawn_chronon: spawn_chronon
+      )
+    end
     def value(current_chronon)
       chronons_alive = current_chronon - spawn_chronon
       Config::Energon::INITIAL_VALUE + (chronons_alive * Config::Energon::GROWTH_RATE)

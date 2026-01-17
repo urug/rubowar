@@ -12,7 +12,7 @@
 
 module Rubowar
   ArenaState = Data.define(
-    :arena_width, :arena_height, :friction, :chronons,
+    :arena_width, :arena_height, :friction, :chronon,
     :energons, :live_rubot_count,
     :energon_spawn_interval, :energon_growth_rate
   ) do
@@ -20,7 +20,7 @@ module Rubowar
       arena_width: Config::Arena::DEFAULT_WIDTH,
       arena_height: Config::Arena::DEFAULT_HEIGHT,
       friction: Config::Arena::DEFAULT_FRICTION,
-      chronons: 0,
+      chronon: 0,
       energons: [],
       live_rubot_count: 0,
       energon_spawn_interval: Config::Arena::ENERGON_SPAWN_INTERVAL,
@@ -29,7 +29,7 @@ module Rubowar
       # Ensure energons array and its contents are frozen for immutability
       frozen_energons = energons.map { |e| e.frozen? ? e : e.dup.freeze }.freeze
       super(
-        arena_width:, arena_height:, friction:, chronons:,
+        arena_width:, arena_height:, friction:, chronon:,
         energons: frozen_energons, live_rubot_count:,
         energon_spawn_interval:, energon_growth_rate:
       )

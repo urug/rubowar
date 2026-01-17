@@ -11,7 +11,7 @@ require "concurrent"
 # purpose = "Orchestrates a complete battle from start to finish"
 # input = "Array of Rubot classes to compete"
 # output = "Winner, events log, final state"
-# collaborators = ["Arena", "RubotActor"]
+# collaborators = ["Arena", "RubotActor", "Events"]
 #
 # [actions]
 # structure = "Hash with phase keys: { sense: [], move: [], combat: [] }"
@@ -38,30 +38,28 @@ require "concurrent"
 #
 # [events]
 # types = ["chronon", "death", "hit", "battle_end", "energon_spawn", "energon_spawn_failed", "energon_collect"]
-# usage = "battle.on(:death) { |data| puts data[:actor].rubot_class.name }"
+# emit_usage = "emit(EventBus::BattleEnd.new(winner: @winner, outcome: :victory))"
+# subscribe_usage = "battle.on(:death) { |data| puts data[:actor_id] }"
 
 module Rubowar
   class Battle
-    attr_reader :arena, :chronons, :winner, :events, :registered_actors
+    attr_reader :arena, :winner, :event_bus, :registered_actors, :event_log
 
     # Convenience constructor for local battles
     def self.local(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
                    friction: Config::Arena::DEFAULT_FRICTION, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
-      arena = Arena.new(width:, height:, friction:)
-      battle = new(arena:, chronon_limit:)
+      event_bus = EventBus.new(chronon_limit:)
+      arena = Arena.new(width:, height:, friction:, event_bus:)
+      battle = new(arena:, event_bus:)
       rubot_classes.each { |klass| battle.register(LocalActor.new(klass)) }
       battle
     end
 
-    def initialize(arena:, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
-      validate_chronon_limit!(chronon_limit)
-
+    def initialize(arena:, event_bus:)
       @arena = arena
-      @chronons_limit = chronon_limit
-      @chronons = 0
+      @event_bus = event_bus
       @winner = nil
-      @events = Concurrent::Array.new
-      @callbacks = Hash.new { |h, k| h[k] = Set.new }
+      @event_log = Concurrent::Array.new
       @registered_actors = []
     end
 
@@ -73,8 +71,14 @@ module Rubowar
       arena.spawn_rubots(registered_actors)
     end
 
+    # Current chronon number (delegates to Events)
+    def chronon
+      @event_bus.current_chronon
+    end
+
+    # Subscribe to battle events
     def on(event_type, &block)
-      @callbacks[event_type].add(block)
+      @event_bus.on(event_type, &block)
     end
 
     def run
@@ -82,21 +86,22 @@ module Rubowar
 
       raise InsufficientRubotsError, "need at least 2 rubots for a battle" if arena.actors.size < 2
 
+      @event_bus.reset_chronon
       call_on_spawn
 
       loop do
-        @chronons += 1
+        @event_bus.increment_chronon
 
         run_chronon
-        emit(:chronon, chronon_state)
+        emit(EventBus::Chronon.new(**chronon_state))
 
         break if battle_over?
       end
 
       determine_winner
-      emit(:battle_end, { winner: @winner, chronons: @chronons })
+      emit(EventBus::BattleEnd.new(winner: @winner, outcome: @winner ? :victory : :draw))
 
-      @events
+      @event_log
     end
 
     def call_on_spawn
@@ -110,7 +115,7 @@ module Rubowar
 
     def run_chronon
       # Cache arena state once per chronon (same for all actors)
-      cached_arena_state = @arena.to_state(@chronons)
+      cached_arena_state = @arena.to_state(chronon)
 
       # 1. Set up state for all living rubots
       living_actors = @arena.actors.reject(&:dead?)
@@ -136,14 +141,14 @@ module Rubowar
 
         actor.death_processed = true
         actor.call_on_death
-        emit(:death, { actor: })
+        emit(EventBus::Death.new(actor_id: actor.id))
       end
     end
 
     # Run all rubot act() calls concurrently with deadline enforcement.
     #
     # THREAD SAFETY:
-    # Worker threads call emit() which appends to @events (Concurrent::Array).
+    # Worker threads call emit() which appends to @event_log (Concurrent::Array).
     # Using Concurrent::Array ensures thread safety across all Ruby implementations
     # (CRuby, JRuby, TruffleRuby) without relying on GVL behavior.
     def run_acts_concurrently(actors)
@@ -157,7 +162,7 @@ module Rubowar
           actor._act_completed = true
         rescue StandardError => e
           actor.apply_damage(Config::Battle::ERROR_DAMAGE)
-          emit(:error, { actor:, error: e })
+          emit(EventBus::Error.new(actor_id: actor.id, error: e))
         ensure
           latch.count_down
         end
@@ -172,44 +177,49 @@ module Rubowar
 
       # Phase 1: Sensing (probe, scan, pulse, then detect last)
       Phases::Sense.execute(arena: @arena, actors:).each do |failure|
-        emit(:action_failed, failure)
-        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
+        emit(EventBus::ActionFailed.new(actor_id: failure[:actor].id, action: failure[:action], reason: failure[:reason]))
+        emit(EventBus::Error.new(actor_id: failure[:actor].id, error: failure[:error])) if failure[:error]
       end
 
       # Phase 2: Movement (thrust, turret), then physics
       Phases::Move.execute(arena: @arena, actors:).each do |failure|
-        emit(:action_failed, failure)
-        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
+        emit(EventBus::ActionFailed.new(actor_id: failure[:actor].id, action: failure[:action], reason: failure[:reason]))
+        emit(EventBus::Error.new(actor_id: failure[:actor].id, error: failure[:error])) if failure[:error]
       end
 
       # Phase 3: Combat (fire, shield), then bullet physics
       Phases::Combat.execute(arena: @arena, actors:).each do |failure|
-        emit(:action_failed, failure)
-        emit(:error, { actor: failure[:actor], error: failure[:error] }) if failure[:error]
+        emit(EventBus::ActionFailed.new(actor_id: failure[:actor].id, action: failure[:action], reason: failure[:reason]))
+        emit(EventBus::Error.new(actor_id: failure[:actor].id, error: failure[:error])) if failure[:error]
       end
 
       # Phase 4: Energon collection and spawning (uses all actors for collection check)
-      energon_result = Phases::Energon.execute(arena: @arena, chronon: @chronons)
+      energon_result = Phases::Energon.execute(arena: @arena, chronon:)
 
       energon_result[:collections].each do |collection|
-        emit(:energon_collect, {
-               actor: collection[:actor],
+        emit(EventBus::EnergonCollect.new(
+               actor_id: collection[:actor].id,
+               energon_id: collection[:energon].id,
                x: collection[:energon].x,
                y: collection[:energon].y,
                amount: collection[:amount]
-             })
+             ))
       end
 
       if energon_result[:spawned]
-        emit(:energon_spawn, { x: energon_result[:spawned].x, y: energon_result[:spawned].y })
+        emit(EventBus::EnergonSpawn.new(
+               energon_id: energon_result[:spawned].id,
+               x: energon_result[:spawned].x,
+               y: energon_result[:spawned].y
+             ))
       elsif energon_result[:spawn_failed]
-        emit(:energon_spawn_failed, { chronon: @chronons })
+        emit(EventBus::EnergonSpawnFailed.new)
       end
     end
 
     def setup_rubot_for_chronon(actor, arena_state = nil)
       actor.rubot_state = actor.to_state
-      actor.arena_state = arena_state || @arena.to_state(@chronons)
+      actor.arena_state = arena_state || @arena.to_state(chronon)
       actor.reset_actions
       actor._act_completed = false
       # Reset pending energy spend for this chronon's upfront energy checks
@@ -221,7 +231,7 @@ module Rubowar
 
     def battle_over?
       alive_actors = @arena.actors.count(&:alive?)
-      alive_actors <= 1 || @chronons >= @chronons_limit
+      alive_actors <= 1 || @event_bus.chronon_limit_reached?
     end
 
     def determine_winner
@@ -239,21 +249,20 @@ module Rubowar
 
     def chronon_state
       {
-        chronons: @chronons,
+        chronon:,
         actors: @arena.actors.map(&:to_state),
-        bullets: @arena.bullets.map { |b| { x: b.x, y: b.y, velocity_x: b.velocity_x, velocity_y: b.velocity_y } }
+        bullets: @arena.bullets.map { |b| { id: b.id, x: b.x, y: b.y, velocity_x: b.velocity_x, velocity_y: b.velocity_y } },
+        energons: @arena.energons.map { |e| { id: e.id, x: e.x, y: e.y, value: e.value_int(chronon) } }
       }
     end
 
-    def emit(event_type, data)
-      event = { type: event_type, **data }
-      @events << event
-      @callbacks[event_type].each { |callback| callback.call(data) }
-    end
+    def emit(event)
+      # Store locally for replay/analysis
+      local_event = { type: event.event_type, chronon:, **event.to_h }
+      @event_log << local_event
 
-    def validate_chronon_limit!(chronon_limit)
-      raise InvalidChrononLimitError, "chronon_limit must be positive" unless chronon_limit.positive?
-      raise InvalidChrononLimitError, "chronon_limit must be finite" if chronon_limit.respond_to?(:infinite?) && chronon_limit.infinite?
+      # Publish to event bus (auto-injects chronon)
+      @event_bus.emit(event)
     end
   end
 end

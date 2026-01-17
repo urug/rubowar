@@ -17,6 +17,14 @@
 
 module Rubowar
   module Config
+    module Ids
+      # Entity ID prefixes for easy identification in logs, events, and debugging
+      # Format: PREFIX-xxxxxxxx (8 hex chars from SecureRandom.hex(4))
+      RUBOT_PREFIX = "rbot"    # rbot-a1b2c3d4
+      BULLET_PREFIX = "bult"   # bult-e5f6g7h8
+      ENERGON_PREFIX = "enrg"  # enrg-i9j0k1l2
+    end
+
     module Arena
       DEFAULT_WIDTH = 640                # Arena width in units
       DEFAULT_HEIGHT = 640               # Arena height in units
@@ -133,7 +141,7 @@ module Rubowar
 
     module Battle
       # Match length limit to prevent infinite stalemates
-      DEFAULT_CHRONON_LIMIT = 10_000 # Enough for multiple engagements
+      DEFAULT_CHRONON_LIMIT = 9_000 # It's over 9000!
 
       # Penalties for rubot code errors
       ERROR_DAMAGE = 20 # Damage for exceptions in act() or callbacks
