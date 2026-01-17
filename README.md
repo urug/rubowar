@@ -515,6 +515,26 @@ save_replay(events)
 
 If rubot code crashes or times out: **20 damage** + skip chronon.
 
+## Command-Line Scripts
+
+Run battles from the command line:
+
+```bash
+# Watch a battle in real-time
+bin/simulate -w rubots/spinner.rb rubots/hunter.rb
+
+# Run 100 battles and see statistics
+bin/simulate -n 100 rubots/spinner.rb rubots/hunter.rb
+
+# Log a battle to JSON for replay/analysis
+bin/log -o replay.json rubots/spinner.rb rubots/hunter.rb
+
+# Run a full tournament
+bin/tournament
+```
+
+See [`SCRIPTS.md`](SCRIPTS.md) for full documentation of all scripts and options.
+
 ## Project Structure
 
 ```
@@ -540,11 +560,16 @@ rubowar/
 │   │   │   ├── combat.rb
 │   │   │   └── energon.rb
 │   │   └── renderers/
-│   │       └── terminal.rb       # ASCII visualization
+│   │       ├── terminal.rb       # ASCII visualization
+│   │       └── json_logger.rb    # JSON serialization for replay/analysis
 │   └── rubowar.rb
 ├── test/
-├── robots/                       # Example rubots (spinner, tracker, coroner, evader, crusher, hunter, hugger)
-├── bin/rubowar                   # CLI (not yet implemented)
+├── rubots/                       # Example rubots (spinner, tracker, coroner, evader, crusher, hunter, hugger)
+├── bin/
+│   ├── simulate                  # Run battles with various options
+│   ├── log                       # Record battles to JSON
+│   ├── tournament                # Run full tournament
+│   └── console                   # Interactive Ruby console
 └── rubowar.gemspec
 ```
 
