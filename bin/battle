@@ -15,20 +15,22 @@ options = {
   format: "text",
   seed: nil,
   watch: false,
-  delay: 0.05
+  delay: 0.05,
+  html: nil,
+  json_log: nil
 }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: bin/simulate [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  opts.banner = "Usage: bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
 
   opts.separator ""
   opts.separator "Arena options:"
 
-  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 800)") do |w|
+  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 480)") do |w|
     options[:width] = w
   end
 
-  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 600)") do |h|
+  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 480)") do |h|
     options[:height] = h
   end
 
@@ -52,18 +54,41 @@ OptionParser.new do |opts|
   end
 
   opts.separator ""
-  opts.separator "Output options:"
+  opts.separator "Renderer options:"
 
-  opts.on("-o", "--output FORMAT", %w[text json csv], "Output format: text, json, csv (default: text)") do |fmt|
-    options[:format] = fmt
-  end
-
-  opts.on("-w", "--watch", "Watch battle in terminal with live rendering") do
+  opts.on("-w", "--watch", "--terminal", "Watch battle live in terminal") do
     options[:watch] = true
   end
 
   opts.on("-d", "--delay SECONDS", Float, "Delay between frames in watch mode (default: 0.05)") do |d|
     options[:delay] = d
+  end
+
+  opts.on("--html", "Generate HTML replay file in battle-logs/") do
+    options[:html] = "battle-logs"
+  end
+
+  opts.on("--html-dir DIR", "Generate HTML replay file in specified directory") do |dir|
+    options[:html] = dir
+  end
+
+  opts.on("--json", "Generate JSON log file in battle-logs/") do
+    options[:json_log] = :auto
+  end
+
+  opts.on("--json-file FILE", "Generate JSON log to specified file") do |file|
+    options[:json_log] = file
+  end
+
+  opts.separator ""
+  opts.separator "Output options:"
+
+  opts.on("-o", "--output FORMAT", %w[text json csv], "Summary format: text, json, csv (default: text)") do |fmt|
+    options[:format] = fmt
+  end
+
+  opts.on("-q", "--quiet", "Suppress summary output (useful with --html or --json-log)") do
+    options[:quiet] = true
   end
 
   opts.on("-h", "--help", "Show this help") do
@@ -81,7 +106,7 @@ rubot_files = if ARGV.empty?
 
 if rubot_files.size < 2
   warn "Error: Need at least 2 rubots to battle"
-  warn "Usage: bin/simulate [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  warn "Usage: bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
   exit 1
 end
 
@@ -116,6 +141,15 @@ end
 # Set random seed if provided
 srand(options[:seed]) if options[:seed]
 
+# Helper to generate auto filename for JSON log
+def generate_json_filename(rubot_classes)
+  require "fileutils"
+  FileUtils.mkdir_p("battle-logs")
+  timestamp = Time.now.strftime("%Y%m%d-%H%M%S")
+  names = rubot_classes.map { |c| c.name.downcase.gsub(/[^a-z0-9]/, "") }.join("-vs-")
+  "battle-logs/battle-#{timestamp}-#{names}.json"
+end
+
 # Run battles
 results = []
 options[:battles].times do |i|
@@ -127,17 +161,55 @@ options[:battles].times do |i|
     chronon_limit: options[:chronon_limit]
   )
 
+  renderers = []
+
+  # Terminal renderer (watch mode)
   if options[:watch]
-    renderer = Rubowar::Renderers::Terminal.new(battle)
+    terminal = Rubowar::Renderers::Terminal.new(battle)
     battle.on(:chronon) do |tick_state|
-      renderer.render(tick_state)
+      terminal.render(tick_state)
       sleep options[:delay]
     end
+    renderers << terminal
+  end
+
+  # HTML Canvas renderer
+  if options[:html]
+    html = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: options[:html])
+    battle.on(:chronon) { |tick_state| html.render(tick_state) }
+    battle.on(:battle_end) { |data| html.render_final(data[:winner]) }
+    renderers << html
+  end
+
+  # JSON Logger renderer
+  if options[:json_log]
+    json_file = options[:json_log] == :auto ? generate_json_filename(rubot_classes) : options[:json_log]
+    json_output = File.open(json_file, "w")
+    json_logger = Rubowar::Renderers::JsonLogger.new(battle, output: json_output)
+    battle.on(:chronon) { |tick_state| json_logger.render(tick_state) }
+    battle.on(:battle_end) { |data| json_logger.render_final(data[:winner]) }
+    renderers << { renderer: json_logger, output: json_output, file: json_file }
   end
 
   battle.run
 
-  renderer.render_final(battle.winner) if options[:watch]
+  # Finalize renderers
+  renderers.each do |r|
+    if r.is_a?(Rubowar::Renderers::Terminal)
+      r.render_final(battle.winner)
+    elsif r.is_a?(Hash) && r[:output]
+      r[:output].close
+    end
+  end
+
+  # Report generated files (always show, even in quiet mode)
+  renderers.each do |r|
+    if r.is_a?(Rubowar::Renderers::HtmlCanvas)
+      warn "HTML replay: #{r.filepath}"
+    elsif r.is_a?(Hash) && r[:file]
+      warn "JSON log: #{r[:file]}"
+    end
+  end
 
   battle_result = {
     battle_number: i + 1,
@@ -157,6 +229,9 @@ options[:battles].times do |i|
 
   results << battle_result
 end
+
+# Skip summary output if quiet
+exit 0 if options[:quiet]
 
 # Generate summary statistics
 wins = Hash.new(0)
@@ -209,7 +284,7 @@ when "csv"
   end
 
 when "text"
-  puts "Simulation: #{options[:battles]} battle(s)"
+  puts "Battle: #{options[:battles]} battle(s)"
   puts "Arena: #{options[:width]}x#{options[:height]}, friction=#{options[:friction]}, chronon_limit=#{options[:chronon_limit]}"
   puts "Rubots: #{rubot_classes.map { |c| "#{c.name} (#{c.size})" }.join(", ")}"
   puts

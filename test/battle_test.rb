@@ -228,7 +228,7 @@ describe Rubowar::Battle do
     it "starts at chronon zero" do
       battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
-      _(battle.chronons).must_equal 0
+      _(battle.chronon).must_equal 0
     end
 
     it "starts with no winner" do
@@ -240,7 +240,7 @@ describe Rubowar::Battle do
     it "starts with empty events" do
       battle = Rubowar::Battle.local([StationaryBot, StationaryBot])
 
-      _(battle.events).must_equal []
+      _(battle.event_log).must_equal []
     end
 
     it "raises error with less than 2 rubots when run" do
@@ -286,7 +286,7 @@ describe Rubowar::Battle do
 
       battle.run
 
-      _(battle.chronons).must_equal 5
+      _(battle.chronon).must_equal 5
     end
 
     it "emits chronon event each tick" do
@@ -528,7 +528,7 @@ describe Rubowar::Battle do
       events = battle.run
 
       # Battle continues to chronon limit (slow bots don't die from being slow)
-      _(battle.chronons).must_equal 3
+      _(battle.chronon).must_equal 3
       chronon_events = events.select { |e| e[:type] == :chronon }
       _(chronon_events.length).must_equal 3
     end
@@ -573,7 +573,7 @@ describe Rubowar::Battle do
       events = battle.run
 
       # Battle should continue despite errors
-      _(battle.chronons).must_equal 3
+      _(battle.chronon).must_equal 3
       chronon_events = events.select { |e| e[:type] == :chronon }
       _(chronon_events.length).must_equal 3
     end
@@ -622,11 +622,11 @@ describe Rubowar::Battle do
 
       # Run chronons manually
       5.times do
-        battle.instance_variable_set(:@chronons, battle.chronons + 1)
+        battle.event_bus.increment_chronon
         battle.send(:run_chronon)
       end
 
-      death_events = battle.events.select { |e| e[:type] == :death && e[:actor] == death_bot }
+      death_events = battle.event_log.select { |e| e[:type] == :death && e[:actor_id] == death_bot.id }
       _(death_events.length).must_equal 1
     end
   end
@@ -856,7 +856,7 @@ describe Rubowar::Battle do
     it "requires id for tracking" do
       actor = Rubowar::LocalActor.new(StationaryBot)
 
-      _(actor.id).must_match(/^[0-9a-f-]{36}$/)
+      _(actor.id).must_match(/^rbot-[0-9a-f]{8}$/)
     end
 
     it "requires to_state returning RubotState" do
@@ -877,8 +877,9 @@ describe Rubowar::Battle do
 
   describe "stub actor compatibility" do
     it "runs battle with stub actors" do
-      arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena:, chronon_limit: 5)
+      event_bus = Rubowar::EventBus.new(chronon_limit: 5)
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus:)
+      battle = Rubowar::Battle.new(arena:, event_bus:)
 
       stub1 = Rubowar::BasicActor.new(size: :medium)
       stub2 = Rubowar::BasicActor.new(size: :medium)
@@ -887,13 +888,14 @@ describe Rubowar::Battle do
 
       events = battle.run
 
-      _(battle.chronons).must_equal 5
+      _(battle.chronon).must_equal 5
       _(events).wont_be_empty
     end
 
     it "processes pre-set thrust actions on stub actor" do
-      arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena:, chronon_limit: 1)
+      event_bus = Rubowar::EventBus.new(chronon_limit: 1)
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus:)
+      battle = Rubowar::Battle.new(arena:, event_bus:)
 
       stub1 = Rubowar::BasicActor.new(size: :medium)
       stub2 = Rubowar::BasicActor.new(size: :medium)
@@ -916,8 +918,9 @@ describe Rubowar::Battle do
     end
 
     it "works alongside RubotActor" do
-      arena = Rubowar::Arena.new(width: 640, height: 640)
-      battle = Rubowar::Battle.new(arena:, chronon_limit: 3)
+      event_bus = Rubowar::EventBus.new(chronon_limit: 3)
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus:)
+      battle = Rubowar::Battle.new(arena:, event_bus:)
 
       stub = Rubowar::BasicActor.new(size: :medium)
       rubot_actor = Rubowar::LocalActor.new(StationaryBot)
@@ -927,7 +930,7 @@ describe Rubowar::Battle do
 
       battle.run
 
-      _(battle.chronons).must_equal 3
+      _(battle.chronon).must_equal 3
       _(battle.arena.actors.length).must_equal 2
     end
 
@@ -998,7 +1001,7 @@ describe Rubowar::Battle do
 
       events = battle.run
 
-      _(battle.chronons).must_equal 2
+      _(battle.chronon).must_equal 2
       _(events).wont_be_empty
     end
 

@@ -38,7 +38,7 @@ module Rubowar
     # Initialize shared actor state. Call this from the including class's initialize method.
     # @param size [Symbol] The rubot size (:small, :medium, :large)
     def initialize_actor(size:)
-      @id = SecureRandom.uuid
+      @id = "#{Config::Ids::RUBOT_PREFIX}-#{SecureRandom.hex(4)}"
       @size = size
       @x = 0.0
       @y = 0.0

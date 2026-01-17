@@ -154,7 +154,7 @@ module Rubowar
       end
 
       def print_status(tick_state)
-        puts "Chronon: #{tick_state[:chronons]}"
+        puts "Chronon: #{tick_state[:chronon]}"
         puts
 
         tick_state[:actors].each_with_index do |rubot, index|

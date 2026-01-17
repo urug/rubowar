@@ -137,7 +137,7 @@ module Rubowar
     def target_stale?
       return true unless @target_chronon
 
-      (chronons - @target_chronon) > targeting_config(:target_timeout)
+      (chronon - @target_chronon) > targeting_config(:target_timeout)
     end
 
     # Get age of current target in chronons
@@ -145,7 +145,7 @@ module Rubowar
     def target_age
       return nil unless @target_chronon
 
-      chronons - @target_chronon
+      chronon - @target_chronon
     end
 
     # === Configuration ===

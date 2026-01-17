@@ -11,7 +11,7 @@
 #   - InvalidChrononLimitError, InsufficientRubotsError
 #   - InvalidRubotSizeError, InvalidSpawnConstraintsError
 # GameplayError = "Errors during gameplay execution"
-#   - SpawnError, InvalidActionError
+#   - SpawnError, InvalidActionError, CallbackError
 
 module Rubowar
   # Base error class for all Rubowar exceptions
@@ -30,4 +30,16 @@ module Rubowar
 
   # Action parameter errors (invalid action parameters from rubots)
   class InvalidActionError < GameplayError; end
+
+  # Event callback errors (one or more callbacks failed during emit)
+  class CallbackError < GameplayError
+    attr_reader :event_type, :errors
+
+    def initialize(event_type, errors)
+      @event_type = event_type
+      @errors = errors
+      messages = errors.map { |e| "#{e.class}: #{e.message}" }.join("; ")
+      super("#{errors.size} callback(s) failed for :#{event_type}: #{messages}")
+    end
+  end
 end

@@ -22,6 +22,7 @@
 # ]
 
 require_relative "rubowar/version"
+require_relative "rubowar/event_bus"
 require_relative "rubowar/errors"
 require_relative "rubowar/numeric_validation"
 require_relative "rubowar/config"
@@ -49,3 +50,4 @@ require_relative "rubowar/phases/energon"
 require_relative "rubowar/battle"
 require_relative "rubowar/renderers/terminal"
 require_relative "rubowar/renderers/json_logger"
+require_relative "rubowar/renderers/html_canvas"

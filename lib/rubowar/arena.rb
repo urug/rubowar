@@ -30,14 +30,15 @@
 
 module Rubowar
   class Arena
-    attr_reader :width, :height, :friction
+    attr_reader :width, :height, :friction, :event_bus
     attr_accessor :bullets, :actors, :energons
 
     def initialize(width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
-                   friction: Config::Arena::DEFAULT_FRICTION)
+                   friction: Config::Arena::DEFAULT_FRICTION, event_bus:)
       @width = width
       @height = height
       @friction = friction
+      @event_bus = event_bus
       @bullets = []
       @actors = []
       @energons = []
@@ -71,12 +72,12 @@ module Rubowar
       @actors << actor
     end
 
-    def to_state(chronons)
+    def to_state(chronon)
       ArenaState.new(
         arena_width: @width,
         arena_height: @height,
         friction: @friction,
-        chronons:,
+        chronon:,
         energons: @energons.map { |e| { x: e.x, y: e.y }.freeze }.freeze,
         live_rubot_count: @actors.count(&:alive?),
         energon_spawn_interval: Config::Arena::ENERGON_SPAWN_INTERVAL,
@@ -91,10 +92,26 @@ module Rubowar
 
         actor.apply_friction(@friction)
         actor.move
-        CollisionSystem.process_wall_collision(actor:, arena_width: @width, arena_height: @height)
+
+        wall_result = CollisionSystem.process_wall_collision(actor:, arena_width: @width, arena_height: @height)
+        if wall_result
+          @event_bus.emit(EventBus::WallHit.new(
+            actor_id: actor.id,
+            damage: wall_result[:damage],
+            walls: wall_result[:walls]
+          ))
+        end
       end
 
-      CollisionSystem.process_rubot_collisions(@actors)
+      collision_responses = CollisionSystem.process_rubot_collisions(@actors)
+      collision_responses.each do |response|
+        @event_bus.emit(EventBus::Collision.new(
+          actor_a_id: response.actor_a.id,
+          actor_b_id: response.actor_b.id,
+          damage_to_a: response.damage_to_a,
+          damage_to_b: response.damage_to_b
+        ))
+      end
     end
 
     # Phase 3 physics: Move bullets, check hits
@@ -112,7 +129,7 @@ module Rubowar
       when :fire
         process_fire(actor:, energy: action[:energy])
       when :shield
-        actor.increase_shielding(action[:energy])
+        process_shield(actor:, energy: action[:energy])
       when :probe
         process_probe(actor:, attributes: action[:attributes])
       when :scan
@@ -192,6 +209,15 @@ module Rubowar
 
       direction = Math.atan2(bullet.velocity_y, bullet.velocity_x) * 180 / Math::PI
       actor.call_safely { |bot| bot.on_hit(damage: bullet.damage, direction:) }
+
+      @event_bus.emit(EventBus::Hit.new(
+        attacker_id: bullet.owner&.id,
+        target_id: actor.id,
+        bullet_id: bullet.id,
+        x: bullet.x,
+        y: bullet.y,
+        damage: bullet.damage
+      ))
     end
 
     def process_fire(actor:, energy:)
@@ -202,14 +228,35 @@ module Rubowar
       damage = (energy * Config::Combat::FIRE_DAMAGE_MULTIPLIER).ceil
       radians = actor.turret_angle * Math::PI / 180
       spawn_distance = actor.radius + Config::Combat::BULLET_RADIUS
+      bullet_x = actor.x + (Math.cos(radians) * spawn_distance)
+      bullet_y = actor.y + (Math.sin(radians) * spawn_distance)
       bullet = Bullet.new(
-        x: actor.x + (Math.cos(radians) * spawn_distance),
-        y: actor.y + (Math.sin(radians) * spawn_distance),
+        x: bullet_x,
+        y: bullet_y,
         angle: actor.turret_angle,
         damage:,
         owner: actor
       )
       @bullets << bullet
+
+      @event_bus.emit(EventBus::Fire.new(
+        actor_id: actor.id,
+        bullet_id: bullet.id,
+        x: bullet_x,
+        y: bullet_y,
+        angle: actor.turret_angle,
+        damage:
+      ))
+
+      true
+    end
+
+    def process_shield(actor:, energy:)
+      result = actor.increase_shielding(energy)
+      return false unless result
+
+      @event_bus.emit(EventBus::Shield.new(actor_id: actor.id, energy:))
+
       true
     end
 
@@ -408,7 +455,7 @@ module Rubowar
         return nil
       end
 
-      energon = Energon.new(x: position[:x], y: position[:y], spawn_chronon: chronons)
+      energon = Energon.spawn(x: position[:x], y: position[:y], spawn_chronon: chronons)
       @energons << energon
       energon
     end

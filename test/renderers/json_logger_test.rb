@@ -60,7 +60,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -72,7 +72,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle.spawn_rubots
       output = StringIO.new
       logger = Rubowar::Renderers::JsonLogger.new(battle, output: output)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -83,7 +83,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 5, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 5, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -94,7 +94,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 42, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 42, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -105,7 +105,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -118,7 +118,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle.arena.actors[0].x = 123.456
       battle.arena.actors[0].y = 789.012
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -131,7 +131,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -142,11 +142,11 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
-      _(logger.frames.first[:rubots].first[:id]).must_match(/^[0-9a-f-]{36}$/)
+      _(logger.frames.first[:rubots].first[:id]).must_match(/^rbot-[0-9a-f]{8}$/)
     end
 
     it "includes rubot health stats" do
@@ -156,7 +156,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle.arena.actors[0].energy = 50
       battle.arena.actors[0].shield_level = 10
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -171,7 +171,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle.spawn_rubots
       battle.arena.actors[0].health = 0
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 
@@ -185,7 +185,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle.spawn_rubots
       logger = Rubowar::Renderers::JsonLogger.new(battle)
       bullets = [{ x: 100.0, y: 200.0, velocity_x: 5.0, velocity_y: 3.0 }]
-      tick_state = { chronons: 1, actors: battle.arena.actors.map(&:to_state), bullets: bullets }
+      tick_state = { chronon: 1, actors: battle.arena.actors.map(&:to_state), bullets: bullets }
 
       logger.render(tick_state)
 
@@ -199,9 +199,9 @@ describe Rubowar::Renderers::JsonLogger do
     it "includes energons in frame" do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 1)
       battle.spawn_rubots
-      battle.arena.energons << Rubowar::Energon.new(x: 300.0, y: 400.0, spawn_chronon: 5)
+      battle.arena.energons << Rubowar::Energon.spawn(x: 300.0, y: 400.0, spawn_chronon: 5)
       logger = Rubowar::Renderers::JsonLogger.new(battle)
-      tick_state = { chronons: 10, actors: battle.arena.actors.map(&:to_state), bullets: [] }
+      tick_state = { chronon: 10, actors: battle.arena.actors.map(&:to_state), bullets: [] }
 
       logger.render(tick_state)
 

@@ -2,12 +2,12 @@
 
 Rubowar includes several command-line scripts for running battles, tournaments, and logging.
 
-## bin/simulate
+## bin/battle
 
-Run one or more battles with configurable options and output formats.
+Run one or more battles with configurable options, renderers, and output formats.
 
 ```bash
-bin/simulate [options] rubot1.rb rubot2.rb [rubot3.rb ...]
+bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]
 ```
 
 If no rubot files are specified, loads all rubots from `rubots/`.
@@ -28,38 +28,91 @@ If no rubot files are specified, loads all rubots from `rubots/`.
 | `-n, --battles COUNT` | Number of battles to run | 1 |
 | `-s, --seed SEED` | Random seed for reproducibility | random |
 
+### Renderer Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `-w, --watch, --terminal` | Watch battle live in terminal | off |
+| `-d, --delay SECONDS` | Delay between frames in watch mode | 0.05 |
+| `--html` | Generate HTML replay file in `battle-logs/` | off |
+| `--html-dir DIR` | Generate HTML replay in custom directory | - |
+| `--json` | Generate JSON log file in `battle-logs/` | off |
+| `--json-file FILE` | Generate JSON log to specific file | - |
+
 ### Output Options
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-o, --output FORMAT` | Output format: `text`, `json`, `csv` | text |
-| `-w, --watch` | Watch battle live in terminal | off |
-| `-d, --delay SECONDS` | Delay between frames in watch mode | 0.05 |
+| `-o, --output FORMAT` | Summary format: `text`, `json`, `csv` | text |
+| `-q, --quiet` | Suppress summary output (file paths still shown) | off |
 
 ### Examples
 
 ```bash
 # Run a single battle between two rubots
-bin/simulate rubots/spinner.rb rubots/hunter.rb
+bin/battle rubots/spinner.rb rubots/hunter.rb
 
-# Watch a battle in real-time
-bin/simulate -w rubots/spinner.rb rubots/crusher.rb
+# Watch a battle live in terminal
+bin/battle --terminal rubots/spinner.rb rubots/crusher.rb
+bin/battle -w rubots/spinner.rb rubots/crusher.rb  # short form
+
+# Generate HTML replay
+bin/battle --html rubots/spinner.rb rubots/tracker.rb
+
+# Generate JSON log
+bin/battle --json rubots/spinner.rb rubots/tracker.rb
+
+# Use all three renderers at once
+bin/battle --terminal --html --json rubots/hunter.rb rubots/evader.rb
+
+# Generate files to custom locations
+bin/battle --html-dir replays/ --json-file logs/battle.json rubots/spinner.rb rubots/tracker.rb
+
+# Quiet mode (suppresses summary, still shows file paths)
+bin/battle --html -q rubots/spinner.rb rubots/tracker.rb
 
 # Run 100 battles and output statistics
-bin/simulate -n 100 rubots/spinner.rb rubots/hunter.rb
+bin/battle -n 100 rubots/spinner.rb rubots/hunter.rb
 
 # Reproducible battle with seed
-bin/simulate -s 12345 rubots/coroner.rb rubots/evader.rb
+bin/battle -s 12345 rubots/coroner.rb rubots/evader.rb
 
-# Output as JSON
-bin/simulate -o json rubots/spinner.rb rubots/tracker.rb
+# Output summary as JSON
+bin/battle -o json rubots/spinner.rb rubots/tracker.rb
 
-# Output as CSV (good for spreadsheets)
-bin/simulate -n 50 -o csv rubots/spinner.rb rubots/hunter.rb > results.csv
+# Output summary as CSV (good for spreadsheets)
+bin/battle -n 50 -o csv rubots/spinner.rb rubots/hunter.rb > results.csv
 
 # Custom arena size
-bin/simulate -W 800 -H 600 -t 2000 rubots/spinner.rb rubots/hunter.rb
+bin/battle -W 800 -H 600 -t 2000 rubots/spinner.rb rubots/hunter.rb
+
+# Battle all rubots in rubots/ directory
+bin/battle --html
 ```
+
+### Renderer Details
+
+**Terminal (`--terminal`, `-w`)**
+- Live ASCII/Unicode visualization in terminal
+- Use `-d` to adjust frame delay (default: 0.05s)
+
+**HTML (`--html`)**
+- Self-contained HTML file with Canvas animation
+- Playback controls: Play/Pause, step forward/back, go to start/end
+- Speed control: 0.25x to 8x playback speed
+- Timeline scrubber: Drag to any point in the battle
+- Keyboard shortcuts: Space (play/pause), arrows (step), Home/End
+- Smooth animation with interpolation between frames
+- Status panel showing health, energy, shield, damage stats
+
+**JSON (`--json`)**
+- NDJSON format (one JSON object per line)
+- Each line is a frame with rubot positions, bullets, energons
+- Final line is battle summary with winner
+
+All files are saved to `battle-logs/` with timestamped names:
+- `battle-20260116-143052-spinner-vs-tracker.html`
+- `battle-20260116-143052-spinner-vs-tracker.json`
 
 ---
 

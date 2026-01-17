@@ -23,8 +23,8 @@ class LargeProbeTestBot
   def act; end
 end
 
-def build_arena
-  Rubowar::Arena.new(width: 800, height: 600)
+def build_arena(event_bus: Rubowar::EventBus.new)
+  Rubowar::Arena.new(width: 800, height: 600, event_bus:)
 end
 
 def build_actor(x:, y:, turret_angle: 0, klass: ProbeTestBot)
@@ -38,14 +38,14 @@ end
 describe Rubowar::Arena do
   describe "initialization" do
     it "sets width and height" do
-      arena = Rubowar::Arena.new(width: 1000, height: 800)
+      arena = Rubowar::Arena.new(width: 1000, height: 800, event_bus: Rubowar::EventBus.new)
 
       _(arena.width).must_equal 1000
       _(arena.height).must_equal 800
     end
 
     it "uses default values" do
-      arena = Rubowar::Arena.new
+      arena = Rubowar::Arena.new(event_bus: Rubowar::EventBus.new)
 
       _(arena.width).must_equal Rubowar::Config::Arena::DEFAULT_WIDTH
       _(arena.height).must_equal Rubowar::Config::Arena::DEFAULT_HEIGHT
@@ -53,7 +53,7 @@ describe Rubowar::Arena do
     end
 
     it "starts with empty bullets and actors" do
-      arena = Rubowar::Arena.new
+      arena = Rubowar::Arena.new(event_bus: Rubowar::EventBus.new)
 
       _(arena.bullets).must_equal []
       _(arena.actors).must_equal []
@@ -154,13 +154,13 @@ describe Rubowar::Arena do
       _(state).must_be_instance_of Rubowar::ArenaState
       _(state.arena_width).must_equal 800
       _(state.arena_height).must_equal 600
-      _(state.chronons).must_equal 50
+      _(state.chronon).must_equal 50
       _(state.live_rubot_count).must_equal 1
     end
 
     it "converts energons to hash format" do
       arena = build_arena
-      energon = Rubowar::Energon.new(x: 200.0, y: 300.0, spawn_chronon: 10)
+      energon = Rubowar::Energon.spawn(x: 200.0, y: 300.0, spawn_chronon: 10)
       arena.energons = [energon]
 
       state = arena.to_state(50)
@@ -1898,7 +1898,7 @@ describe Rubowar::Arena do
       arena = build_arena
       actor = build_actor(x: 100, y: 100)
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 500, y: 500, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 500, y: 500, spawn_chronon: 50)
       arena.energons = [energon]
 
       collections = arena.check_energon_collection(100)
@@ -1911,7 +1911,7 @@ describe Rubowar::Arena do
       actor = build_actor(x: 100, y: 100)
       arena.actors = [actor]
       # Place energon within collection range (rubot radius + energon radius)
-      energon = Rubowar::Energon.new(x: 100 + actor.radius, y: 100, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 100 + actor.radius, y: 100, spawn_chronon: 50)
       arena.energons = [energon]
 
       collections = arena.check_energon_collection(100)
@@ -1925,7 +1925,7 @@ describe Rubowar::Arena do
       arena = build_arena
       actor = build_actor(x: 100, y: 100)
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 100, y: 100, spawn_chronon: 50)
       arena.energons = [energon]
 
       arena.check_energon_collection(100)
@@ -1938,7 +1938,7 @@ describe Rubowar::Arena do
       actor = build_actor(x: 100, y: 100)
       actor.energy = 50
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 100, y: 100, spawn_chronon: 50)
       arena.energons = [energon]
 
       arena.check_energon_collection(100)
@@ -1951,7 +1951,7 @@ describe Rubowar::Arena do
       actor = build_actor(x: 100, y: 100)
       actor.energy = actor.max_energy - 1
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 0)
+      energon = Rubowar::Energon.spawn(x: 100, y: 100, spawn_chronon: 0)
       arena.energons = [energon]
 
       arena.check_energon_collection(100) # 100 chronons old = 101 value
@@ -1964,7 +1964,7 @@ describe Rubowar::Arena do
       actor = build_actor(x: 100, y: 100)
       actor.health = 0
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 100, y: 100, spawn_chronon: 50)
       arena.energons = [energon]
 
       collections = arena.check_energon_collection(100)
@@ -1978,7 +1978,7 @@ describe Rubowar::Arena do
       actor = build_actor(x: 100, y: 100)
       actor.energy = 0
       arena.actors = [actor]
-      energon = Rubowar::Energon.new(x: 100, y: 100, spawn_chronon: 50)
+      energon = Rubowar::Energon.spawn(x: 100, y: 100, spawn_chronon: 50)
       arena.energons = [energon]
 
       collections = arena.check_energon_collection(100) # 50 chronons old

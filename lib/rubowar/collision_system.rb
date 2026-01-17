@@ -127,41 +127,41 @@ module Rubowar
     # @param actor [RubotActor] The actor to check
     # @param arena_width [Numeric] Arena width
     # @param arena_height [Numeric] Arena height
-    # @return [Boolean] true if a wall collision occurred
+    # @return [Hash, nil] Wall collision data { actor:, damage:, walls: [] } or nil if no collision
     def process_wall_collision(actor:, arena_width:, arena_height:)
-      hit_x = false
-      hit_y = false
       total_damage = 0
+      walls = []
 
       # Check left wall
       if (actor.x - actor.radius).negative?
         actor.clamp_x(min: actor.radius, max: arena_width - actor.radius)
-        hit_x = true
+        walls << :left
         total_damage += apply_wall_bounce(actor:, normal_x: 1.0, normal_y: 0.0)
       # Check right wall
       elsif actor.x + actor.radius > arena_width
         actor.clamp_x(min: actor.radius, max: arena_width - actor.radius)
-        hit_x = true
+        walls << :right
         total_damage += apply_wall_bounce(actor:, normal_x: -1.0, normal_y: 0.0)
       end
 
       # Check bottom wall
       if (actor.y - actor.radius).negative?
         actor.clamp_y(min: actor.radius, max: arena_height - actor.radius)
-        hit_y = true
+        walls << :bottom
         total_damage += apply_wall_bounce(actor:, normal_x: 0.0, normal_y: 1.0)
       # Check top wall
       elsif actor.y + actor.radius > arena_height
         actor.clamp_y(min: actor.radius, max: arena_height - actor.radius)
-        hit_y = true
+        walls << :top
         total_damage += apply_wall_bounce(actor:, normal_x: 0.0, normal_y: -1.0)
       end
 
-      return false unless hit_x || hit_y
+      return nil if walls.empty?
 
       actor.apply_collision_damage(total_damage)
       actor.call_safely(&:on_wall)
-      true
+
+      { actor:, damage: total_damage, walls: }
     end
 
     # Calculate and apply wall bounce physics

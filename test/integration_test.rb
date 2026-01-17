@@ -40,9 +40,9 @@ class IntegrationSensingBot
 
   def act
     # Record which ticks have results
-    @ticks_with_pulse_echo << chronons if pulse_echo&.any?
-    @ticks_with_probe_echo << chronons if probe_echo&.any?
-    @ticks_with_scan_echo << chronons if scan_echo&.any?
+    @ticks_with_pulse_echo << chronon if pulse_echo&.any?
+    @ticks_with_probe_echo << chronon if probe_echo&.any?
+    @ticks_with_scan_echo << chronon if scan_echo&.any?
 
     # Queue sensing for next tick
     pulse(distance: 500)
@@ -83,7 +83,7 @@ class IntegrationCollectorBot
   end
 
   def on_energon(amount)
-    @energon_collections << { tick: chronons, amount: }
+    @energon_collections << { tick: chronon, amount: }
   end
 
   def act
@@ -158,7 +158,7 @@ class IntegrationDetectBot
   end
 
   def act
-    @detect_intels_by_tick[chronons] = detect_intel.dup if detect_intel
+    @detect_intels_by_tick[chronon] = detect_intel.dup if detect_intel
     detect
   end
 end
@@ -184,7 +184,7 @@ describe "Integration Tests" do
       events = battle.run
 
       _(battle.winner).wont_be_nil
-      _(battle.chronons).must_be :>=, 1
+      _(battle.chronon).must_be :>=, 1
       _(events).wont_be_empty
     end
 
@@ -351,7 +351,7 @@ describe "Integration Tests" do
       battle = Rubowar::Battle.local([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 200)
       battle.run
 
-      spawn_events = battle.events.select { |e| e[:type] == :energon_spawn }
+      spawn_events = battle.event_log.select { |e| e[:type] == :energon_spawn }
 
       # Should spawn at tick 80 and 160
       _(spawn_events.length).must_be :>=, 2
@@ -425,7 +425,7 @@ describe "Integration Tests" do
       # Run ticks manually so crash happens
       3.times { battle.send(:run_chronon) }
 
-      error_events = battle.events.select { |e| e[:type] == :error }
+      error_events = battle.event_log.select { |e| e[:type] == :error }
 
       _(error_events).wont_be_empty
       _(error_events.first[:error]).must_be_instance_of RuntimeError

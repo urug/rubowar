@@ -211,10 +211,10 @@ describe Rubowar::CollisionSystem do
         actor:, arena_width: 800, arena_height: 600
       )
 
-      _(result).must_equal false
+      _(result).must_be_nil
     end
 
-    it "returns true when actor touches left wall" do
+    it "returns collision data when actor touches left wall" do
       actor = build_collision_actor(x: 10, y: 100)
       actor.velocity_x = -10.0
 
@@ -222,10 +222,11 @@ describe Rubowar::CollisionSystem do
         actor:, arena_width: 800, arena_height: 600
       )
 
-      _(result).must_equal true
+      _(result).wont_be_nil
+      _(result[:walls]).must_include :left
     end
 
-    it "returns true when actor touches right wall" do
+    it "returns collision data when actor touches right wall" do
       actor = build_collision_actor(x: 790, y: 100)
       actor.velocity_x = 10.0
 
@@ -233,10 +234,11 @@ describe Rubowar::CollisionSystem do
         actor:, arena_width: 800, arena_height: 600
       )
 
-      _(result).must_equal true
+      _(result).wont_be_nil
+      _(result[:walls]).must_include :right
     end
 
-    it "returns true when actor touches bottom wall" do
+    it "returns collision data when actor touches bottom wall" do
       actor = build_collision_actor(x: 100, y: 10)
       actor.velocity_y = -10.0
 
@@ -244,10 +246,11 @@ describe Rubowar::CollisionSystem do
         actor:, arena_width: 800, arena_height: 600
       )
 
-      _(result).must_equal true
+      _(result).wont_be_nil
+      _(result[:walls]).must_include :bottom
     end
 
-    it "returns true when actor touches top wall" do
+    it "returns collision data when actor touches top wall" do
       actor = build_collision_actor(x: 100, y: 590)
       actor.velocity_y = 10.0
 
@@ -255,7 +258,8 @@ describe Rubowar::CollisionSystem do
         actor:, arena_width: 800, arena_height: 600
       )
 
-      _(result).must_equal true
+      _(result).wont_be_nil
+      _(result[:walls]).must_include :top
     end
 
     it "clamps actor position to arena bounds" do
