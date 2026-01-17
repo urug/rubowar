@@ -77,8 +77,8 @@ module Rubowar
     end
 
     # Subscribe to battle events
-    def on(event_type, &block)
-      @event_bus.on(event_type, &block)
+    def on(event_type, &)
+      @event_bus.on(event_type, &)
     end
 
     def run

@@ -62,11 +62,11 @@ module Rubowar
       end
 
       # Returns the complete battle log as JSON
-      def to_json(*args)
+      def to_json(*)
         if @pretty
-          JSON.pretty_generate(to_h, *args)
+          JSON.pretty_generate(to_h, *)
         else
-          JSON.generate(to_h, *args)
+          JSON.generate(to_h, *)
         end
       end
 

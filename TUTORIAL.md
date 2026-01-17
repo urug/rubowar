@@ -180,9 +180,9 @@ Arena friction is 0.92 - you lose 8% speed each chronon. Without thrust, you'll 
 ### Probe - Precision Targeting
 
 ```ruby
-probe                         # 1 energy - just detection
-probe(:position)              # 5 energy - get x, y
-probe(:position, :velocity)   # 8 energy - get x, y, velocity_x, velocity_y
+probe                         # 1 energy - just detection (defaults to :size)
+probe(:position)              # 4 energy - get x, y
+probe(:position, :velocity)   # 7 energy - get x, y, velocity_x, velocity_y
 
 # Results in probe_echo NEXT chronon (ProbeEcho object):
 probe_echo.found?             # true if target detected
@@ -196,8 +196,8 @@ probe_echo.velocity_y         # -1.0 (if requested)
 ### Scan - Area Search
 
 ```ruby
-scan(angle: 60, distance: 200)                  # 7 energy - 60° arc, 200 units
-scan(angle: 60, distance: 200, velocity: true)  # 9 energy - includes velocity
+scan(angle: 60, distance: 200)                  # 8 energy - 60° arc, 200 units
+scan(angle: 60, distance: 200, velocity: true)  # 10 energy - includes velocity
 
 # Results in scan_echo NEXT chronon (ScanEcho object):
 scan_echo.empty?              # true if no targets found
@@ -275,7 +275,7 @@ lead_x, lead_y = lead_position(
 target_angle = angle_to(target_x: lead_x, target_y: lead_y)
 ```
 
-See the Tracker bot (`robots/tracker.rb`) for a complete example using the `SimpleTargeting` mixin, which handles lead calculation for you.
+See the Tracker bot (`rubots/tracker.rb`) for a complete example using the `SimpleTargeting` mixin, which handles lead calculation for you.
 
 ## Part 6: Putting It Together
 
@@ -338,7 +338,7 @@ class MyHunter
 
   def search_for_targets
     # Alternate between scanning and pulsing
-    if chronons % 3 == 0
+    if chronon % 3 == 0
       pulse(distance: 300)
     else
       rotate_turret(15 * @search_direction)
@@ -346,7 +346,7 @@ class MyHunter
     end
 
     # Change search direction occasionally
-    @search_direction *= -1 if chronons % 50 == 0
+    @search_direction *= -1 if chronon % 50 == 0
   end
 end
 ```
@@ -357,7 +357,7 @@ end
 
 ```ruby
 def act
-  puts "Chronon #{chronons}: energy=#{energy}, health=#{health}"
+  puts "Chronon #{chronon}: energy=#{energy}, health=#{health}"
   puts "  probe_echo: #{probe_echo.inspect}"
   # ... rest of act
 end
@@ -375,7 +375,7 @@ end
 2. **Forgetting energy costs**
    ```ruby
    # WRONG - might not have enough energy
-   scan(angle: 360, distance: 500)  # 14 energy!
+   scan(angle: 360, distance: 500)  # 26 energy!
    fire(20)                          # 20 energy!
    thrust(speed: 6, angle: 90)       # 16+ energy!
    # Total: 50+ energy in one chronon
@@ -416,7 +416,7 @@ Choose based on your strategy:
 ## Next Steps
 
 1. **Run battles**: Test your bot against the sample bots
-2. **Study the samples**: Read `SAMPLE_BOTS.md` and the code in `robots/`
+2. **Study the samples**: Read `SAMPLE_BOTS.md` and the code in `rubots/`
 3. **Iterate**: Watch battles, identify weaknesses, improve
 4. **Experiment**: Try different sizes, strategies, and tactics
 
@@ -436,7 +436,7 @@ Remember: The best bot depends on what you're fighting against. Adapt!
 | Sensor                    | Cost | Delay     | Returns                 |
 |---------------------------|------|-----------|-------------------------|
 | `probe(*attrs)`           | 1-18 | 1 chronon | Single target, detailed |
-| `scan(angle:, distance:)` | 5-15 | 1 chronon | Multiple targets in arc |
+| `scan(angle:, distance:)` | 3-26 | 1 chronon | Multiple targets in arc |
 | `pulse(distance:)`        | 3-6  | 1 chronon | All targets in radius   |
 | `detect`                  | 2    | 1 chronon | Counter-intel counts    |
 

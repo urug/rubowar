@@ -129,8 +129,8 @@ module Rubowar
       def generate_filename
         timestamp = @start_time.strftime("%Y%m%d-%H%M%S")
         rubot_names = @arena.actors
-          .map { |a| a.rubot_class.name.downcase.gsub(/[^a-z0-9]/, "") }
-          .join("-vs-")
+                            .map { |a| a.rubot_class.name.downcase.gsub(/[^a-z0-9]/, "") }
+                            .join("-vs-")
         "battle-#{timestamp}-#{rubot_names}.html"
       end
 

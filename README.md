@@ -71,7 +71,7 @@ end
 | `shield_level`                 | Shield strength (0 to max_health, decays 12%/chronon) |
 | `arena_width`, `arena_height`  | Arena dimensions                                  |
 | `friction`                     | Arena friction (default 0.92)                     |
-| `chronons`                     | Current game tick                                 |
+| `chronon`                      | Current game tick                                 |
 | `damage_dealt`, `damage_taken` | Match stats                                       |
 | `energons`                     | All energon positions `[{x:, y:}]` (free)         |
 | `size`                         | Rubot size (:small, :medium, :large)              |
@@ -399,8 +399,9 @@ battle = Rubowar::Battle.local([MyBot, OpponentBot])
 battle.run
 
 # Low-level API for custom actors
-arena = Rubowar::Arena.new(width: 640, height: 640)
-battle = Rubowar::Battle.new(arena:)
+event_bus = Rubowar::EventBus.new(chronon_limit: 9000)
+arena = Rubowar::Arena.new(width: 640, height: 640, event_bus: event_bus)
+battle = Rubowar::Battle.new(arena: arena, event_bus: event_bus)
 battle.register(Rubowar::LocalActor.new(MyBot))
 battle.register(my_custom_actor)
 battle.run
@@ -428,7 +429,7 @@ class WebActor
   def reset_actions = @_actions = { sense: [], move: [], combat: [] }
   def rubot_state=(state) = @_rubot_state = state
   def arena_state=(state) = @_arena_state = state
-  def _pending_energy_spend=(val) = @_pending = val
+  def _pending_energy_spend=(val) = @_pending_energy_spend = val
 
   # Called each chronon - for external actors, this is a no-op
   # Actions are set externally via set_actions before the deadline
@@ -467,8 +468,9 @@ end
 
 ```ruby
 # Create battle with custom actor
-arena = Rubowar::Arena.new
-battle = Rubowar::Battle.new(arena:, chronon_limit: 1000)
+event_bus = Rubowar::EventBus.new(chronon_limit: 1000)
+arena = Rubowar::Arena.new(event_bus: event_bus)
+battle = Rubowar::Battle.new(arena: arena, event_bus: event_bus)
 
 web_player = WebActor.new(size: :medium, name: "Player1")
 battle.register(web_player)
@@ -508,7 +510,7 @@ save_replay(events)
 ## Victory
 
 - Last rubot standing wins
-- Chronon limit (10,000 chronons) prevents stalemates
+- Chronon limit (9,000 chronons) prevents stalemates
 - Tiebreaker: most damage dealt, then highest HP percentage
 
 ## Error Handling
