@@ -3,14 +3,14 @@
 require "securerandom"
 
 # [file]
-# purpose = "State container and resource management for rubot actors"
-# responsibility = "Track health, energy, shields, damage stats, and detection counts"
+# purpose = "State container and identity management for rubot actors"
+# responsibility = "Track position, size, detection counts, and coordinate with RubotResources"
 # pattern = "Mixin Module"
 #
 # [module.RubotActor]
-# purpose = "Provides state accessors and resource management for actors"
-# note = "Include alongside RubotPhysics in LocalActor, BasicActor, etc."
-# collaborators = ["RubotPhysics", "Arena", "Battle", "RubotState"]
+# purpose = "Provides state accessors and identity management for actors"
+# note = "Include alongside RubotPhysics and RubotResources in LocalActor, BasicActor, etc."
+# collaborators = ["RubotPhysics", "RubotResources", "Arena", "Battle", "RubotState"]
 #
 # [sizes]
 # small = { radius: 16, energy_regen: 8, max_health: 80 }
@@ -31,6 +31,8 @@ require "securerandom"
 
 module Rubowar
   module RubotActor
+    include RubotResources
+
     attr_accessor :x, :y, :velocity_x, :velocity_y, :health, :energy, :shield_level, :damage_dealt,
                   :damage_taken, :death_processed, :_act_completed
     attr_reader :id, :size, :detection_counts, :position_set, :turret_angle
@@ -70,14 +72,6 @@ module Rubowar
       Config::Rubot::SIZES[@size][:max_health]
     end
 
-    def max_energy
-      Config::Rubot::MAX_ENERGY
-    end
-
-    def max_shield
-      max_health # Shield cap equals HP cap
-    end
-
     # === State queries ===
 
     def speed
@@ -107,77 +101,6 @@ module Rubowar
         damage_taken: @damage_taken,
         size: @size
       )
-    end
-
-    # === Damage handling ===
-
-    # Normal damage - shields absorb first
-    def apply_damage(amount)
-      if @shield_level.positive?
-        absorbed = [@shield_level, amount].min
-        @shield_level -= absorbed
-        amount -= absorbed
-      end
-
-      @health -= amount
-      @health = 0 if @health.negative?
-      @damage_taken += amount
-    end
-
-    # Collision damage - bypasses shields (physical impact)
-    def apply_collision_damage(amount)
-      @health -= amount
-      @health = 0 if @health.negative?
-      @damage_taken += amount
-    end
-
-    # === Energy management ===
-
-    def regenerate_energy
-      @energy = [@energy + energy_regen, max_energy].min
-    end
-
-    # Attempts to spend energy. If insufficient energy, drains to zero and returns false.
-    # This penalizes rubots for attempting actions they can't afford.
-    def spend_energy(amount)
-      NumericValidation.validate!(amount, name: "energy amount", non_negative: true)
-
-      if amount > @energy
-        @energy = 0
-        false
-      else
-        @energy -= amount
-        true
-      end
-    end
-
-    def add_energy(amount)
-      @energy = [@energy + amount, max_energy].min
-    end
-
-    # === Shield management ===
-
-    def degrade_shield
-      @shield_level = (@shield_level * (1 - Config::Rubot::SHIELD_DECAY_RATE)).floor
-    end
-
-    def add_shield(amount)
-      @shield_level = [@shield_level + amount, max_shield].min
-    end
-
-    def increase_shielding(energy)
-      NumericValidation.validate!(energy, name: "shield energy", positive: true)
-
-      return false unless spend_energy(energy)
-
-      add_shield(energy)
-      true
-    end
-
-    # === Combat stats ===
-
-    def add_damage_dealt(amount)
-      @damage_dealt += amount
     end
 
     # === Detection ===

@@ -137,7 +137,7 @@ module Rubowar
       errors = []
       callbacks.each do |callback|
         callback.call(data_with_chronon)
-      rescue => e
+      rescue StandardError => e
         errors << e
       end
       raise CallbackError.new(event.event_type, errors) if errors.any?

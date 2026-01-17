@@ -33,8 +33,8 @@ module Rubowar
     attr_reader :width, :height, :friction, :event_bus
     attr_accessor :bullets, :actors, :energons
 
-    def initialize(width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
-                   friction: Config::Arena::DEFAULT_FRICTION, event_bus:)
+    def initialize(event_bus:, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
+                   friction: Config::Arena::DEFAULT_FRICTION)
       @width = width
       @height = height
       @friction = friction
@@ -94,23 +94,23 @@ module Rubowar
         actor.move
 
         wall_result = CollisionSystem.process_wall_collision(actor:, arena_width: @width, arena_height: @height)
-        if wall_result
-          @event_bus.emit(EventBus::WallHit.new(
-            actor_id: actor.id,
-            damage: wall_result[:damage],
-            walls: wall_result[:walls]
-          ))
-        end
+        next unless wall_result
+
+        @event_bus.emit(EventBus::WallHit.new(
+                          actor_id: actor.id,
+                          damage: wall_result[:damage],
+                          walls: wall_result[:walls]
+                        ))
       end
 
       collision_responses = CollisionSystem.process_rubot_collisions(@actors)
       collision_responses.each do |response|
         @event_bus.emit(EventBus::Collision.new(
-          actor_a_id: response.actor_a.id,
-          actor_b_id: response.actor_b.id,
-          damage_to_a: response.damage_to_a,
-          damage_to_b: response.damage_to_b
-        ))
+                          actor_a_id: response.actor_a.id,
+                          actor_b_id: response.actor_b.id,
+                          damage_to_a: response.damage_to_a,
+                          damage_to_b: response.damage_to_b
+                        ))
       end
     end
 
@@ -211,13 +211,13 @@ module Rubowar
       actor.call_safely { |bot| bot.on_hit(damage: bullet.damage, direction:) }
 
       @event_bus.emit(EventBus::Hit.new(
-        attacker_id: bullet.owner&.id,
-        target_id: actor.id,
-        bullet_id: bullet.id,
-        x: bullet.x,
-        y: bullet.y,
-        damage: bullet.damage
-      ))
+                        attacker_id: bullet.owner&.id,
+                        target_id: actor.id,
+                        bullet_id: bullet.id,
+                        x: bullet.x,
+                        y: bullet.y,
+                        damage: bullet.damage
+                      ))
     end
 
     def process_fire(actor:, energy:)
@@ -240,13 +240,13 @@ module Rubowar
       @bullets << bullet
 
       @event_bus.emit(EventBus::Fire.new(
-        actor_id: actor.id,
-        bullet_id: bullet.id,
-        x: bullet_x,
-        y: bullet_y,
-        angle: actor.turret_angle,
-        damage:
-      ))
+                        actor_id: actor.id,
+                        bullet_id: bullet.id,
+                        x: bullet_x,
+                        y: bullet_y,
+                        angle: actor.turret_angle,
+                        damage:
+                      ))
 
       true
     end
