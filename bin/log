@@ -1,0 +1,161 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require "bundler/setup"
+require "rubowar"
+require "optparse"
+
+options = {
+  width: 480,
+  height: 480,
+  friction: 0.95,
+  chronon_limit: 1000,
+  seed: nil,
+  output: nil,
+  pretty: false,
+  stream: false
+}
+
+OptionParser.new do |opts|
+  opts.banner = "Usage: bin/log [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  opts.separator ""
+  opts.separator "Records a battle to JSON for replay or analysis."
+
+  opts.separator ""
+  opts.separator "Arena options:"
+
+  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 480)") do |w|
+    options[:width] = w
+  end
+
+  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 480)") do |h|
+    options[:height] = h
+  end
+
+  opts.on("-f", "--friction FRICTION", Float, "Friction coefficient (default: 0.95)") do |f|
+    options[:friction] = f
+  end
+
+  opts.on("-t", "--chronons LIMIT", Integer, "Chronon limit (default: 1000)") do |t|
+    options[:chronon_limit] = t
+  end
+
+  opts.on("-s", "--seed SEED", Integer, "Random seed for reproducibility") do |s|
+    options[:seed] = s
+  end
+
+  opts.separator ""
+  opts.separator "Output options:"
+
+  opts.on("-o", "--output FILE", "Output file (default: stdout)") do |file|
+    options[:output] = file
+  end
+
+  opts.on("-p", "--pretty", "Pretty-print JSON output") do
+    options[:pretty] = true
+  end
+
+  opts.on("--stream", "Stream NDJSON (one JSON object per line) instead of array") do
+    options[:stream] = true
+  end
+
+  opts.on("-h", "--help", "Show this help") do
+    puts opts
+    exit
+  end
+end.parse!
+
+# Load rubot files
+rubot_files = if ARGV.empty?
+                Dir.glob(File.join(__dir__, "..", "rubots", "*.rb"))
+              else
+                ARGV.map { |f| File.expand_path(f) }
+              end
+
+if rubot_files.size < 2
+  warn "Error: Need at least 2 rubots to battle"
+  warn "Usage: bin/log [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  exit 1
+end
+
+rubot_classes = []
+rubot_files.each do |file|
+  unless File.exist?(file)
+    warn "Error: File not found: #{file}"
+    exit 1
+  end
+
+  before = ObjectSpace.each_object(Class).select do |c|
+    c.include?(Rubowar::Rubot)
+  rescue StandardError
+    false
+  end
+  require file
+  after = ObjectSpace.each_object(Class).select do |c|
+    c.include?(Rubowar::Rubot)
+  rescue StandardError
+    false
+  end
+  new_classes = after - before
+
+  if new_classes.empty?
+    warn "Error: No Rubot class found in #{file}"
+    exit 1
+  end
+
+  rubot_classes << new_classes.first
+end
+
+# Set random seed if provided
+srand(options[:seed]) if options[:seed]
+
+# Create battle
+battle = Rubowar::Battle.local(
+  rubot_classes,
+  width: options[:width],
+  height: options[:height],
+  friction: options[:friction],
+  chronon_limit: options[:chronon_limit]
+)
+
+# Set up logger
+if options[:stream] && options[:output]
+  # Streaming mode: write NDJSON to file
+  output_io = File.open(options[:output], "w")
+  logger = Rubowar::Renderers::JsonLogger.new(battle, output: output_io, pretty: options[:pretty])
+
+  battle.on(:chronon) { |data| logger.render(data) }
+  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+
+  battle.run
+
+  output_io.close
+  warn "Battle logged to #{options[:output]} (#{File.size(options[:output])} bytes)"
+
+elsif options[:stream]
+  # Streaming mode: write NDJSON to stdout
+  logger = Rubowar::Renderers::JsonLogger.new(battle, output: $stdout, pretty: options[:pretty])
+
+  battle.on(:chronon) { |data| logger.render(data) }
+  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+
+  battle.run
+
+else
+  # Collect mode: gather all frames, output at end
+  logger = Rubowar::Renderers::JsonLogger.new(battle, pretty: options[:pretty])
+
+  battle.on(:chronon) { |data| logger.render(data) }
+  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+
+  battle.run
+
+  json = logger.to_json
+
+  if options[:output]
+    File.write(options[:output], json)
+    warn "Battle logged to #{options[:output]} (#{File.size(options[:output])} bytes)"
+  else
+    puts json
+  end
+end
