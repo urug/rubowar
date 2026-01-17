@@ -21,7 +21,7 @@ battle.run
 puts "Winner: #{battle.winner.rubot_class.name}"
 ```
 
-This bot spins and shoots when it has energy. Medium size regenerates 10 energy/turn, so it stays sustainable!
+This bot spins and shoots when it has energy. Medium size regenerates 16 energy/turn, so it stays sustainable!
 
 ## Learning Path
 
@@ -320,9 +320,9 @@ def on_energon(amount)         # Collected energon
 
 | Size      | Radius | HP  | Energy Regen | Mass |
 |-----------|--------|-----|--------------|------|
-| `:small`  | 16     | 80  | +8/chronon   | 0.64 |
-| `:medium` | 20     | 100 | +10/chronon  | 1.0  |
-| `:large`  | 24     | 120 | +12/chronon  | 1.44 |
+| `:small`  | 6      | 50  | +7/chronon   | 0.36 |
+| `:medium` | 10     | 90  | +16/chronon  | 1.0  |
+| `:large`  | 14     | 120 | +18/chronon  | 1.96 |
 
 **Tradeoffs:**
 - **Small**: Harder to hit, cheapest thrust, but least HP
@@ -331,7 +331,7 @@ def on_energon(amount)         # Collected energon
 
 ## Arena
 
-- **Dimensions**: Variable (default 640x640)
+- **Dimensions**: Variable (default 800x600)
 - **Origin**: Bottom-left (0,0)
 - **Angles**: 0 = East, 90 = North, 180 = West, 270 = South
 - **Friction**: 0.92 default (velocity *= friction each chronon)
@@ -372,7 +372,7 @@ Energy power-ups that spawn periodically and grow in value over time.
 - **Spawn rate**: Every 50 chronons (configurable)
 - **Starting value**: 1 energy
 - **Growth**: +1 energy per chronon alive
-- **Collection**: Touch to collect (8 unit radius)
+- **Collection**: Touch to collect (4 unit radius)
 - **Spawn position**: Maximizes minimum distance from all bots, avoids walls (15% buffer)
 
 ### Detection
@@ -523,10 +523,10 @@ Run battles from the command line:
 
 ```bash
 # Watch a battle in real-time
-bin/simulate -w rubots/spinner.rb rubots/hunter.rb
+bin/battle -w rubots/spinner.rb rubots/hunter.rb
 
 # Run 100 battles and see statistics
-bin/simulate -n 100 rubots/spinner.rb rubots/hunter.rb
+bin/battle -n 100 rubots/spinner.rb rubots/hunter.rb
 
 # Log a battle to JSON for replay/analysis
 bin/log -o replay.json rubots/spinner.rb rubots/hunter.rb
@@ -568,7 +568,7 @@ rubowar/
 ├── test/
 ├── rubots/                       # Example rubots (spinner, tracker, coroner, evader, crusher, hunter, hugger)
 ├── bin/
-│   ├── simulate                  # Run battles with various options
+│   ├── battle                    # Run battles with various options
 │   ├── log                       # Record battles to JSON
 │   ├── tournament                # Run full tournament
 │   └── console                   # Interactive Ruby console

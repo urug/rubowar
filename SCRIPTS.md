@@ -16,8 +16,8 @@ If no rubot files are specified, loads all rubots from `rubots/`.
 
 | Option | Description | Default |
 |--------|-------------|---------|
-| `-W, --width WIDTH` | Arena width | 480 |
-| `-H, --height HEIGHT` | Arena height | 480 |
+| `-W, --width WIDTH` | Arena width | 800 |
+| `-H, --height HEIGHT` | Arena height | 600 |
 | `-f, --friction FRICTION` | Friction coefficient | 0.95 |
 | `-t, --chronons LIMIT` | Chronon limit per battle | 1000 |
 

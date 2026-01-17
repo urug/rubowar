@@ -161,9 +161,9 @@ A wall-hugging evader with minimal movement philosophy.
 - **Wall Play:** Hug walls for defense (Hugger)
 
 ### Size Choices
-- **Small:** Evader, Hugger (agile, harder to hit, 8 energy regen)
-- **Medium:** Spinner, Coroner (balanced, 10 energy regen)
-- **Large:** Tracker, Crusher, Hunter (tanky, 12 energy regen, easier to hit)
+- **Small:** Evader, Hugger (agile, harder to hit, 7 energy regen)
+- **Medium:** Spinner, Coroner (balanced, 16 energy regen)
+- **Large:** Tracker, Crusher, Hunter (tanky, 18 energy regen, easier to hit)
 
 ## Next Steps
 

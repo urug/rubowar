@@ -87,7 +87,7 @@ class MyFirstBot
 end
 ```
 
-Medium rubots regenerate 10 energy per chronon. By keeping a reserve of 20, we ensure we can always sense and move.
+Medium rubots regenerate 16 energy per chronon. By keeping a reserve of 20, we ensure we can always sense and move.
 
 **Congratulations!** You've just built the Spinner bot - a simple but functional rubot.
 
@@ -404,9 +404,9 @@ end
 
 | Size      | HP  | Regen       | Movement Cost | Playstyle                 |
 |-----------|-----|-------------|---------------|---------------------------|
-| `:small`  | 80  | 8/chronon   | Cheapest      | Agile dodger, hard to hit |
-| `:medium` | 100 | 10/chronon  | Medium        | Balanced                  |
-| `:large`  | 120 | 12/chronon  | Expensive     | Tanky, high firepower     |
+| `:small`  | 50  | 7/chronon   | Cheapest      | Agile dodger, hard to hit |
+| `:medium` | 90  | 16/chronon  | Medium        | Balanced                  |
+| `:large`  | 120 | 18/chronon  | Expensive     | Tanky, high firepower     |
 
 Choose based on your strategy:
 - **Small**: Evasion-focused, hit-and-run
