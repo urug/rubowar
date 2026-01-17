@@ -161,36 +161,32 @@ module Rubowar
           </head>
           <body>
             <div id="app">
-              <header id="header">
-                <h1>Rubowar Battle Replay</h1>
-                <div id="battle-info">
-                  <span id="chronon-display">Chronon: 0</span>
-                  <span id="winner-display"></span>
-                </div>
-              </header>
-
               <main id="main">
                 <div id="arena-container">
                   <canvas id="arena-canvas"></canvas>
                 </div>
 
                 <aside id="status-panel">
+                  <h1>Rubowar Battle Replay</h1>
                   <div id="rubot-stats"></div>
+                  <div id="battle-info">
+                    <span id="chronon-display">Chronon: 0</span>
+                    <span id="winner-display"></span>
+                  </div>
                 </aside>
               </main>
 
               <footer id="controls">
-                <button id="btn-start" title="Go to start (Home)">|&lt;</button>
-                <button id="btn-prev" title="Previous frame (Left Arrow)">&lt;</button>
-                <button id="btn-play-pause" title="Play/Pause (Space)">Play</button>
-                <button id="btn-next" title="Next frame (Right Arrow)">&gt;</button>
-                <button id="btn-end" title="Go to end (End)">&gt;|</button>
+                <button id="btn-start" title="Go to start (Home)">⏮</button>
+                <button id="btn-prev" title="Previous frame (Left Arrow)">◁</button>
+                <button id="btn-play-pause" title="Play/Pause (Space)">Play ▶</button>
+                <button id="btn-next" title="Next frame (Right Arrow)">▷</button>
+                <button id="btn-end" title="Go to end (End)">⏭</button>
 
                 <input type="range" id="scrubber" min="0" max="0" value="0">
 
                 <label>Speed:
                   <select id="speed-select">
-                    <option value="0.25">0.25x</option>
                     <option value="0.5">0.5x</option>
                     <option value="1" selected>1x</option>
                     <option value="2">2x</option>
@@ -229,26 +225,6 @@ module Rubowar
             height: 100vh;
           }
 
-          #header {
-            padding: 12px 20px;
-            background: #1a1a2e;
-            border-bottom: 1px solid #2a2a4e;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-          }
-
-          #header h1 {
-            font-size: 1.4em;
-            color: #fff;
-          }
-
-          #battle-info {
-            display: flex;
-            gap: 20px;
-            font-family: monospace;
-          }
-
           #main {
             flex: 1;
             display: flex;
@@ -257,10 +233,27 @@ module Rubowar
             overflow: hidden;
           }
 
-          #arena-container {
-            flex: 1;
+          #status-panel h1 {
+            font-size: 1.2em;
+            color: #fff;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #2a2a4e;
+          }
+
+          #battle-info {
+            margin-top: auto;
+            padding-top: 15px;
+            border-top: 1px solid #2a2a4e;
+            font-family: monospace;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
+            gap: 8px;
+          }
+
+          #arena-container {
+            display: flex;
+            justify-content: flex-start;
             align-items: center;
           }
 
@@ -270,8 +263,12 @@ module Rubowar
           }
 
           #status-panel {
-            width: 280px;
+            flex: 1;
+            min-width: 200px;
+            max-width: 400px;
             overflow-y: auto;
+            display: flex;
+            flex-direction: column;
           }
 
           .rubot-stat {
@@ -402,7 +399,7 @@ module Rubowar
               this.currentFrame = 0;
               this.isPlaying = false;
               this.playbackSpeed = 1.0;
-              this.chrononDuration = 1000 / 30;
+              this.chrononDuration = 1000 / 15;
 
               this.interpolationProgress = 0;
               this.lastTimestamp = null;
@@ -415,8 +412,14 @@ module Rubowar
 
             setupCanvas() {
               const { width, height } = this.metadata.arena;
-              const maxHeight = window.innerHeight;
-              const scale = maxHeight / height;
+              // Leave room for controls and status panel (min 200px + padding)
+              const availableWidth = window.innerWidth - 260;
+              const availableHeight = window.innerHeight - 100; // controls + padding
+
+              // Scale to fill available space
+              const scaleX = availableWidth / width;
+              const scaleY = availableHeight / height;
+              const scale = Math.min(scaleX, scaleY);
 
               this.canvas.width = width * scale;
               this.canvas.height = height * scale;
@@ -523,7 +526,7 @@ module Rubowar
 
               ctx.strokeStyle = "#2a2a4e";
               ctx.lineWidth = 1;
-              const gridSize = 50 * this.scale;
+              const gridSize = 25 * this.scale;
 
               for (let x = 0; x < this.canvas.width; x += gridSize) {
                 ctx.beginPath();
@@ -556,11 +559,11 @@ module Rubowar
               }
 
               if (rubot.shield_level > 0) {
-                const shieldRadius = radius + 5 * this.scale;
-                const shieldAlpha = Math.min(rubot.shield_level / 50, 0.6);
+                const shieldRadius = radius + 2 * this.scale;
+                const shieldAlpha = Math.min(rubot.shield_level / 40, 0.85);
                 ctx.beginPath();
                 ctx.arc(x, y, shieldRadius, 0, Math.PI * 2);
-                ctx.fillStyle = "rgba(100, 200, 255, " + shieldAlpha + ")";
+                ctx.fillStyle = "rgba(140, 220, 255, " + shieldAlpha + ")";
                 ctx.fill();
               }
 
@@ -569,21 +572,9 @@ module Rubowar
               ctx.fillStyle = colors.body;
               ctx.fill();
               ctx.strokeStyle = colors.dark;
-              ctx.lineWidth = 2;
+              // Border thickness based on size
+              ctx.lineWidth = rubot.size === "small" ? 1 : rubot.size === "large" ? 4 : 2;
               ctx.stroke();
-
-              if (rubot.size === "small") {
-                ctx.beginPath();
-                ctx.arc(x, y, radius * 0.3, 0, Math.PI * 2);
-                ctx.fillStyle = colors.dark;
-                ctx.fill();
-              } else if (rubot.size === "large") {
-                ctx.beginPath();
-                ctx.arc(x, y, radius * 0.6, 0, Math.PI * 2);
-                ctx.strokeStyle = colors.dark;
-                ctx.lineWidth = 3;
-                ctx.stroke();
-              }
 
               const turretAngle = -rubot.turret_angle * Math.PI / 180;
               const turretLength = radius * 1.4;
@@ -640,7 +631,8 @@ module Rubowar
 
             drawEnergons(energons) {
               const ctx = this.ctx;
-              const energonRadius = 8 * this.scale;
+              const energonRadius = 4 * this.scale;
+              const diamondRadius = energonRadius * 0.6;
 
               energons.forEach(energon => {
                 const x = energon.x * this.scale;
@@ -654,21 +646,16 @@ module Rubowar
                              energonRadius * 4, energonRadius * 4);
 
                 ctx.beginPath();
-                ctx.moveTo(x, y - energonRadius);
-                ctx.lineTo(x + energonRadius, y);
-                ctx.lineTo(x, y + energonRadius);
-                ctx.lineTo(x - energonRadius, y);
+                ctx.moveTo(x, y - diamondRadius);
+                ctx.lineTo(x + diamondRadius, y);
+                ctx.lineTo(x, y + diamondRadius);
+                ctx.lineTo(x - diamondRadius, y);
                 ctx.closePath();
                 ctx.fillStyle = "#00FF96";
                 ctx.fill();
                 ctx.strokeStyle = "#00CC78";
                 ctx.lineWidth = 2;
                 ctx.stroke();
-
-                ctx.fillStyle = "#fff";
-                ctx.font = (10 * this.scale) + "px monospace";
-                ctx.textAlign = "center";
-                ctx.fillText(energon.value, x, y + energonRadius + 12 * this.scale);
               });
             }
 
@@ -696,10 +683,6 @@ module Rubowar
                   '<div class="stat-row">' +
                     '<span class="stat-label">Shield:</span>' +
                     '<span class="stat-value">' + rubot.shield_level + '</span>' +
-                  '</div>' +
-                  '<div class="stat-row">' +
-                    '<span class="stat-label">Damage:</span>' +
-                    '<span class="stat-value">+' + rubot.damage_dealt + ' / -' + rubot.damage_taken + '</span>' +
                   '</div>' +
                 '</div>';
               }).join("");
@@ -745,7 +728,7 @@ module Rubowar
 
             updatePlayButton() {
               document.getElementById("btn-play-pause").textContent =
-                this.isPlaying ? "Pause" : "Play";
+                this.isPlaying ? "Pause ⏸" : "Play ▶";
             }
 
             updateScrubber() {

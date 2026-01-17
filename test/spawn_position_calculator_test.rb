@@ -180,6 +180,52 @@ describe Rubowar::SpawnPositionCalculator do
         _(pos[:y]).must_be_kind_of Numeric
       end
     end
+
+    it "maximizes distance from existing energons" do
+      energon_positions = [{ x: 100, y: 100 }]
+
+      pos = Rubowar::SpawnPositionCalculator.find_energon_position(
+        width: 800,
+        height: 600,
+        rubot_positions: [],
+        energon_positions:,
+        wall_buffer: 50
+      )
+
+      distance = Rubowar::Physics.distance(
+        x1: pos[:x], y1: pos[:y],
+        x2: 100, y2: 100
+      )
+
+      min_expected_distance = Math.sqrt((800**2) + (600**2)) / 3
+      _(distance).must_be :>=, min_expected_distance
+    end
+
+    it "maximizes distance from both rubots and energons" do
+      rubot_positions = [{ x: 100, y: 100 }]
+      energon_positions = [{ x: 700, y: 500 }]
+
+      pos = Rubowar::SpawnPositionCalculator.find_energon_position(
+        width: 800,
+        height: 600,
+        rubot_positions:,
+        energon_positions:,
+        wall_buffer: 50
+      )
+
+      rubot_distance = Rubowar::Physics.distance(
+        x1: pos[:x], y1: pos[:y],
+        x2: 100, y2: 100
+      )
+      energon_distance = Rubowar::Physics.distance(
+        x1: pos[:x], y1: pos[:y],
+        x2: 700, y2: 500
+      )
+
+      # Position should be reasonably far from both
+      _(rubot_distance).must_be :>=, 100
+      _(energon_distance).must_be :>=, 100
+    end
   end
 
   describe ".too_close?" do

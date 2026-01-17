@@ -7,8 +7,8 @@ require "optparse"
 require "json"
 
 options = {
-  width: 480,
-  height: 480,
+  width: 800,
+  height: 600,
   friction: 0.95,
   chronon_limit: 1000,
   battles: 1,
@@ -26,11 +26,11 @@ OptionParser.new do |opts|
   opts.separator ""
   opts.separator "Arena options:"
 
-  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 480)") do |w|
+  opts.on("-W", "--width WIDTH", Integer, "Arena width (default: 800)") do |w|
     options[:width] = w
   end
 
-  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 480)") do |h|
+  opts.on("-H", "--height HEIGHT", Integer, "Arena height (default: 600)") do |h|
     options[:height] = h
   end
 

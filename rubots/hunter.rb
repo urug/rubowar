@@ -30,6 +30,7 @@ class Hunter
 
   def act
     sense_environment
+    track_target
 
     case @mode
     when :searching
@@ -66,45 +67,71 @@ class Hunter
   private
 
   def sense_environment
-    # Pulse for broad awareness
-    return if chronon - @last_pulse < 10
+    # Pulse for broad awareness every 10 ticks
+    if chronon - @last_pulse >= 10
+      pulse(distance: PULSE_RANGE)
+      @last_pulse = chronon
 
-    pulse(distance: PULSE_RANGE)
-    @last_pulse = chronon
+      if pulse_echo.any_rubots?
+        closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
 
-    return unless pulse_echo.any_rubots?
+        # Always update to closest target (handles target switching after kill)
+        @target = { x: closest.x, y: closest.y }
+        determine_tactics
+      elsif @target
+        # No rubots found - target is dead, search for new one
+        search_mode
+      end
+    end
 
-    # Pick closest target
-    closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+    # Use scan to get velocity data for better tracking
+    update_target_from_scan if @target && energy > 12
+  end
 
-    return unless @target.nil? || distance_to(target_x: closest.x, target_y: closest.y) < distance_to(target_x: @target[:x], target_y: @target[:y])
+  def update_target_from_scan
+    scan(angle: 50, distance: 300, velocity: true)
+    return unless scan_echo.any_rubots?
 
-    # Preserve velocity data when updating position
+    closest = scan_echo.closest_rubot(to_x: x, to_y: y)
     @target = {
       x: closest.x,
       y: closest.y,
-      velocity_x: @target&.dig(:velocity_x),
-      velocity_y: @target&.dig(:velocity_y)
+      velocity_x: closest.velocity_x,
+      velocity_y: closest.velocity_y
     }
-    determine_tactics
+  end
+
+  def track_target
+    return unless @target
+
+    # Calculate lead angle if we have velocity data
+    target_angle = if @target[:velocity_x] && @target[:velocity_y]
+                     lead_angle(
+                       target_x: @target[:x],
+                       target_y: @target[:y],
+                       velocity_x: @target[:velocity_x],
+                       velocity_y: @target[:velocity_y],
+                       projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+                     )
+                   else
+                     angle_to(target_x: @target[:x], target_y: @target[:y])
+                   end
+
+    turret_diff = normalize_angle(target_angle - turret_angle)
+
+    # Rotate faster when far off, slower when close for precision
+    max_rotation = turret_diff.abs > 40 ? 20 : 15
+    rotate_turret(turret_diff.clamp(-max_rotation, max_rotation))
   end
 
   def determine_tactics
     return unless @target
 
-    # Probe to learn target size and health
-    aim_at_target
-
+    # Probe to learn target size and health when aligned
     if turret_aligned? && energy > 12
-      probe(:position, :velocity, :size, :health)
+      probe(:size, :health)
 
       if probe_echo.found?
-        @target = {
-          x: probe_echo.x || @target[:x],
-          y: probe_echo.y || @target[:y],
-          velocity_x: probe_echo.velocity_x,
-          velocity_y: probe_echo.velocity_y
-        }
         @target_size = probe_echo.size
         @target_health = probe_echo.health
 
@@ -117,10 +144,11 @@ class Hunter
                 else
                   :hunting   # Medium - standard aggression
                 end
+        return
       end
     end
 
-    # Default to hunting if we can't probe
+    # Default to hunting if we can't probe yet
     @mode = :hunting if @mode == :searching
   end
 
@@ -241,27 +269,16 @@ class Hunter
   def update_target
     return unless @target
 
-    # Probe periodically for health updates
-    return unless turret_aligned? && energy > 10 && (chronon % 15).zero?
+    # Probe periodically for health updates (position handled by scan)
+    return unless turret_aligned? && energy > 8 && (chronon % 12).zero?
 
-    probe(:position, :velocity, :health)
-    return unless probe_echo.found?
-
-    @target = {
-      x: probe_echo.x || @target[:x],
-      y: probe_echo.y || @target[:y],
-      velocity_x: probe_echo.velocity_x,
-      velocity_y: probe_echo.velocity_y
-    }
-    @target_health = probe_echo.health
-  end
-
-  def aim_at_target
-    return unless @target
-
-    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
-    turret_diff = normalize_angle(target_angle - turret_angle)
-    rotate_turret(turret_diff.clamp(-20, 20))
+    probe(:health)
+    if probe_echo.found?
+      @target_health = probe_echo.health
+    else
+      # Target not found - they're dead or moved, clear and search for new target
+      search_mode
+    end
   end
 
   def turret_aligned?
@@ -274,7 +291,7 @@ class Hunter
   def aim_and_fire(power:)
     return unless @target
 
-    # Lead moving targets
+    # Check alignment (turret tracking handles rotation)
     target_angle = if @target[:velocity_x] && @target[:velocity_y]
                      lead_angle(
                        target_x: @target[:x],
@@ -287,11 +304,10 @@ class Hunter
                      angle_to(target_x: @target[:x], target_y: @target[:y])
                    end
 
-    turret_diff = normalize_angle(target_angle - turret_angle)
-    rotate_turret(turret_diff.clamp(-20, 20))
+    turret_diff = normalize_angle(target_angle - turret_angle).abs
 
     # Fire when aligned
-    return unless turret_diff.abs < 18 && energy > power + 10
+    return unless turret_diff < 18 && energy > power + 8
 
     fire(power)
   end
