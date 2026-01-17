@@ -353,7 +353,8 @@ describe Rubowar::Battle do
       # Place prober at center, target directly to the east
       prober_actor.x = 200
       prober_actor.y = 200
-      prober_actor.turret_angle = 350 # Start slightly before east (0 degrees)
+      # Start at 345 so after 15 degree rotation, turret is at 0 (pointing at target)
+      prober_actor.turret_angle = 345
       target_actor.x = 400
       target_actor.y = 200
 
@@ -364,7 +365,7 @@ describe Rubowar::Battle do
       # Tick 1: no previous probe, returns empty ProbeEcho
       _(results[0]).must_be :empty?
 
-      # After turret rotates past 0 degrees (east), should find target in subsequent ticks
+      # After turret rotates to 0 degrees (east), should find target in subsequent ticks
       found_target = results[1..].any?(&:found?)
       _(found_target).must_equal true
     end
@@ -794,8 +795,8 @@ describe Rubowar::Battle do
       battle.send(:run_chronon)
 
       # Energy should have decreased by 2 (detect cost) plus regen
-      # Starting: 50, detect: -2, regen: +10 = 58
-      _(detector.energy).must_equal 58
+      # Starting: 50, detect: -2, regen: +energy_regen
+      _(detector.energy).must_equal 50 - 2 + detector.energy_regen
     end
 
     it "returns false and fails when insufficient energy" do
@@ -1031,8 +1032,8 @@ describe Rubowar::Battle do
       # Health unchanged (no damage for slowness)
       _(timeout_bot.health).must_equal initial_health
 
-      # Energy regenerated normally (medium = 10/tick, 2 ticks = +20, capped at 100)
-      _(timeout_bot.energy).must_equal [50 + 20, timeout_bot.max_energy].min
+      # Energy regenerated normally (energy_regen/tick, 2 ticks, capped at max_energy)
+      _(timeout_bot.energy).must_equal [50 + (timeout_bot.energy_regen * 2), timeout_bot.max_energy].min
     end
   end
 end

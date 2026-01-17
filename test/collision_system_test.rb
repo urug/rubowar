@@ -114,7 +114,8 @@ describe Rubowar::CollisionSystem do
 
     it "handles different sized actors" do
       small = build_collision_actor(x: 100, y: 100, klass: SmallCollisionBot)
-      large = build_collision_actor(x: 120, y: 100, klass: LargeCollisionBot)
+      # Position large bot so they overlap (radii 8+12=20, so < 20 apart)
+      large = build_collision_actor(x: 115, y: 100, klass: LargeCollisionBot)
       small.velocity_x = 5.0
       large.velocity_x = -5.0
 
@@ -122,7 +123,7 @@ describe Rubowar::CollisionSystem do
 
       # Small bot should be pushed more than large bot
       _(small.x).must_be :<, 100 # Pushed left
-      _(large.x).must_be :>, 120 # Pushed right (less)
+      _(large.x).must_be :>, 115 # Pushed right (less)
     end
   end
 
@@ -215,7 +216,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "returns collision data when actor touches left wall" do
-      actor = build_collision_actor(x: 10, y: 100)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = actor.radius - 2 # Position overlapping left wall
       actor.velocity_x = -10.0
 
       result = Rubowar::CollisionSystem.process_wall_collision(
@@ -227,7 +229,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "returns collision data when actor touches right wall" do
-      actor = build_collision_actor(x: 790, y: 100)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = 800 - actor.radius + 2 # Position overlapping right wall
       actor.velocity_x = 10.0
 
       result = Rubowar::CollisionSystem.process_wall_collision(
@@ -239,7 +242,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "returns collision data when actor touches bottom wall" do
-      actor = build_collision_actor(x: 100, y: 10)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.y = actor.radius - 2 # Position overlapping bottom wall
       actor.velocity_y = -10.0
 
       result = Rubowar::CollisionSystem.process_wall_collision(
@@ -251,7 +255,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "returns collision data when actor touches top wall" do
-      actor = build_collision_actor(x: 100, y: 590)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.y = 600 - actor.radius + 2 # Position overlapping top wall
       actor.velocity_y = 10.0
 
       result = Rubowar::CollisionSystem.process_wall_collision(
@@ -263,7 +268,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "clamps actor position to arena bounds" do
-      actor = build_collision_actor(x: 5, y: 100)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = actor.radius - 5 # Position well inside left wall
       actor.velocity_x = -10.0
 
       Rubowar::CollisionSystem.process_wall_collision(
@@ -274,7 +280,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "reverses velocity on wall bounce" do
-      actor = build_collision_actor(x: 10, y: 100)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = actor.radius - 2 # Position overlapping left wall
       actor.velocity_x = -10.0
       actor.velocity_y = 0.0
 
@@ -286,7 +293,8 @@ describe Rubowar::CollisionSystem do
     end
 
     it "applies damage on wall collision" do
-      actor = build_collision_actor(x: 10, y: 100)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = actor.radius - 2 # Position overlapping left wall
       actor.velocity_x = -10.0
       initial_health = actor.health
 
@@ -298,7 +306,9 @@ describe Rubowar::CollisionSystem do
     end
 
     it "handles corner collisions" do
-      actor = build_collision_actor(x: 10, y: 10)
+      actor = build_collision_actor(x: 100, y: 100)
+      actor.x = actor.radius - 2 # Position overlapping left wall
+      actor.y = actor.radius - 2 # Position overlapping bottom wall
       actor.velocity_x = -10.0
       actor.velocity_y = -10.0
 

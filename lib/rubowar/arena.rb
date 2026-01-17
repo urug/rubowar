@@ -487,12 +487,15 @@ module Rubowar
                         .select(&:alive?)
                         .map { |r| { x: r.x, y: r.y } }
 
+      energon_positions = @energons.map { |e| { x: e.x, y: e.y } }
+
       wall_buffer = ([@width, @height].min * Config::Arena::ENERGON_WALL_BUFFER_RATIO).round
 
       SpawnPositionCalculator.find_energon_position(
         width: @width,
         height: @height,
         rubot_positions:,
+        energon_positions:,
         wall_buffer:
       )
     end

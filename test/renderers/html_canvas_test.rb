@@ -145,7 +145,7 @@ describe Rubowar::Renderers::HtmlCanvas do
 
       rubot = renderer.frames.first[:rubots].first
       _(rubot[:health]).must_equal 75
-      _(rubot[:max_health]).must_equal 100
+      _(rubot[:max_health]).must_equal Rubowar::Config::Rubot::SIZES[:medium][:max_health]
     end
 
     it "includes rubot radius based on size" do
@@ -157,7 +157,7 @@ describe Rubowar::Renderers::HtmlCanvas do
       renderer.render(tick_state)
 
       rubot = renderer.frames.first[:rubots].first
-      _(rubot[:radius]).must_equal 20
+      _(rubot[:radius]).must_equal Rubowar::Config::Rubot::SIZES[:medium][:radius]
     end
 
     it "includes rubot alive status" do

@@ -455,23 +455,21 @@ describe "Integration Tests" do
     end
 
     it "shields decay each tick" do
-      battle = Rubowar::Battle.local([IntegrationShieldBot, IntegrationStationaryBot], chronon_limit: 20)
+      battle = Rubowar::Battle.local([IntegrationStationaryBot, IntegrationStationaryBot], chronon_limit: 20)
       battle.spawn_rubots
 
-      shield_bot = battle.arena.actors.find { |r| r.instance.is_a?(IntegrationShieldBot) }
+      # Directly set shield and test decay without bot intervention
+      bot = battle.arena.actors.first
+      bot.shield_level = 100
 
-      # Run a few ticks to build shields
-      battle.send(:call_on_spawn)
-      5.times { battle.send(:run_chronon) }
+      initial_shield = bot.shield_level
 
-      shield_after_build = shield_bot.shield_level
+      # Decay shields directly (12% per tick)
+      battle.arena.regenerate_and_degrade
 
-      # Run more ticks without adding shields (low energy)
-      shield_bot.energy = 0
-      5.times { battle.send(:run_chronon) }
-
-      # Shields should have decayed
-      _(shield_bot.shield_level).must_be :<, shield_after_build
+      # Shields should have decayed by 12%
+      expected_shield = (initial_shield * (1 - Rubowar::Config::Rubot::SHIELD_DECAY_RATE)).to_i
+      _(bot.shield_level).must_equal expected_shield
     end
   end
 
@@ -544,8 +542,8 @@ describe "Integration Tests" do
       battle.send(:call_on_spawn)
       battle.send(:run_chronon)
 
-      # Should have regenerated (medium = 10/tick)
-      _(bot.energy).must_equal 60
+      # Should have regenerated (energy_regen/tick)
+      _(bot.energy).must_equal 50 + bot.energy_regen
     end
 
     it "caps energy at max" do

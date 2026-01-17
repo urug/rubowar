@@ -31,6 +31,7 @@ class Crusher
 
   def act
     sense_targets
+    track_target
 
     case @mode
     when :hunting
@@ -73,29 +74,67 @@ class Crusher
 
   def sense_targets
     # Pulse every few ticks for awareness
-    return if chronon - @last_pulse < 8
+    if chronon - @last_pulse >= 8
+      pulse(distance: 400)
+      @last_pulse = chronon
 
-    pulse(distance: 400)
-    @last_pulse = chronon
-    return unless pulse_echo.any_rubots?
+      if pulse_echo.any_rubots?
+        # Prioritize: corner-trapped > wall-adjacent > closest
+        best = pulse_echo.rubots.min_by do |t|
+          dist = distance_to(target_x: t.x, target_y: t.y)
+          target_hash = { x: t.x, y: t.y }
+          wall_dist = wall_distance_of(target_hash)
 
-    # Prioritize: corner-trapped > wall-adjacent > closest
-    # Need to convert SenseTarget to hash for @target storage
-    best = pulse_echo.rubots.min_by do |t|
-      dist = distance_to(target_x: t.x, target_y: t.y)
-      target_hash = { x: t.x, y: t.y }
-      wall_dist = wall_distance_of(target_hash)
+          corner_bonus = in_corner?(target_hash) ? -300 : 0
+          wall_bonus = wall_dist < WALL_DANGER ? -150 : 0
 
-      # Huge priority for corner-trapped targets
-      corner_bonus = in_corner?(target_hash) ? -300 : 0
-      # High priority for wall-adjacent targets
-      wall_bonus = wall_dist < WALL_DANGER ? -150 : 0
+          dist + corner_bonus + wall_bonus
+        end
 
-      dist + corner_bonus + wall_bonus
+        @target = { x: best.x, y: best.y } if best
+        @mode = :positioning if @target && @mode == :hunting
+      end
     end
 
-    @target = { x: best.x, y: best.y } if best
-    @mode = :positioning if @target && @mode == :hunting
+    # Use scan to get velocity data for better tracking
+    update_target_from_scan if @target && energy > 15
+  end
+
+  def update_target_from_scan
+    # Scan in direction of target to get velocity
+    scan(angle: 60, distance: 350, velocity: true)
+    return unless scan_echo.any_rubots?
+
+    closest = scan_echo.closest_rubot(to_x: x, to_y: y)
+    @target = {
+      x: closest.x,
+      y: closest.y,
+      velocity_x: closest.velocity_x,
+      velocity_y: closest.velocity_y
+    }
+  end
+
+  def track_target
+    return unless @target
+
+    # Calculate lead angle if we have velocity data
+    target_angle = if @target[:velocity_x] && @target[:velocity_y]
+                     lead_angle(
+                       target_x: @target[:x],
+                       target_y: @target[:y],
+                       velocity_x: @target[:velocity_x],
+                       velocity_y: @target[:velocity_y],
+                       projectile_speed: Rubowar::Config::Combat::BULLET_SPEED
+                     )
+                   else
+                     angle_to(target_x: @target[:x], target_y: @target[:y])
+                   end
+
+    turret_diff = normalize_angle(target_angle - turret_angle)
+
+    # Rotate faster when far off target, slower when close for precision
+    max_rotation = turret_diff.abs > 45 ? 20 : 15
+    rotate_turret(turret_diff.clamp(-max_rotation, max_rotation))
   end
 
   def hunt
@@ -111,7 +150,6 @@ class Crusher
   def position_for_ram
     return hunt unless @target
 
-    update_target_position
     dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # If close enough to ram, do it
@@ -142,8 +180,6 @@ class Crusher
   def execute_ram
     return hunt unless @target
 
-    update_target_position
-
     # Check if target is now pinned
     if target_pinned?
       @mode = :crushing
@@ -171,7 +207,6 @@ class Crusher
   def crush_pinned_target
     return hunt unless @target
 
-    update_target_position
     dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Stop crushing if: target escaped, timeout, or target dead (no update)
@@ -273,30 +308,10 @@ class Crusher
     wall_distance_of(@target) < PIN_THRESHOLD
   end
 
-  def update_target_position
-    return unless @target
-
-    # Use probe for precise tracking when aligned
-    target_angle = angle_to(target_x: @target[:x], target_y: @target[:y])
-    turret_diff = normalize_angle(target_angle - turret_angle).abs
-
-    return unless turret_diff < 20 && energy > 10
-
-    probe(:position, :velocity)
-    return unless probe_echo.found?
-
-    @target = {
-      x: probe_echo.x,
-      y: probe_echo.y,
-      velocity_x: probe_echo.velocity_x,
-      velocity_y: probe_echo.velocity_y
-    }
-  end
-
   def aim_and_fire(aggressive: false)
     return unless @target
 
-    # Lead moving targets
+    # Check alignment to target (turret tracking handles rotation)
     target_angle = if @target[:velocity_x] && @target[:velocity_y]
                      lead_angle(
                        target_x: @target[:x],
@@ -309,14 +324,13 @@ class Crusher
                      angle_to(target_x: @target[:x], target_y: @target[:y])
                    end
 
-    turret_diff = normalize_angle(target_angle - turret_angle)
-    rotate_turret(turret_diff.clamp(-15, 15))
+    turret_diff = normalize_angle(target_angle - turret_angle).abs
 
     # Fire if aligned - aggressive mode has wider tolerance and lower energy threshold
-    alignment_threshold = aggressive ? 25 : 15
-    energy_threshold = aggressive ? 20 : 35
-    return unless turret_diff.abs < alignment_threshold && energy > energy_threshold
+    alignment_threshold = aggressive ? 25 : 18
+    energy_threshold = aggressive ? 20 : 30
+    return unless turret_diff < alignment_threshold && energy > energy_threshold
 
-    fire(aggressive ? 15 : 10)
+    fire(aggressive ? 14 : 12)
   end
 end

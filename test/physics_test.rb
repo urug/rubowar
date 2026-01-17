@@ -5,21 +5,30 @@ require "test_helper"
 describe Rubowar::Physics do
   describe ".mass_factor" do
     it "returns 1.0 for medium radius" do
-      mass = Rubowar::Physics.mass_factor(20)
+      medium_radius = Rubowar::Config::Rubot::SIZES[:medium][:radius]
+      mass = Rubowar::Physics.mass_factor(medium_radius)
 
       _(mass).must_equal 1.0
     end
 
     it "returns area ratio for small radius" do
-      mass = Rubowar::Physics.mass_factor(16)
+      small_radius = Rubowar::Config::Rubot::SIZES[:small][:radius]
+      medium_radius = Rubowar::Config::Rubot::SIZES[:medium][:radius]
+      expected_mass = (small_radius.to_f / medium_radius)**2
 
-      _(mass).must_be_close_to 0.64, 0.001 # (16/20)^2
+      mass = Rubowar::Physics.mass_factor(small_radius)
+
+      _(mass).must_be_close_to expected_mass, 0.001
     end
 
     it "returns area ratio for large radius" do
-      mass = Rubowar::Physics.mass_factor(24)
+      large_radius = Rubowar::Config::Rubot::SIZES[:large][:radius]
+      medium_radius = Rubowar::Config::Rubot::SIZES[:medium][:radius]
+      expected_mass = (large_radius.to_f / medium_radius)**2
 
-      _(mass).must_be_close_to 1.44, 0.001 # (24/20)^2
+      mass = Rubowar::Physics.mass_factor(large_radius)
+
+      _(mass).must_be_close_to expected_mass, 0.001
     end
   end
 

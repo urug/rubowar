@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # A stationary turret that uses SimpleTargeting to track and shoot enemies.
-# Large size provides 120 HP and 12 energy regen - tanky and high firepower.
+# Large size provides 120 HP and 18 energy regen - tanky and high firepower.
 # A step up from Spinner - demonstrates proper target tracking.
 class Tracker
   include Rubowar::Rubot
@@ -9,28 +9,72 @@ class Tracker
 
   size :large
 
+  def on_spawn
+    @last_pulse = -100
+  end
+
   def act
-    # Try sensors in order: probe (precise) → scan (arc) → pulse (360°)
-    # NOTE: Sensing has 1-chronon latency - these results are from the PREVIOUS chronon
-    self.target =
-      acquire_target_from_probe(probe_echo) ||
-      acquire_target_from_scan(scan_echo) ||
-      acquire_target_from_pulse(pulse_echo)
+    sense_targets
+    track_turret
 
     if target
-      rotate_turret(aim_at_target(target))
-      fire(12) if turret_aligned?(target) && energy > 25
-      probe(:position, :velocity)
-      @tracked_target = target
-    elsif @tracked_target
-      @tracked_target = nil unless scan_echo.any_rubots?
-      # Lost target - scan forward arc where we last saw them
-      scan(angle: 120, distance: arena_diagonal * 0.5, velocity: true)
+      fire(14) if turret_aligned?(target) && energy > 25
     else
-      # No target - pulse to find one
-      pulse(distance: arena_diagonal * 0.6)
+      # No target - spin turret while searching
+      rotate_turret(10)
     end
 
-    raise_shields(5) if energy > 50 && shield_level < 40
+    raise_shields(6) if energy > 50 && shield_level < 40
+  end
+
+  private
+
+  def sense_targets
+    # Pulse frequently for position updates (omnidirectional - always works)
+    if chronon - @last_pulse >= 8
+      pulse(distance: arena_diagonal * 0.6)
+      @last_pulse = chronon
+
+      if pulse_echo.any_rubots?
+        closest = pulse_echo.closest_rubot(to_x: x, to_y: y)
+        # Update position from pulse, preserve velocity if we have it
+        self.target = {
+          x: closest.x,
+          y: closest.y,
+          velocity_x: target&.dig(:velocity_x),
+          velocity_y: target&.dig(:velocity_y)
+        }
+      else
+        # Lost target
+        self.target = nil
+      end
+    end
+
+    # Scan for velocity data when turret is roughly aligned
+    return unless target && energy > 10
+
+    target_angle = angle_to(target_x: target[:x], target_y: target[:y])
+    turret_diff = normalize_angle(target_angle - turret_angle).abs
+
+    # Only scan if turret is within 45° of target (scan is 90° arc)
+    return unless turret_diff < 45
+
+    scan(angle: 90, distance: 400, velocity: true)
+    return unless scan_echo.any_rubots?
+
+    closest = scan_echo.closest_rubot(to_x: x, to_y: y)
+    self.target = {
+      x: closest.x,
+      y: closest.y,
+      velocity_x: closest.velocity_x,
+      velocity_y: closest.velocity_y
+    }
+  end
+
+  def track_turret
+    return unless target
+
+    # Use SimpleTargeting's lead calculation
+    rotate_turret(aim_at_target(target))
   end
 end

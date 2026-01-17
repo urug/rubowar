@@ -344,14 +344,23 @@ module Rubowar
     # @param max_lead_chronons - cap on prediction distance (default: Config::Targeting::MAX_LEAD_CHRONONS)
     def lead_position(target_x:, target_y:, velocity_x:, velocity_y:,
                       projectile_speed: Config::Targeting::BULLET_SPEED,
-                      max_lead_chronons: Config::Targeting::MAX_LEAD_CHRONONS)
+                      max_lead_chronons: Config::Targeting::MAX_LEAD_CHRONONS,
+                      friction: Config::Arena::DEFAULT_FRICTION)
       return [target_x, target_y] unless velocity_x && velocity_y
 
       dist = distance_to(target_x:, target_y:)
       lead_chronons = [dist / projectile_speed, max_lead_chronons].min
 
-      lead_x = target_x + (velocity_x * lead_chronons)
-      lead_y = target_y + (velocity_y * lead_chronons)
+      # Account for friction: target decelerates each chronon
+      # Displacement = v * (1 - friction^t) / (1 - friction) for geometric series
+      if friction < 1.0 && lead_chronons > 0
+        displacement_factor = (1 - (friction**lead_chronons)) / (1 - friction)
+      else
+        displacement_factor = lead_chronons
+      end
+
+      lead_x = target_x + (velocity_x * displacement_factor)
+      lead_y = target_y + (velocity_y * displacement_factor)
 
       margin = Config::Movement::DEFAULT_ARENA_MARGIN
       # Clamp to arena bounds
@@ -363,8 +372,10 @@ module Rubowar
 
     # Calculate angle to lead position (for aiming turret at moving target)
     def lead_angle(target_x:, target_y:, velocity_x:, velocity_y:,
-                   projectile_speed: Config::Targeting::BULLET_SPEED)
-      lead_x, lead_y = lead_position(target_x:, target_y:, velocity_x:, velocity_y:, projectile_speed:)
+                   projectile_speed: Config::Targeting::BULLET_SPEED,
+                   friction: Config::Arena::DEFAULT_FRICTION)
+      lead_x, lead_y = lead_position(target_x:, target_y:, velocity_x:, velocity_y:,
+                                     projectile_speed:, friction:)
       angle_to(target_x: lead_x, target_y: lead_y)
     end
 

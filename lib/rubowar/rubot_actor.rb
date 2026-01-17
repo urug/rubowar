@@ -13,9 +13,9 @@ require "securerandom"
 # collaborators = ["RubotPhysics", "RubotResources", "Arena", "Battle", "RubotState"]
 #
 # [sizes]
-# small = { radius: 16, energy_regen: 8, max_health: 80 }
-# medium = { radius: 20, energy_regen: 10, max_health: 100 }
-# large = { radius: 24, energy_regen: 12, max_health: 120 }
+# small = { radius: 8, energy_regen: 8, max_health: 80 }
+# medium = { radius: 12, energy_regen: 10, max_health: 100 }
+# large = { radius: 16, energy_regen: 12, max_health: 120 }
 # tradeoffs = "Small = agile, cheap thrust. Large = tanky, high regen, harder to hit"
 #
 # [implementor_requirements]

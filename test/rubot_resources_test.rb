@@ -36,19 +36,19 @@ describe Rubowar::RubotResources do
     it "equals max_health for small rubots" do
       actor = Rubowar::LocalActor.new(SmallResourceBot)
 
-      _(actor.max_shield).must_equal 80
+      _(actor.max_shield).must_equal Rubowar::Config::Rubot::SIZES[:small][:max_health]
     end
 
     it "equals max_health for medium rubots" do
       actor = Rubowar::LocalActor.new(DummyResourceBot)
 
-      _(actor.max_shield).must_equal 100
+      _(actor.max_shield).must_equal Rubowar::Config::Rubot::SIZES[:medium][:max_health]
     end
 
     it "equals max_health for large rubots" do
       actor = Rubowar::LocalActor.new(LargeResourceBot)
 
-      _(actor.max_shield).must_equal 120
+      _(actor.max_shield).must_equal Rubowar::Config::Rubot::SIZES[:large][:max_health]
     end
   end
 
@@ -58,7 +58,7 @@ describe Rubowar::RubotResources do
 
       actor.apply_damage(30)
 
-      _(actor.health).must_equal 70
+      _(actor.health).must_equal actor.max_health - 30
     end
 
     it "tracks damage taken" do
@@ -76,7 +76,7 @@ describe Rubowar::RubotResources do
       actor.apply_damage(30)
 
       _(actor.shield_level).must_equal 0
-      _(actor.health).must_equal 90
+      _(actor.health).must_equal actor.max_health - 10
     end
 
     it "partially absorbs damage when shield is less than damage" do
@@ -86,7 +86,7 @@ describe Rubowar::RubotResources do
       actor.apply_damage(30)
 
       _(actor.shield_level).must_equal 0
-      _(actor.health).must_equal 80
+      _(actor.health).must_equal actor.max_health - 20
       _(actor.damage_taken).must_equal 20
     end
 
@@ -106,7 +106,7 @@ describe Rubowar::RubotResources do
 
       actor.apply_collision_damage(20)
 
-      _(actor.health).must_equal 80
+      _(actor.health).must_equal actor.max_health - 20
       _(actor.shield_level).must_equal 50
     end
 
@@ -134,7 +134,7 @@ describe Rubowar::RubotResources do
 
       actor.regenerate_energy
 
-      _(actor.energy).must_equal 60
+      _(actor.energy).must_equal 50 + actor.energy_regen
     end
 
     it "caps energy at max" do

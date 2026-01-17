@@ -11,7 +11,7 @@ class Evader
   EVASION_CHRONONS = 12
   WALL_BUFFER = 80        # Large buffer for momentum
   MIN_SHOT_ENERGY = 10    # Don't bother with tiny shots
-  ENERGON_RANGE = 150     # How far to go for energon
+  ENERGON_RANGE = 250     # How far to go for energon
 
   def on_spawn
     @evading = 0
@@ -101,17 +101,28 @@ class Evader
   end
 
   def wall_emergency?
-    # Emergency if close to wall with any momentum toward it
-    (x < WALL_BUFFER && velocity_x.negative?) ||
-      (x > arena_width - WALL_BUFFER && velocity_x.positive?) ||
-      (y < WALL_BUFFER && velocity_y.negative?) ||
-      (y > arena_height - WALL_BUFFER && velocity_y.positive?)
+    # Predict wall collision based on position + velocity
+    # With friction 0.92, stopping distance ≈ velocity * 12
+    stopping_margin = 12
+
+    chronons_to_left = velocity_x.negative? ? x / -velocity_x : Float::INFINITY
+    chronons_to_right = velocity_x.positive? ? (arena_width - x) / velocity_x : Float::INFINITY
+    chronons_to_bottom = velocity_y.negative? ? y / -velocity_y : Float::INFINITY
+    chronons_to_top = velocity_y.positive? ? (arena_height - y) / velocity_y : Float::INFINITY
+
+    [chronons_to_left, chronons_to_right, chronons_to_bottom, chronons_to_top].min < stopping_margin
   end
 
   def escape_wall
-    # Thrust toward center to brake
-    center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
-    thrust(speed: 3, angle: center_angle)
+    # Thrust opposite to current velocity to brake
+    if speed > 1
+      brake_angle = Math.atan2(-velocity_y, -velocity_x) * 180.0 / Math::PI
+      thrust(speed: 6, angle: brake_angle)
+    else
+      # Already slow, thrust toward center
+      center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
+      thrust(speed: 4, angle: center_angle)
+    end
   end
 
   def evade
@@ -135,17 +146,19 @@ class Evader
   end
 
   def approaching_wall?
-    # Check if momentum is carrying us toward a wall
-    return true if x < WALL_BUFFER * 1.5 && velocity_x.negative?
-    return true if x > arena_width - (WALL_BUFFER * 1.5) && velocity_x.positive?
-    return true if y < WALL_BUFFER * 1.5 && velocity_y.negative?
-    return true if y > arena_height - (WALL_BUFFER * 1.5) && velocity_y.positive?
+    # Predict if we'll hit a wall within 20 chronons
+    caution_margin = 20
 
-    near_wall?
+    chronons_to_left = velocity_x.negative? ? x / -velocity_x : Float::INFINITY
+    chronons_to_right = velocity_x.positive? ? (arena_width - x) / velocity_x : Float::INFINITY
+    chronons_to_bottom = velocity_y.negative? ? y / -velocity_y : Float::INFINITY
+    chronons_to_top = velocity_y.positive? ? (arena_height - y) / velocity_y : Float::INFINITY
+
+    [chronons_to_left, chronons_to_right, chronons_to_bottom, chronons_to_top].min < caution_margin
   end
 
   def collect_energon?
-    return false if energy > 80 # Don't bother if already high
+    return false if energy > 90 # Only skip if nearly full
 
     @energon_target = find_nearest_energon(max_distance: ENERGON_RANGE)
     @energon_target != nil
@@ -204,10 +217,21 @@ class Evader
   end
 
   def wall_adjust(angle)
-    angle += 90 if x < WALL_BUFFER
-    angle -= 90 if x > arena_width - WALL_BUFFER
-    angle -= 90 if y < WALL_BUFFER
-    angle += 90 if y > arena_height - WALL_BUFFER
-    angle % 360
+    # If heading toward wall, steer parallel to it instead
+    rad = angle * Math::PI / 180.0
+    dx = Math.cos(rad)
+    dy = Math.sin(rad)
+
+    # Check if this angle would take us toward a wall we're near
+    hitting_left = x < WALL_BUFFER * 2 && dx.negative?
+    hitting_right = x > arena_width - WALL_BUFFER * 2 && dx.positive?
+    hitting_bottom = y < WALL_BUFFER * 2 && dy.negative?
+    hitting_top = y > arena_height - WALL_BUFFER * 2 && dy.positive?
+
+    return angle unless hitting_left || hitting_right || hitting_bottom || hitting_top
+
+    # Steer toward center instead
+    center_angle = angle_to(target_x: arena_width / 2.0, target_y: arena_height / 2.0)
+    normalize_angle(center_angle)
   end
 end

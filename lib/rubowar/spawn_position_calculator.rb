@@ -48,10 +48,11 @@ module Rubowar
       raise SpawnError, "Could not find valid spawn position after #{Config::Spawn::MAX_ATTEMPTS} attempts"
     end
 
-    # Find a spawn position for energon that maximizes minimum distance from rubots
+    # Find a spawn position for energon that maximizes minimum distance from rubots and existing energons
     # Uses grid sampling to find positions, returns {x:, y:} or nil if no valid position
-    def find_energon_position(width:, height:, rubot_positions:, wall_buffer:)
-      return { x: width / 2.0, y: height / 2.0 } if rubot_positions.empty?
+    def find_energon_position(width:, height:, rubot_positions:, wall_buffer:, energon_positions: [])
+      all_positions = rubot_positions + energon_positions
+      return { x: width / 2.0, y: height / 2.0 } if all_positions.empty?
 
       candidates = []
       best_min_distance = -1
@@ -60,7 +61,7 @@ module Rubowar
       # Sample candidate positions using a grid
       (wall_buffer..(width - wall_buffer)).step(Config::Spawn::ENERGON_GRID_STEP) do |cx|
         (wall_buffer..(height - wall_buffer)).step(Config::Spawn::ENERGON_GRID_STEP) do |cy|
-          min_dist = rubot_positions.map do |pos|
+          min_dist = all_positions.map do |pos|
             Physics.distance(x1: cx, y1: cy, x2: pos[:x], y2: pos[:y])
           end.min
 
