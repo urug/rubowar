@@ -415,9 +415,8 @@ module Rubowar
 
             setupCanvas() {
               const { width, height } = this.metadata.arena;
-              const maxWidth = window.innerWidth * 0.65;
-              const maxHeight = window.innerHeight * 0.7;
-              const scale = Math.min(maxWidth / width, maxHeight / height);
+              const maxHeight = window.innerHeight;
+              const scale = maxHeight / height;
 
               this.canvas.width = width * scale;
               this.canvas.height = height * scale;

@@ -67,10 +67,10 @@ class Hunter
 
   def sense_environment
     # Pulse for broad awareness
-    return if chronons - @last_pulse < 10
+    return if chronon - @last_pulse < 10
 
     pulse(distance: PULSE_RANGE)
-    @last_pulse = chronons
+    @last_pulse = chronon
 
     return unless pulse_echo.any_rubots?
 
@@ -79,7 +79,13 @@ class Hunter
 
     return unless @target.nil? || distance_to(target_x: closest.x, target_y: closest.y) < distance_to(target_x: @target[:x], target_y: @target[:y])
 
-    @target = { x: closest.x, y: closest.y }
+    # Preserve velocity data when updating position
+    @target = {
+      x: closest.x,
+      y: closest.y,
+      velocity_x: @target&.dig(:velocity_x),
+      velocity_y: @target&.dig(:velocity_y)
+    }
     determine_tactics
   end
 
@@ -128,7 +134,7 @@ class Hunter
       thrust(speed: 4, angle: center_angle) if speed < 10
     elsif speed < 6
       # Circle in center
-      thrust(speed: 3, angle: (chronons * 3) % 360)
+      thrust(speed: 3, angle: (chronon * 3) % 360)
     end
 
     rotate_turret(12)
@@ -236,7 +242,7 @@ class Hunter
     return unless @target
 
     # Probe periodically for health updates
-    return unless turret_aligned? && energy > 10 && (chronons % 15).zero?
+    return unless turret_aligned? && energy > 10 && (chronon % 15).zero?
 
     probe(:position, :velocity, :health)
     return unless probe_echo.found?
@@ -321,7 +327,7 @@ class Hunter
 
   def collect_nearby_energon?
     # Only check for energon after they've had time to spawn
-    return false if chronons < energon_spawn_interval
+    return false if chronon < energon_spawn_interval
 
     # Only collect if we could use the energy
     return false if energy > 70
