@@ -24,7 +24,7 @@ class Evader
     check_if_targeted
 
     # SENSE: Pulse every other chronon (6 energy)
-    update_target if chronons.odd?
+    update_target if chronon.odd?
 
     move
 
@@ -52,7 +52,7 @@ class Evader
   private
 
   def check_if_targeted
-    # Proactive juking: change direction every 8-15 chronons when near enemy
+    # Proactive juking: change direction every 8-15 chronon when near enemy
     @juke_timer -= 1
     if @juke_timer <= 0 && @target
       dist = distance_to(target_x: @target[:x], target_y: @target[:y])

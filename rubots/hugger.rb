@@ -79,9 +79,9 @@ class Hugger
   end
 
   def sense_environment
-    return if chronons - @last_scan < 8
+    return if chronon - @last_scan < 8
 
-    @last_scan = chronons
+    @last_scan = chronon
     scan_for_targets
     update_safe_wall
   end
@@ -90,7 +90,7 @@ class Hugger
     scan_opposite_corners
     process_scan_echos unless scan_echo.empty?
 
-    return unless @target.nil? || (chronons % 16).zero?
+    return unless @target.nil? || (chronon % 16).zero?
 
     pulse(distance: 300)
     process_pulse_echos unless pulse_echo.empty?
@@ -152,7 +152,7 @@ class Hugger
 
   def current_corner_to_scan
     corners = opposite_corners
-    corners[(chronons / 25) % corners.size]
+    corners[(chronon / 25) % corners.size]
   end
 
   def opposite_corners
@@ -223,7 +223,7 @@ class Hugger
     else
       # Micro-dodge: small slip perpendicular to wall
       move_angle = directed_wall_parallel_angle
-      slip_offset = chronons % 4 < 2 ? 15 : -15
+      slip_offset = chronon % 4 < 2 ? 15 : -15
       move_angle = (move_angle + slip_offset) % 360
     end
 
@@ -233,7 +233,7 @@ class Hugger
 
   def evade_toward_wall
     base_angle = angle_to(target_x: wall_target_position[0], target_y: wall_target_position[1])
-    jink_offset = chronons % 6 < 3 ? 25 : -25
+    jink_offset = chronon % 6 < 3 ? 25 : -25
     move_angle = (base_angle + jink_offset) % 360
 
     thrust(speed: 5, angle: move_angle) if speed < 10
@@ -349,7 +349,7 @@ class Hugger
   end
 
   def probe_target_health
-    return unless energy > 15 && (chronons % 10).zero?
+    return unless energy > 15 && (chronon % 10).zero?
 
     probe(:health, :shield)
     return unless probe_echo.found?

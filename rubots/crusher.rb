@@ -49,7 +49,7 @@ class Crusher
     return unless @target && target_pinned?
 
     @mode = :crushing
-    @crush_start = chronons
+    @crush_start = chronon
   end
 
   def on_hit(damage:, direction:)
@@ -73,10 +73,10 @@ class Crusher
 
   def sense_targets
     # Pulse every few ticks for awareness
-    return if chronons - @last_pulse < 8
+    return if chronon - @last_pulse < 8
 
     pulse(distance: 400)
-    @last_pulse = chronons
+    @last_pulse = chronon
     return unless pulse_echo.any_rubots?
 
     # Prioritize: corner-trapped > wall-adjacent > closest
@@ -147,7 +147,7 @@ class Crusher
     # Check if target is now pinned
     if target_pinned?
       @mode = :crushing
-      @crush_start = chronons
+      @crush_start = chronon
       return
     end
 
@@ -175,7 +175,7 @@ class Crusher
     dist = distance_to(target_x: @target[:x], target_y: @target[:y])
 
     # Stop crushing if: target escaped, timeout, or target dead (no update)
-    if !target_pinned? || (chronons - @crush_start) > 60
+    if !target_pinned? || (chronon - @crush_start) > 60
       @mode = :positioning
       @crush_start = nil
       return
