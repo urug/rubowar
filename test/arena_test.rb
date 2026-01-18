@@ -61,6 +61,42 @@ describe Rubowar::Arena do
     end
   end
 
+  describe "#live_actors" do
+    it "returns only alive actors" do
+      arena = build_arena
+      alive_actor = build_actor(x: 100, y: 100)
+      dead_actor = build_actor(x: 200, y: 200)
+      dead_actor.health = 0
+      arena.actors = [alive_actor, dead_actor]
+
+      result = arena.live_actors
+
+      _(result).must_equal [alive_actor]
+    end
+
+    it "returns empty array when all actors are dead" do
+      arena = build_arena
+      dead_actor = build_actor(x: 100, y: 100)
+      dead_actor.health = 0
+      arena.actors = [dead_actor]
+
+      result = arena.live_actors
+
+      _(result).must_be_empty
+    end
+
+    it "returns all actors when all are alive" do
+      arena = build_arena
+      actor1 = build_actor(x: 100, y: 100)
+      actor2 = build_actor(x: 200, y: 200)
+      arena.actors = [actor1, actor2]
+
+      result = arena.live_actors
+
+      _(result).must_equal [actor1, actor2]
+    end
+  end
+
   describe "#arena_diagonal" do
     it "calculates diagonal length" do
       arena = build_arena

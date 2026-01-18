@@ -55,9 +55,9 @@ module Rubowar
       battle
     end
 
-    def initialize(arena:, event_bus:)
+    def initialize(arena:, event_bus: nil, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
       @arena = arena
-      @event_bus = event_bus
+      @event_bus = event_bus || EventBus.new(chronon_limit:)
       @winner = nil
       @event_log = Concurrent::Array.new
       @registered_actors = []

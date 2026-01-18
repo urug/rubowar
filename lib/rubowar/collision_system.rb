@@ -48,10 +48,9 @@ module Rubowar
     # @return [Array<CollisionResponse>] Collision responses for overlapping pairs
     def detect_collisions(actors)
       responses = []
+      live_actors = actors.select(&:alive?)
 
-      actors.combination(2).each do |actor_a, actor_b|
-        next if actor_a.dead? || actor_b.dead?
-
+      live_actors.combination(2).each do |actor_a, actor_b|
         distance = Physics.distance(x1: actor_a.x, y1: actor_a.y, x2: actor_b.x, y2: actor_b.y)
         min_distance = actor_a.radius + actor_b.radius
 

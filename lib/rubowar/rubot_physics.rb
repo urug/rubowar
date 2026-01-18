@@ -47,9 +47,7 @@ module Rubowar
         @energy -= required_energy
         actual_speed = speed
       else
-        actual_speed = Physics.thrust_speed_from_energy(
-          energy: @energy, mass:, direction_multiplier:
-        )
+        actual_speed = Physics.thrust_speed_from_energy(energy: @energy, mass:, direction_multiplier:)
         @energy = 0
       end
 

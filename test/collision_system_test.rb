@@ -155,6 +155,20 @@ describe Rubowar::CollisionSystem do
 
       _(result).must_be_empty
     end
+
+    it "only detects collisions between live actors" do
+      alive_a = build_collision_actor(x: 100, y: 100)
+      alive_b = build_collision_actor(x: 110, y: 100)
+      dead_c = build_collision_actor(x: 105, y: 100)
+      dead_c.health = 0
+
+      result = Rubowar::CollisionSystem.detect_collisions([alive_a, alive_b, dead_c])
+
+      # Only one collision between the two live actors
+      _(result.length).must_equal 1
+      _(result.first.actor_a).must_equal alive_a
+      _(result.first.actor_b).must_equal alive_b
+    end
   end
 
   describe ".build_collision_response" do
