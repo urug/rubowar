@@ -21,25 +21,7 @@ class MoveAndFireBot
   end
 end
 
-# Test bot that records its position when firing
-class PositionRecordingBot
-  include Rubowar::Rubot
-
-  size :medium
-
-  attr_reader :position_when_fired, :position_at_tick_start
-
-  def on_spawn
-    @position_when_fired = nil
-    @position_at_tick_start = nil
-  end
-
-  def act
-    @position_at_tick_start = { x:, y: }
-    thrust(speed: 10, angle: 0) # Move east
-    fire(10)
-  end
-end
+# PositionRecordingBot moved to inline anonymous class in the test that uses it
 
 # Test bot that stores pulse results each tick
 class PulseTestBot
@@ -55,7 +37,8 @@ class PulseTestBot
 
   def act
     # Read previous tick's result, then queue new pulse
-    @pulse_echos_per_tick << (pulse_echo&.dup || [])
+    # Note: pulse_echo returns empty PulseEcho (not nil) when no results
+    @pulse_echos_per_tick << pulse_echo.dup
     pulse(distance: 800)
   end
 end
@@ -74,7 +57,8 @@ class ProbeTestBotForBattle
 
   def act
     # Read previous tick's result, then queue new probe
-    @probe_echos_per_tick << probe_echo&.dup
+    # Note: probe_echo returns empty ProbeEcho (not nil) when no results
+    @probe_echos_per_tick << probe_echo.dup
     probe(:size)
     # Rotate turret to sweep for targets
     rotate_turret(15)
@@ -95,7 +79,8 @@ class ScanTestBot
 
   def act
     # Read previous tick's result, then queue new scan
-    @scan_echos_per_tick << (scan_echo&.dup || [])
+    # Note: scan_echo returns empty ScanEcho (not nil) when no results
+    @scan_echos_per_tick << scan_echo.dup
     scan(angle: 360, distance: 500)
   end
 end
@@ -156,19 +141,8 @@ class DeathTrackingBot
   def act; end
 end
 
-class SmallStationaryBot
-  include Rubowar::Rubot
-
-  size :small
-  def act; end
-end
-
-class LargeStationaryBot
-  include Rubowar::Rubot
-
-  size :large
-  def act; end
-end
+# SmallStationaryBot and LargeStationaryBot removed - were unused.
+# Use anonymous inline classes with `size :small` or `size :large` when needed.
 
 # Test bot that detects if it's being sensed
 class DetectTestBot
@@ -184,7 +158,8 @@ class DetectTestBot
 
   def act
     # Record detect result from current tick's sense phase
-    @detect_intels_per_tick << detect_intel&.dup
+    # Note: detect_intel returns empty DetectIntel (not nil) when no results
+    @detect_intels_per_tick << detect_intel.dup
     detect
   end
 end
@@ -404,11 +379,21 @@ describe Rubowar::Battle do
 
   describe "phased action processing" do
     it "fires bullets from post-movement position" do
-      battle = Rubowar::Battle.local([PositionRecordingBot, StationaryBot], chronon_limit: 1)
+      # Anonymous inline class - bot that thrusts east and fires
+      mover_class = Class.new do
+        include Rubowar::Rubot
+        size :medium
+        def act
+          thrust(speed: 10, angle: 0) # Move east
+          fire(10)
+        end
+      end
+
+      battle = Rubowar::Battle.local([mover_class, StationaryBot], chronon_limit: 1)
 
       # Spawn actors first, then position at known location
       battle.spawn_rubots
-      mover = battle.arena.actors.find { |r| r.instance.is_a?(PositionRecordingBot) }
+      mover = battle.arena.actors[0] # First registered actor
       mover.x = 100.0
       mover.y = 300.0
       mover.turret_angle = 0 # Facing east
