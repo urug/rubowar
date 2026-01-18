@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 require "forwardable"
-require "timeout"
+require "concurrent"
 
 # [file]
 # purpose = "Actor that wraps a local Rubot instance"
@@ -15,11 +15,12 @@ require "timeout"
 # collaborators = ["Arena", "Battle", "RubotState", "RubotActor", "RubotPhysics"]
 #
 # [callback_methods]
-# call_safely = "Block-based callback with error handling"
+# call_safely = "Block-based callback with error handling using Concurrent::Future"
 # examples = [
 #   "actor.call_safely(&:on_spawn)                                    # No args",
 #   "actor.call_safely { |bot| bot.on_hit(damage: 10, direction: 45) } # With args"
 # ]
+# thread_safety = "Uses Concurrent::Future instead of Timeout.timeout to avoid unsafe Thread#raise"
 
 module Rubowar
   class LocalActor
@@ -63,6 +64,10 @@ module Rubowar
     # Safely execute a block with the rubot instance, penalizing errors with damage.
     # Includes timeout protection to prevent infinite loops or excessive computation.
     #
+    # Uses Concurrent::Future instead of Timeout.timeout because Ruby's Timeout uses
+    # Thread#raise which can interrupt code at unsafe points (e.g., inside ensure blocks),
+    # potentially causing resource leaks or inconsistent state.
+    #
     # @yield [instance] Block receives the rubot instance
     # @return [Object, nil] Block return value or nil on error/dead/timeout
     #
@@ -72,17 +77,21 @@ module Rubowar
     def call_safely
       return nil unless alive?
 
-      Timeout.timeout(Config::Battle::CALLBACK_TIMEOUT) do
-        yield @instance
+      future = Concurrent::Future.execute { yield @instance }
+      result = future.value(Config::Battle::CALLBACK_TIMEOUT)
+
+      if future.fulfilled?
+        result
+      elsif future.rejected?
+        apply_collision_damage(Config::Battle::ERROR_DAMAGE)
+        warn "[#{@rubot_class.name}] Error in callback: #{future.reason.class} - #{future.reason.message}"
+        nil
+      else
+        # Timeout - future is still pending
+        apply_collision_damage(Config::Battle::ERROR_DAMAGE)
+        warn "[#{@rubot_class.name}] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
+        nil
       end
-    rescue Timeout::Error
-      apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-      warn "[#{@rubot_class.name}] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
-      nil
-    rescue StandardError => e
-      apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-      warn "[#{@rubot_class.name}] Error in callback: #{e.class} - #{e.message}"
-      nil
     end
 
     # Call on_death callback for dead rubots.

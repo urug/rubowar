@@ -56,6 +56,7 @@ module Rubowar
       @position_set = false
       @death_processed = false
       @_act_completed = false
+      initialize_resource_mutex
     end
 
     # === Size-based configuration ===
@@ -120,8 +121,9 @@ module Rubowar
       true
     end
 
-    private
+    protected
 
+    # Validate rubot size. Protected so subclasses (LocalActor, BasicActor) can call it.
     def validate_size!(size, context = nil)
       return if Config::Rubot::SIZES.key?(size)
 

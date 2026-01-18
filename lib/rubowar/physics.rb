@@ -18,12 +18,19 @@
 
 module Rubowar
   module Physics
+    # Memoized mass factors by radius to avoid repeated calculations.
+    # Thread-safe: Hash#[] is atomic in CRuby, and values are computed once per radius.
+    @mass_factors = {}
+
     module_function
 
-    # Calculate mass factor based on radius (relative to medium bot size)
+    # Calculate mass factor based on radius (relative to medium bot size).
+    # Memoized since this is called frequently and the result is constant per radius.
     def mass_factor(radius)
-      medium_radius = Config::Rubot::SIZES[:medium][:radius].to_f
-      (radius / medium_radius)**2
+      @mass_factors[radius] ||= begin
+        medium_radius = Config::Rubot::SIZES[:medium][:radius].to_f
+        (radius / medium_radius)**2
+      end
     end
 
     # Euclidean distance between two points

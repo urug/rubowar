@@ -36,10 +36,10 @@ module Rubowar
 
             begin
               success = arena.process_action(actor:, action:)
-              failed_actions << { actor:, action: } unless success
-            rescue InvalidActionError => e
+              failed_actions << { actor:, action:, reason: :insufficient_energy } unless success
+            rescue StandardError => e
               actor.apply_damage(Config::Battle::ERROR_DAMAGE)
-              failed_actions << { actor:, action:, error: e }
+              failed_actions << { actor:, action:, reason: :error, error: e }
             end
           end
         end
@@ -55,10 +55,10 @@ module Rubowar
 
             begin
               success = arena.process_action(actor:, action:)
-              failed_actions << { actor:, action: } unless success
-            rescue InvalidActionError => e
+              failed_actions << { actor:, action:, reason: :insufficient_energy } unless success
+            rescue StandardError => e
               actor.apply_damage(Config::Battle::ERROR_DAMAGE)
-              failed_actions << { actor:, action:, error: e }
+              failed_actions << { actor:, action:, reason: :error, error: e }
             end
           end
         end

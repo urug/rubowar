@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-require "timeout"
+require "concurrent"
 
 # [file]
 # purpose = "Minimal actor implementation for testing and external control"
@@ -16,6 +16,7 @@ require "timeout"
 #   "Simulating network/remote actors",
 #   "Reference implementation for custom actors"
 # ]
+# thread_safety = "Uses Concurrent::Future instead of Timeout.timeout to avoid unsafe Thread#raise"
 
 module Rubowar
   class BasicActor
@@ -104,20 +105,26 @@ module Rubowar
 
     # === Callbacks ===
 
+    # Uses Concurrent::Future instead of Timeout.timeout because Ruby's Timeout uses
+    # Thread#raise which can interrupt code at unsafe points.
     def call_safely
       return nil unless alive?
 
-      Timeout.timeout(Config::Battle::CALLBACK_TIMEOUT) do
-        yield self
+      future = Concurrent::Future.execute { yield self }
+      result = future.value(Config::Battle::CALLBACK_TIMEOUT)
+
+      if future.fulfilled?
+        result
+      elsif future.rejected?
+        apply_collision_damage(Config::Battle::ERROR_DAMAGE)
+        warn "[BasicActor] Error in callback: #{future.reason.class} - #{future.reason.message}"
+        nil
+      else
+        # Timeout - future is still pending
+        apply_collision_damage(Config::Battle::ERROR_DAMAGE)
+        warn "[BasicActor] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
+        nil
       end
-    rescue Timeout::Error
-      apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-      warn "[BasicActor] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
-      nil
-    rescue StandardError => e
-      apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-      warn "[BasicActor] Error in callback: #{e.class} - #{e.message}"
-      nil
     end
 
     def call_on_death
