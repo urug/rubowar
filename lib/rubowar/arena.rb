@@ -85,32 +85,38 @@ module Rubowar
       )
     end
 
+    def live_actors
+      @actors.select(&:alive?)
+    end
+
     # Phase 2 physics: Move rubots, apply friction, handle collisions
     def update_rubot_physics
-      @actors.each do |actor|
-        next if actor.dead?
-
+      live_actors.each do |actor|
         actor.apply_friction(@friction)
         actor.move
 
         wall_result = CollisionSystem.process_wall_collision(actor:, arena_width: @width, arena_height: @height)
         next unless wall_result
 
-        @event_bus.emit(EventBus::WallHit.new(
-                          actor_id: actor.id,
-                          damage: wall_result[:damage],
-                          walls: wall_result[:walls]
-                        ))
+        @event_bus.emit(
+          EventBus::WallHit.new(
+            actor_id: actor.id,
+            damage: wall_result[:damage],
+            walls: wall_result[:walls]
+          )
+        )
       end
 
       collision_responses = CollisionSystem.process_rubot_collisions(@actors)
       collision_responses.each do |response|
-        @event_bus.emit(EventBus::Collision.new(
-                          actor_a_id: response.actor_a.id,
-                          actor_b_id: response.actor_b.id,
-                          damage_to_a: response.damage_to_a,
-                          damage_to_b: response.damage_to_b
-                        ))
+        @event_bus.emit(
+          EventBus::Collision.new(
+            actor_a_id: response.actor_a.id,
+            actor_b_id: response.actor_b.id,
+            damage_to_a: response.damage_to_a,
+            damage_to_b: response.damage_to_b
+          )
+        )
       end
     end
 
@@ -145,9 +151,7 @@ module Rubowar
     end
 
     def regenerate_and_degrade
-      @actors.each do |actor|
-        next if actor.dead?
-
+      live_actors.each do |actor|
         actor.regenerate_energy
         actor.degrade_shield
       end
@@ -184,8 +188,7 @@ module Rubowar
     # Returns true if bullet hit a target and should be removed
     # Note: A bullet can only hit one target per update
     def check_bullet_hit(bullet)
-      @actors.each do |actor|
-        next if actor.dead?
+      live_actors.each do |actor|
         next unless bullet_hits_actor?(bullet, actor)
 
         apply_bullet_damage(bullet, actor)
@@ -501,9 +504,7 @@ module Rubowar
     end
 
     def find_energon_collector(energon)
-      @actors.find do |actor|
-        next false if actor.dead?
-
+      live_actors.find do |actor|
         distance = Physics.distance(x1: energon.x, y1: energon.y, x2: actor.x, y2: actor.y)
         distance < actor.radius + Config::Energon::RADIUS
       end

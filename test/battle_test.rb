@@ -230,6 +230,35 @@ describe Rubowar::Battle do
     it "raises error with infinite chronon limit" do
       _ { Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: Float::INFINITY) }.must_raise Rubowar::InvalidChrononLimitError
     end
+
+    it "creates event_bus automatically when not provided" do
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus: Rubowar::EventBus.new)
+      battle = Rubowar::Battle.new(arena:)
+
+      _(battle.event_bus).wont_be_nil
+      _(battle.event_bus).must_be_instance_of Rubowar::EventBus
+    end
+
+    it "uses provided event_bus when given" do
+      event_bus = Rubowar::EventBus.new(chronon_limit: 10)
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus:)
+      battle = Rubowar::Battle.new(arena:, event_bus:)
+
+      _(battle.event_bus).must_equal event_bus
+    end
+
+    it "uses custom chronon_limit when creating event_bus automatically" do
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus: Rubowar::EventBus.new)
+      battle = Rubowar::Battle.new(arena:, chronon_limit: 25)
+      stub1 = Rubowar::BasicActor.new(size: :medium)
+      stub2 = Rubowar::BasicActor.new(size: :medium)
+      battle.register(stub1)
+      battle.register(stub2)
+
+      battle.run
+
+      _(battle.chronon).must_equal 25
+    end
   end
 
   describe "#on" do
