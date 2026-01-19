@@ -35,12 +35,14 @@ module Rubowar
 
     attr_accessor :x, :y, :velocity_x, :velocity_y, :health, :energy, :shield_level, :damage_dealt,
                   :damage_taken, :death_processed, :_act_completed
-    attr_reader :id, :size, :detection_counts, :position_set, :turret_angle
+    attr_reader :id, :name, :size, :detection_counts, :position_set, :turret_angle
 
     # Initialize shared actor state. Call this from the including class's initialize method.
     # @param size [Symbol] The rubot size (:small, :medium, :large)
-    def initialize_actor(size:)
+    # @param name [String] Display name for the actor (defaults to class name if nil)
+    def initialize_actor(size:, name:)
       @id = "#{Config::Ids::RUBOT_PREFIX}-#{SecureRandom.hex(4)}"
+      @name = name
       @size = size
       @x = 0.0
       @y = 0.0

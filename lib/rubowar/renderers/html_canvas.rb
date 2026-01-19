@@ -73,7 +73,7 @@ module Rubowar
           rubots: @arena.actors.map do |actor|
             {
               id: actor.id,
-              name: actor.rubot_class.name,
+              name: actor.name,
               size: actor.size
             }
           end,
@@ -85,7 +85,7 @@ module Rubowar
         actor = @arena.actors[index]
         {
           id: actor.id,
-          name: actor.rubot_class.name,
+          name: actor.name,
           x: state.x.round(2),
           y: state.y.round(2),
           turret_angle: state.turret_angle.round(2),
@@ -120,7 +120,7 @@ module Rubowar
 
       def serialize_winner(actor)
         {
-          name: actor.rubot_class.name,
+          name: actor.name,
           health: actor.health,
           damage_dealt: actor.damage_dealt
         }
@@ -129,7 +129,7 @@ module Rubowar
       def generate_filename
         timestamp = @start_time.strftime("%Y%m%d-%H%M%S")
         rubot_names = @arena.actors
-                            .map { |a| a.rubot_class.name.downcase.gsub(/[^a-z0-9]/, "") }
+                            .map { |a| a.name.downcase.gsub(/[^a-z0-9]/, "") }
                             .join("-vs-")
         "battle-#{timestamp}-#{rubot_names}.html"
       end

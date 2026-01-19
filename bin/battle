@@ -214,10 +214,10 @@ options[:battles].times do |i|
   battle_result = {
     battle_number: i + 1,
     chronons: battle.chronon,
-    winner: battle.winner&.rubot_class&.name,
+    winner: battle.winner&.name,
     rubots: battle.arena.actors.map do |r|
       {
-        name: r.rubot_class.name,
+        name: r.name,
         size: r.size,
         alive: r.alive?,
         health: r.health.round(1),
