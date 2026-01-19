@@ -68,6 +68,32 @@ describe Rubowar::RubotActor do
 
       _(actor.size).must_equal :small
     end
+
+    it "defaults name to rubot class name" do
+      actor = Rubowar::LocalActor.new(DummyBot)
+
+      _(actor.name).must_equal "DummyBot"
+    end
+
+    it "uses custom name when provided" do
+      actor = Rubowar::LocalActor.new(DummyBot, name: "The Destroyer")
+
+      _(actor.name).must_equal "The Destroyer"
+    end
+  end
+
+  describe "BasicActor" do
+    it "defaults name to BasicActor" do
+      actor = Rubowar::BasicActor.new
+
+      _(actor.name).must_equal "BasicActor"
+    end
+
+    it "uses custom name when provided" do
+      actor = Rubowar::BasicActor.new(name: "Test Fighter")
+
+      _(actor.name).must_equal "Test Fighter"
+    end
   end
 
   describe "#radius" do

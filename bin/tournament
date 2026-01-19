@@ -48,8 +48,8 @@ def run_battle(rubot_classes, iterations)
     end
 
     rankings.each_with_index do |actor, idx|
-      results[[actor.rubot_class.name, idx]] ||= 0
-      results[[actor.rubot_class.name, idx]] += 1
+      results[[actor.name, idx]] ||= 0
+      results[[actor.name, idx]] += 1
     end
   end
 

@@ -261,6 +261,30 @@ describe Rubowar::Battle do
     end
   end
 
+  describe "#register" do
+    it "returns the registered actor" do
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus: Rubowar::EventBus.new)
+      battle = Rubowar::Battle.new(arena:)
+      actor = Rubowar::BasicActor.new(name: "Test Bot")
+
+      result = battle.register(actor)
+
+      _(result).must_equal actor
+      _(result.name).must_equal "Test Bot"
+      _(result.id).must_match(/^rbot-/)
+    end
+
+    it "adds actor to registered_actors" do
+      arena = Rubowar::Arena.new(width: 640, height: 640, event_bus: Rubowar::EventBus.new)
+      battle = Rubowar::Battle.new(arena:)
+      actor = Rubowar::BasicActor.new
+
+      battle.register(actor)
+
+      _(battle.registered_actors).must_include actor
+    end
+  end
+
   describe "#on" do
     it "registers callback for event type" do
       battle = Rubowar::Battle.local([StationaryBot, StationaryBot], chronon_limit: 1)

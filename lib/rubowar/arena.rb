@@ -384,7 +384,7 @@ module Rubowar
           result[:velocity_x] = bullet.velocity_x
           result[:velocity_y] = bullet.velocity_y
         end
-        result[:owner] = bullet.owner&.rubot_class&.name if owner
+        result[:owner] = bullet.owner&.name if owner
         results << result
       end
 
@@ -438,7 +438,7 @@ module Rubowar
         next unless within_distance?(actor:, distance:, x: bullet.x, y: bullet.y)
 
         result = { x: bullet.x, y: bullet.y, type: :bullet }
-        result[:owner] = bullet.owner&.rubot_class&.name if owner
+        result[:owner] = bullet.owner&.name if owner
         results << result
       end
 

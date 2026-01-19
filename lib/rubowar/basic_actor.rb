@@ -23,9 +23,9 @@ module Rubowar
     include RubotActor
     include RubotPhysics
 
-    def initialize(size: :medium, health: nil, energy: nil)
+    def initialize(size: :medium, health: nil, energy: nil, name: "BasicActor")
       validate_size!(size)
-      initialize_actor(size:)
+      initialize_actor(size:, name:)
       @health = health || max_health
       @energy = energy || max_energy
       @_actions = { sense: [], move: [], combat: [] }
@@ -117,12 +117,12 @@ module Rubowar
         result
       elsif future.rejected?
         apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-        warn "[BasicActor] Error in callback: #{future.reason.class} - #{future.reason.message}"
+        warn "[#{name}] Error in callback: #{future.reason.class} - #{future.reason.message}"
         nil
       else
         # Timeout - future is still pending
         apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-        warn "[BasicActor] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
+        warn "[#{name}] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
         nil
       end
     end

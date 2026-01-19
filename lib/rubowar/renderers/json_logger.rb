@@ -100,7 +100,7 @@ module Rubowar
           },
           rubots: @battle.arena.actors.map do |actor|
             {
-              name: actor.rubot_class.name,
+              name: actor.name,
               size: actor.size,
               id: actor.id
             }
@@ -114,7 +114,7 @@ module Rubowar
         actor = @arena.actors[index]
         {
           id: actor.id,
-          name: actor.rubot_class.name,
+          name: actor.name,
           x: state.x.round(2),
           y: state.y.round(2),
           velocity_x: state.velocity_x.round(2),
@@ -135,7 +135,7 @@ module Rubowar
       def serialize_actor(actor)
         {
           id: actor.id,
-          name: actor.rubot_class.name,
+          name: actor.name,
           x: actor.x.round(2),
           y: actor.y.round(2),
           health: actor.health,

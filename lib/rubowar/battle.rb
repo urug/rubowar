@@ -65,6 +65,7 @@ module Rubowar
 
     def register(actor)
       registered_actors << actor
+      actor
     end
 
     def spawn_rubots

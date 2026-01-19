@@ -33,14 +33,14 @@ module Rubowar
     def_delegators :@instance, :act, :rubot_state=, :arena_state=, :_pending_energy_spend=
     def_delegator :@instance, :actions, :rubot_actions
 
-    def initialize(rubot_class)
+    def initialize(rubot_class, name: nil)
       # Validate size before setting any instance variables to avoid partial initialization
       size = rubot_class.size
       validate_size!(size, rubot_class)
 
       @rubot_class = rubot_class
       @instance = rubot_class.new
-      initialize_actor(size:)
+      initialize_actor(size:, name: name || rubot_class.name)
     end
 
     # Reset the rubot's actions hash for a new chronon
@@ -84,12 +84,12 @@ module Rubowar
         result
       elsif future.rejected?
         apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-        warn "[#{@rubot_class.name}] Error in callback: #{future.reason.class} - #{future.reason.message}"
+        warn "[#{name}] Error in callback: #{future.reason.class} - #{future.reason.message}"
         nil
       else
         # Timeout - future is still pending
         apply_collision_damage(Config::Battle::ERROR_DAMAGE)
-        warn "[#{@rubot_class.name}] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
+        warn "[#{name}] Callback timed out after #{Config::Battle::CALLBACK_TIMEOUT}s"
         nil
       end
     end
@@ -100,7 +100,7 @@ module Rubowar
     def call_on_death
       @instance.on_death if @instance.respond_to?(:on_death)
     rescue StandardError => e
-      warn "[#{@rubot_class.name}] Error in on_death callback: #{e.class} - #{e.message}"
+      warn "[#{name}] Error in on_death callback: #{e.class} - #{e.message}"
       nil
     end
   end
