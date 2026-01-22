@@ -82,7 +82,7 @@ class IntegrationCollectorBot
     @energon_collections = []
   end
 
-  def on_energon(amount)
+  def on_energon(amount:)
     @energon_collections << { tick: chronon, amount: }
   end
 

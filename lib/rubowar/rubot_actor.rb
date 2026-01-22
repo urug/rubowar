@@ -91,6 +91,8 @@ module Rubowar
 
     def to_state
       RubotState.new(
+        id: @id,
+        name: @name,
         x: @x,
         y: @y,
         velocity_x: @velocity_x,
@@ -98,6 +100,7 @@ module Rubowar
         speed:,
         turret_angle: @turret_angle,
         health: @health,
+        max_health:,
         energy: @energy,
         shield_level: @shield_level,
         damage_dealt: @damage_dealt,

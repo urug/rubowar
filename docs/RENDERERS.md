@@ -40,8 +40,8 @@ battle.on(:chronon) do |tick_state|
   sleep 0.03  # ~30 FPS
 end
 
-battle.on(:battle_end) do |data|
-  terminal.render_final(data[:winner])
+battle.on(:battle_end) do |_data|
+  terminal.render_final(battle.winner)
 end
 ```
 
@@ -61,14 +61,14 @@ Structured JSON output for replay, analysis, or ML training.
 File.open("battle.ndjson", "w") do |file|
   logger = Rubowar::Renderers::JsonLogger.new(battle, output: file)
   battle.on(:chronon) { |data| logger.render(data) }
-  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+  battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
   battle.run
 end
 
 # Collect mode: gather frames in memory
 logger = Rubowar::Renderers::JsonLogger.new(battle)
 battle.on(:chronon) { |data| logger.render(data) }
-battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 battle.run
 
 # Access complete battle data
@@ -124,7 +124,7 @@ Self-contained HTML files with animated Canvas visualization.
 html = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: "replays")
 
 battle.on(:chronon) { |data| html.render(data) }
-battle.on(:battle_end) { |data| html.render_final(data[:winner]) }
+battle.on(:battle_end) { |_data| html.render_final(battle.winner) }
 
 battle.run
 
@@ -192,11 +192,14 @@ Each actor in `tick_state[:actors]` is a `RubotState` with:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `id` | String | Unique identifier (e.g., "rbot-a1b2c3d4") |
+| `name` | String | Display name of the rubot |
 | `x`, `y` | Float | Position in arena |
 | `velocity_x`, `velocity_y` | Float | Current velocity |
 | `speed` | Float | Magnitude of velocity |
 | `turret_angle` | Float | Turret direction (0-360°) |
 | `health` | Integer | Current health |
+| `max_health` | Integer | Maximum health (varies by size) |
 | `energy` | Integer | Current energy |
 | `shield_level` | Integer | Active shield amount |
 | `damage_dealt` | Integer | Total damage dealt |
@@ -228,8 +231,8 @@ renderer = MyRenderer.new(battle)
 # Main game tick - fires every chronon
 battle.on(:chronon) { |data| renderer.render(data) }
 
-# Battle conclusion
-battle.on(:battle_end) { |data| renderer.render_final(data[:winner]) }
+# Battle conclusion - use battle.winner for full actor object
+battle.on(:battle_end) { |_data| renderer.render_final(battle.winner) }
 
 # Optional: subscribe to specific events
 battle.on(:fire) { |data| puts "Fire! #{data}" }
@@ -242,7 +245,7 @@ battle.on(:death) { |data| puts "Death! #{data}" }
 | Event | Fields | Description |
 |-------|--------|-------------|
 | `:chronon` | `chronon`, `actors`, `bullets`, `energons` | Each game tick |
-| `:battle_end` | `winner`, `outcome` | Battle concluded |
+| `:battle_end` | `winner_id`, `winner_name`, `outcome` | Battle concluded |
 | `:fire` | `actor_id`, `bullet_id`, `x`, `y`, `angle`, `damage` | Rubot fires |
 | `:hit` | `attacker_id`, `target_id`, `bullet_id`, `x`, `y`, `damage` | Bullet hit |
 | `:shield` | `actor_id`, `energy` | Shield raised |
@@ -285,7 +288,7 @@ module Rubowar
       end
 
       def render_final(winner)
-        @output.puts "# Winner: #{winner&.rubot_class&.name || 'Draw'}"
+        @output.puts "# Winner: #{winner&.name || 'Draw'}"
         @output.close
       end
     end
@@ -296,7 +299,7 @@ end
 File.open("battle.csv", "w") do |file|
   csv = Rubowar::Renderers::CsvLogger.new(battle, output: file)
   battle.on(:chronon) { |data| csv.render(data) }
-  battle.on(:battle_end) { |data| csv.render_final(data[:winner]) }
+  battle.on(:battle_end) { |_data| csv.render_final(battle.winner) }
   battle.run
 end
 ```
@@ -318,12 +321,12 @@ end
 # JSON for data analysis
 json = Rubowar::Renderers::JsonLogger.new(battle)
 battle.on(:chronon) { |data| json.render(data) }
-battle.on(:battle_end) { |data| json.render_final(data[:winner]) }
+battle.on(:battle_end) { |_data| json.render_final(battle.winner) }
 
 # HTML for shareable replay
 html = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: "replays")
 battle.on(:chronon) { |data| html.render(data) }
-battle.on(:battle_end) { |data| html.render_final(data[:winner]) }
+battle.on(:battle_end) { |_data| html.render_final(battle.winner) }
 
 battle.run
 

@@ -125,7 +125,7 @@ if options[:stream] && options[:output]
   logger = Rubowar::Renderers::JsonLogger.new(battle, output: output_io, pretty: options[:pretty])
 
   battle.on(:chronon) { |data| logger.render(data) }
-  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+  battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 
   battle.run
 
@@ -137,7 +137,7 @@ elsif options[:stream]
   logger = Rubowar::Renderers::JsonLogger.new(battle, output: $stdout, pretty: options[:pretty])
 
   battle.on(:chronon) { |data| logger.render(data) }
-  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+  battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 
   battle.run
 
@@ -146,7 +146,7 @@ else
   logger = Rubowar::Renderers::JsonLogger.new(battle, pretty: options[:pretty])
 
   battle.on(:chronon) { |data| logger.render(data) }
-  battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+  battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 
   battle.run
 

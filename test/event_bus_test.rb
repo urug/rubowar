@@ -245,9 +245,11 @@ describe Rubowar::EventBus do
       received = nil
       event_bus.on(:battle_end) { |data| received = data }
 
-      event_bus.emit(Rubowar::EventBus::BattleEnd.new(winner: nil, outcome: :draw))
+      event_bus.emit(Rubowar::EventBus::BattleEnd.new(winner_id: nil, winner_name: nil, outcome: :draw))
 
       _(received[:outcome]).must_equal :draw
+      _(received[:winner_id]).must_be_nil
+      _(received[:winner_name]).must_be_nil
     end
 
     it "emits ActionFailed event" do

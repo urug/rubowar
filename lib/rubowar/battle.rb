@@ -38,38 +38,67 @@ require "concurrent"
 #
 # [events]
 # types = ["chronon", "death", "hit", "battle_end", "energon_spawn", "energon_spawn_failed", "energon_collect"]
-# emit_usage = "emit(EventBus::BattleEnd.new(winner: @winner, outcome: :victory))"
+# emit_usage = "emit(EventBus::BattleEnd.new(winner_id: @winner&.id, winner_name: @winner&.name, outcome: :victory))"
 # subscribe_usage = "battle.on(:death) { |data| puts data[:actor_id] }"
 
 module Rubowar
   class Battle
-    attr_reader :arena, :winner, :event_bus, :registered_actors, :event_log
+    attr_reader :arena, :winner, :event_bus, :registered_actors, :event_log, :seed
+
+    # Battle statistics - supports battle.stats and battle.stats[bot_id]
+    # @return [BattleStats] Statistics object with overall and per-bot stats
+    def stats
+      BattleStats.new(self)
+    end
 
     # Convenience constructor for local battles
+    # @param seed [Integer, nil] Random seed for reproducibility. If nil, generates a random seed.
     def self.local(rubot_classes, width: Config::Arena::DEFAULT_WIDTH, height: Config::Arena::DEFAULT_HEIGHT,
-                   friction: Config::Arena::DEFAULT_FRICTION, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
+                   friction: Config::Arena::DEFAULT_FRICTION, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT,
+                   seed: nil)
       event_bus = EventBus.new(chronon_limit:)
       arena = Arena.new(width:, height:, friction:, event_bus:)
-      battle = new(arena:, event_bus:)
+      battle = new(arena:, event_bus:, seed:)
       rubot_classes.each { |klass| battle.register(LocalActor.new(klass)) }
       battle
     end
 
-    def initialize(arena:, event_bus: nil, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT)
+    # @param seed [Integer, nil] Random seed for reproducibility. If nil, generates a random seed.
+    #   Access the seed used via battle.seed after creation.
+    def initialize(arena:, event_bus: nil, chronon_limit: Config::Battle::DEFAULT_CHRONON_LIMIT, seed: nil)
       @arena = arena
       @event_bus = event_bus || EventBus.new(chronon_limit:)
       @winner = nil
       @event_log = Concurrent::Array.new
       @registered_actors = []
+      @actor_positions = {}  # actor => {x:, y:} for controlled spawning
+
+      # Set up deterministic RNG - generate seed if not provided
+      @seed = seed || Random.new_seed
+      srand(@seed)
     end
 
-    def register(actor)
+    # Register an actor for the battle
+    # @param actor [BasicActor] The actor to register
+    # @param position [Hash, nil] Optional starting position {x:, y:}. If nil, spawns randomly.
+    # @param turret_angle [Float, nil] Optional starting turret angle in degrees. If nil, random.
+    # @return [BasicActor] The registered actor
+    #
+    # @example Random spawn
+    #   battle.register(LocalActor.new(MyBot))
+    #
+    # @example Controlled spawn
+    #   battle.register(LocalActor.new(MyBot), position: {x: 100, y: 100})
+    #   battle.register(LocalActor.new(MyBot), position: {x: 200, y: 200}, turret_angle: 90)
+    #
+    def register(actor, position: nil, turret_angle: nil)
       registered_actors << actor
+      @actor_positions[actor] = { position:, turret_angle: } if position || turret_angle
       actor
     end
 
     def spawn_rubots
-      arena.spawn_rubots(registered_actors)
+      arena.spawn_rubots(registered_actors, positions: @actor_positions)
     end
 
     # Current chronon number (delegates to Events)
@@ -100,7 +129,11 @@ module Rubowar
       end
 
       determine_winner
-      emit(EventBus::BattleEnd.new(winner: @winner, outcome: @winner ? :victory : :draw))
+      emit(EventBus::BattleEnd.new(
+             winner_id: @winner&.id,
+             winner_name: @winner&.name,
+             outcome: @winner ? :victory : :draw
+           ))
 
       @event_log
     end

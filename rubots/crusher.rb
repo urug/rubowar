@@ -45,7 +45,7 @@ class Crusher
     end
   end
 
-  def on_collision(_other)
+  def on_collision(other:)
     # Successful ram - if they're pinned, start crushing
     return unless @target && target_pinned?
 

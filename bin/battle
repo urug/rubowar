@@ -21,7 +21,8 @@ options = {
 }
 
 OptionParser.new do |opts|
-  opts.banner = "Usage: bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  opts.banner = "Usage: bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]\n" \
+                "       bin/battle [options] rubot.rb:2  (same rubot fighting itself)"
 
   opts.separator ""
   opts.separator "Arena options:"
@@ -97,21 +98,34 @@ OptionParser.new do |opts|
   end
 end.parse!
 
-# Load rubot files
-rubot_files = if ARGV.empty?
-                Dir.glob(File.join(__dir__, "..", "rubots", "*.rb"))
-              else
-                ARGV.map { |f| File.expand_path(f) }
-              end
+# Parse rubot arguments - supports "file.rb" or "file.rb:count" syntax
+rubot_entries = if ARGV.empty?
+                  Dir.glob(File.join(__dir__, "..", "rubots", "*.rb")).map { |f| [f, 1] }
+                else
+                  ARGV.map do |arg|
+                    # Check for :N suffix (count specifier)
+                    if arg =~ /:(\d+)$/
+                      count = ::Regexp.last_match(1).to_i
+                      file = arg.sub(/:(\d+)$/, "")
+                      [File.expand_path(file), count]
+                    else
+                      [File.expand_path(arg), 1]
+                    end
+                  end
+                end
 
-if rubot_files.size < 2
+# Count total rubots
+total_rubots = rubot_entries.sum { |_, count| count }
+if total_rubots < 2
   warn "Error: Need at least 2 rubots to battle"
   warn "Usage: bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]"
+  warn "       bin/battle [options] rubot.rb:2  (same rubot twice)"
   exit 1
 end
 
-rubot_classes = []
-rubot_files.each do |file|
+# Load unique files and map to classes
+file_to_class = {}
+rubot_entries.map(&:first).uniq.each do |file|
   unless File.exist?(file)
     warn "Error: File not found: #{file}"
     exit 1
@@ -135,7 +149,13 @@ rubot_files.each do |file|
     exit 1
   end
 
-  rubot_classes << new_classes.first
+  file_to_class[file] = new_classes.first
+end
+
+# Build rubot_classes list with duplicates as specified
+rubot_classes = []
+rubot_entries.each do |file, count|
+  count.times { rubot_classes << file_to_class[file] }
 end
 
 # Set random seed if provided
@@ -177,7 +197,7 @@ options[:battles].times do |i|
   if options[:html]
     html = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: options[:html])
     battle.on(:chronon) { |tick_state| html.render(tick_state) }
-    battle.on(:battle_end) { |data| html.render_final(data[:winner]) }
+    battle.on(:battle_end) { |_data| html.render_final(battle.winner) }
     renderers << html
   end
 
@@ -187,7 +207,7 @@ options[:battles].times do |i|
     json_output = File.open(json_file, "w")
     json_logger = Rubowar::Renderers::JsonLogger.new(battle, output: json_output)
     battle.on(:chronon) { |tick_state| json_logger.render(tick_state) }
-    battle.on(:battle_end) { |data| json_logger.render_final(data[:winner]) }
+    battle.on(:battle_end) { |_data| json_logger.render_final(battle.winner) }
     renderers << { renderer: json_logger, output: json_output, file: json_file }
   end
 

@@ -132,11 +132,12 @@ module Rubowar
     end
 
     # Callback stubs (for call_safely compatibility)
+    # All callbacks use keyword arguments for consistency.
     def on_spawn; end
     def on_hit(damage:, direction:); end
     def on_wall; end
-    def on_collision(other_state); end
-    def on_energon(amount); end
+    def on_collision(other:); end
+    def on_energon(amount:); end
     def on_death; end
   end
 end

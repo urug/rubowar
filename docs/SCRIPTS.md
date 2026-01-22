@@ -8,9 +8,26 @@ Run one or more battles with configurable options, renderers, and output formats
 
 ```bash
 bin/battle [options] rubot1.rb rubot2.rb [rubot3.rb ...]
+bin/battle [options] rubot.rb:2  # same rubot fighting itself
 ```
 
 If no rubot files are specified, loads all rubots from `rubots/`.
+
+### Multiple Instances
+
+You can run multiple instances of the same rubot using either syntax:
+
+```bash
+# Repeat the file
+bin/battle rubots/spinner.rb rubots/spinner.rb
+
+# Use count syntax (more convenient)
+bin/battle rubots/spinner.rb:2
+
+# Mix and match
+bin/battle rubots/spinner.rb:2 rubots/hunter.rb      # 2 Spinners vs 1 Hunter
+bin/battle rubots/spinner.rb:3 rubots/hunter.rb:2    # 3 Spinners vs 2 Hunters
+```
 
 ### Arena Options
 
@@ -51,6 +68,13 @@ If no rubot files are specified, loads all rubots from `rubots/`.
 ```bash
 # Run a single battle between two rubots
 bin/battle rubots/spinner.rb rubots/hunter.rb
+
+# Same rubot fighting itself
+bin/battle rubots/spinner.rb:2
+bin/battle rubots/spinner.rb rubots/spinner.rb  # equivalent
+
+# 2 Spinners vs 1 Hunter
+bin/battle rubots/spinner.rb:2 rubots/hunter.rb
 
 # Watch a battle live in terminal
 bin/battle --terminal rubots/spinner.rb rubots/crusher.rb
