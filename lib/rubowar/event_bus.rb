@@ -9,9 +9,10 @@ require "concurrent"
 #
 # [class.EventBus]
 # purpose = "Per-battle event bus for game events and chronon tracking"
-# publish = "event_bus.emit(EventBus::BattleEnd.new(...))"
+# publish = "event_bus.emit(EventBus::BattleEnd.new(winner_id: id, winner_name: name, outcome: :victory))"
 # subscribe = "event_bus.on(:battle_end) { |data| ... }"
 # chronon = "event_bus.current_chronon, increment_chronon, reset_chronon"
+# serialization = "All events include Broadcastable module with to_broadcast_h for safe serialization"
 #
 # [event_categories]
 # battle = "Chronon, BattleEnd, Death, Error, ActionFailed"
@@ -29,64 +30,103 @@ require "concurrent"
 
 module Rubowar
   class EventBus
+    # === Broadcastable Module ===
+    #
+    # Provides to_broadcast_h for safe serialization of events.
+    # Recursively converts nested Data objects, Arrays, and Hashes to plain hashes.
+    module Broadcastable
+      def to_broadcast_h
+        to_h.transform_values { |v| serialize_value(v) }
+      end
+
+      private
+
+      def serialize_value(value)
+        case value
+        when Data
+          value.respond_to?(:to_broadcast_h) ? value.to_broadcast_h : value.to_h
+        when Array
+          value.map { |e| serialize_value(e) }
+        when Hash
+          value.transform_values { |v| serialize_value(v) }
+        else
+          value
+        end
+      end
+    end
+
     # === Event Definitions ===
     #
     # Each event is a Data.define with explicit event_type method.
-    # Usage: event_bus.emit(EventBus::BattleEnd.new(winner: actor, outcome: :victory))
+    # All events include Broadcastable for safe serialization via to_broadcast_h.
+    # Usage: event_bus.emit(EventBus::BattleEnd.new(winner_id: actor.id, ...))
 
     # Battle lifecycle events
     Chronon = Data.define(:chronon, :actors, :bullets, :energons) do
+      include Broadcastable
       def event_type = :chronon
     end
 
-    BattleEnd = Data.define(:winner, :outcome) do
+    BattleEnd = Data.define(:winner_id, :winner_name, :outcome) do
+      include Broadcastable
       def event_type = :battle_end
     end
 
     Death = Data.define(:actor_id) do
+      include Broadcastable
       def event_type = :death
     end
 
     Error = Data.define(:actor_id, :error) do
+      include Broadcastable
       def event_type = :error
     end
 
     ActionFailed = Data.define(:actor_id, :action, :reason) do
+      include Broadcastable
       def event_type = :action_failed
     end
 
     # Combat events
     Fire = Data.define(:actor_id, :bullet_id, :x, :y, :angle, :damage) do
+      include Broadcastable
       def event_type = :fire
     end
 
     Hit = Data.define(:attacker_id, :target_id, :bullet_id, :x, :y, :damage) do
+      include Broadcastable
       def event_type = :hit
     end
 
     Shield = Data.define(:actor_id, :energy) do
+      include Broadcastable
       def event_type = :shield
     end
 
     # Physics events
     Collision = Data.define(:actor_a_id, :actor_b_id, :damage_to_a, :damage_to_b) do
+      include Broadcastable
       def event_type = :collision
     end
 
     WallHit = Data.define(:actor_id, :damage, :walls) do
+      include Broadcastable
       def event_type = :wall_hit
     end
 
     # Energon events
     EnergonSpawn = Data.define(:energon_id, :x, :y) do
+      include Broadcastable
       def event_type = :energon_spawn
     end
 
     EnergonCollect = Data.define(:actor_id, :energon_id, :x, :y, :amount) do
+      include Broadcastable
       def event_type = :energon_collect
     end
 
     EnergonSpawnFailed = Data.define do
+      include Broadcastable
       def event_type = :energon_spawn_failed
     end
 

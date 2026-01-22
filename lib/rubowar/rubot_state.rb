@@ -7,14 +7,15 @@
 #
 # [RubotState]
 # purpose = "Prevents rubots from modifying their own state directly"
-# fields = ["x", "y", "velocity_x", "velocity_y", "speed", "turret_angle", "health", "energy", "shield_level", "damage_dealt", "damage_taken", "size"]
+# fields = ["id", "name", "x", "y", "velocity_x", "velocity_y", "speed", "turret_angle", "health", "max_health", "energy", "shield_level", "damage_dealt", "damage_taken", "size"]
 # immutable = true
 
 module Rubowar
   RubotState = Data.define(
+    :id, :name,
     :x, :y, :velocity_x, :velocity_y, :speed,
     :turret_angle,
-    :health, :energy, :shield_level,
+    :health, :max_health, :energy, :shield_level,
     :damage_dealt, :damage_taken, :size
   )
 end

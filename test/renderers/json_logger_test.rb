@@ -384,7 +384,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 3)
       logger = Rubowar::Renderers::JsonLogger.new(battle)
       battle.on(:chronon) { |data| logger.render(data) }
-      battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+      battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 
       battle.run
 
@@ -399,7 +399,7 @@ describe Rubowar::Renderers::JsonLogger do
       battle = Rubowar::Battle.local([JsonLoggerTestBot, JsonLoggerTestBot], chronon_limit: 2)
       logger = Rubowar::Renderers::JsonLogger.new(battle)
       battle.on(:chronon) { |data| logger.render(data) }
-      battle.on(:battle_end) { |data| logger.render_final(data[:winner]) }
+      battle.on(:battle_end) { |_data| logger.render_final(battle.winner) }
 
       battle.run
       json = logger.to_json

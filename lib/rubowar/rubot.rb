@@ -280,13 +280,187 @@ module Rubowar
       true
     end
 
+    # === Debug Helpers ===
+    #
+    # These methods help understand why actions fail and what sensing detected.
+    # Enable debug mode with: @debug = true in your rubot
+
+    # Enable/disable debug mode
+    attr_accessor :debug
+
+    # Try an action and log why it failed (if debug mode is on)
+    # Returns the action result and prints debug info if it failed
+    #
+    # @example
+    #   debug_action(:thrust, speed: 5, angle: 90)
+    #   # => [DEBUG] thrust failed: need 8 energy, have 5
+    #   debug_action(:fire, 20)
+    #   # => [DEBUG] fire failed: need 20 energy, have 15
+    #
+    def debug_action(action_name, *args, **kwargs)
+      # Calculate cost based on action type
+      cost = case action_name
+             when :fire, :raise_shields
+               args.first || kwargs[:energy_amount] || kwargs[:energy]
+             when :rotate_turret
+               degrees = args.first || kwargs[:degrees] || 0
+               (normalize_angle(degrees).abs / Config::Combat::TURRET_TURN_DIVISOR).ceil
+             else
+               action_cost(action_name, **kwargs)
+             end
+
+      # Call the action with appropriate arguments
+      result = case action_name
+               when :fire, :raise_shields, :rotate_turret
+                 send(action_name, args.first || kwargs.values.first)
+               else
+                 send(action_name, **kwargs)
+               end
+
+      if @debug && !result
+        reason = if cost && available_energy < cost
+                   "need #{cost} energy, have #{available_energy.to_i}"
+                 elsif action_name == :rotate_turret && (args.first || kwargs[:degrees])&.zero?
+                   "no rotation needed (0 degrees)"
+                 else
+                   "unknown reason"
+                 end
+        warn "[DEBUG] #{action_name} failed: #{reason}"
+      end
+
+      result
+    end
+
+    # Get the energy cost of an action before attempting it
+    #
+    # @example
+    #   action_cost(:fire, energy_amount: 20)  # => 20
+    #   action_cost(:thrust, speed: 5, angle: 90)  # => ~8 (varies by momentum)
+    #   action_cost(:probe, attributes: [:position, :velocity])  # => 7
+    #
+    def action_cost(action_name, **params)
+      case action_name
+      when :thrust
+        thrust_cost(thrust_speed: params[:speed], angle: params[:angle])
+      when :rotate_turret
+        degrees = normalize_angle(params[:degrees] || 0)
+        (degrees.abs / Config::Combat::TURRET_TURN_DIVISOR).ceil
+      when :fire
+        params[:energy_amount] || params[:energy]
+      when :raise_shields
+        params[:energy_amount] || params[:energy]
+      when :probe
+        attrs = params[:attributes] || [:size]
+        SensorCalculator.probe_cost(attrs)
+      when :scan
+        SensorCalculator.scan_cost(**params.slice(:angle, :distance, :velocity, :owner))
+      when :pulse
+        SensorCalculator.pulse_cost(**params.slice(:distance, :owner))
+      when :detect
+        SensorCalculator.detect_cost
+      end
+    end
+
+    # Check if you can afford an action
+    #
+    # @example
+    #   if can_do?(:fire, energy_amount: 20)
+    #     fire(20)
+    #   end
+    #
+    def can_do?(action_name, **params)
+      cost = action_cost(action_name, **params)
+      cost && available_energy >= cost
+    end
+
+    # Dump all sensing results in human-readable format
+    # Call this in act() to see what your sensors detected
+    #
+    # @example
+    #   def act
+    #     dump_sensing if @debug
+    #     # ... rest of act
+    #   end
+    #
+    def dump_sensing
+      output = ["[SENSING] Chronon #{chronon}"]
+
+      # Probe results
+      if probe_echo.found?
+        output << "  Probe: HIT - #{probe_echo.to_h.compact}"
+      else
+        output << "  Probe: MISS (no target in turret line)"
+      end
+
+      # Scan results
+      if scan_echo.any?
+        output << "  Scan: #{scan_echo.count} target(s)"
+        scan_echo.each_with_index do |target, i|
+          line = "    [#{i}] #{target.type} at (#{target.x.round(1)}, #{target.y.round(1)})"
+          line += " vel=(#{target.velocity_x.round(1)}, #{target.velocity_y.round(1)})" if target.velocity_x
+          output << line
+        end
+      else
+        output << "  Scan: empty"
+      end
+
+      # Pulse results
+      if pulse_echo.any?
+        output << "  Pulse: #{pulse_echo.count} target(s)"
+        pulse_echo.each_with_index do |target, i|
+          output << "    [#{i}] #{target.type} at (#{target.x.round(1)}, #{target.y.round(1)})"
+        end
+      else
+        output << "  Pulse: empty"
+      end
+
+      # Detect results
+      if detect_intel.targeted?
+        output << "  Detect: probed=#{detect_intel.probed} scanned=#{detect_intel.scanned} pulsed=#{detect_intel.pulsed}"
+      else
+        output << "  Detect: no activity"
+      end
+
+      warn output.join("\n")
+    end
+
+    # Get a summary of your current state (useful for debugging)
+    #
+    # @example
+    #   warn status_summary if @debug
+    #
+    def status_summary
+      "[STATUS] pos=(#{x.round(1)}, #{y.round(1)}) vel=(#{velocity_x.round(1)}, #{velocity_y.round(1)}) " \
+        "speed=#{speed.round(1)} turret=#{turret_angle.round(1)}° " \
+        "HP=#{health.to_i}/#{rubot_state.max_health} E=#{energy.to_i} shield=#{shield_level.to_i}"
+    end
+
     # Callbacks (override in rubot class)
+    # All callbacks use keyword arguments for consistency.
+    #
+    # @example
+    #   def on_hit(damage:, direction:)
+    #     # damage: Integer - amount of damage taken
+    #     # direction: Float - angle the shot came from (degrees)
+    #   end
+    #
+    #   def on_collision(other:)
+    #     # other: RubotState - state snapshot of the rubot you collided with
+    #     # Contains: id, name, x, y, velocity_x, velocity_y, speed, turret_angle,
+    #     #           health, max_health, energy, shield_level, damage_dealt,
+    #     #           damage_taken, size
+    #   end
+    #
+    #   def on_energon(amount:)
+    #     # amount: Integer - energy collected
+    #   end
+    #
     def on_spawn; end
     def on_hit(damage:, direction:); end
     def on_death; end
     def on_wall; end
-    def on_collision(other_rubot); end
-    def on_energon(amount); end
+    def on_collision(other:); end
+    def on_energon(amount:); end
 
     # Required method for rubots to implement
     def act

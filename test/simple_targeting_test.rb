@@ -29,10 +29,12 @@ end
 
 def build_targeting_state(health: 100, energy: 100, x: 100, y: 100, turret_angle: 0)
   Rubowar::RubotState.new(
+    id: "test-rubot",
+    name: "TestBot",
     x:, y:,
     velocity_x: 0, velocity_y: 0, speed: 0,
     turret_angle:,
-    health:, energy:, shield_level: 0,
+    health:, max_health: 100, energy:, shield_level: 0,
     damage_dealt: 0, damage_taken: 0, size: :medium
   )
 end

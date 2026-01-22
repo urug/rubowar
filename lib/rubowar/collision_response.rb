@@ -44,8 +44,8 @@ module Rubowar
       actor_a.apply_collision_damage(damage_to_a)
       actor_b.apply_collision_damage(damage_to_b)
 
-      actor_a.call_safely { |bot| bot.on_collision(actor_b.to_state) }
-      actor_b.call_safely { |bot| bot.on_collision(actor_a.to_state) }
+      actor_a.call_safely { |bot| bot.on_collision(other: actor_b.to_state) }
+      actor_b.call_safely { |bot| bot.on_collision(other: actor_a.to_state) }
     end
   end
 end

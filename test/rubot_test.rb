@@ -31,11 +31,13 @@ def build_bot(energy: 50, health: 100, x: 100.0, y: 200.0, velocity_x: 1.0, velo
   bot = RubotTestBot.new
   speed = Math.sqrt((velocity_x**2) + (velocity_y**2))
   bot.rubot_state = Rubowar::RubotState.new(
+    id: "test-rubot",
+    name: "TestBot",
     x:, y:,
     velocity_x:, velocity_y:,
     speed:,
     turret_angle:,
-    health:, energy:, shield_level: 10,
+    health:, max_health: 100, energy:, shield_level: 10,
     damage_dealt: 25, damage_taken: 20,
     size: :medium
   )

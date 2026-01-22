@@ -15,7 +15,7 @@ describe Rubowar::Phases::Energon do
 
       def act; end
 
-      def on_energon(amount)
+      def on_energon(amount:)
         @collected_energon = amount
       end
     end

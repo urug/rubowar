@@ -404,7 +404,7 @@ describe Rubowar::Renderers::HtmlCanvas do
       battle = Rubowar::Battle.local([HtmlCanvasTestBot, HtmlCanvasTestBot], chronon_limit: 3)
       renderer = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: "tmp/test-battle-logs")
       battle.on(:chronon) { |data| renderer.render(data) }
-      battle.on(:battle_end) { |data| renderer.render_final(data[:winner]) }
+      battle.on(:battle_end) { |_data| renderer.render_final(battle.winner) }
 
       battle.run
 
@@ -420,7 +420,7 @@ describe Rubowar::Renderers::HtmlCanvas do
       battle = Rubowar::Battle.local([HtmlCanvasTestBot, HtmlCanvasTestBot], chronon_limit: 2)
       renderer = Rubowar::Renderers::HtmlCanvas.new(battle, output_dir: "tmp/test-battle-logs")
       battle.on(:chronon) { |data| renderer.render(data) }
-      battle.on(:battle_end) { |data| renderer.render_final(data[:winner]) }
+      battle.on(:battle_end) { |_data| renderer.render_final(battle.winner) }
 
       battle.run
 

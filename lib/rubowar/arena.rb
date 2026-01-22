@@ -61,14 +61,29 @@ module Rubowar
       (arena_diagonal * Config::Arena::SPAWN_MAX_DISTANCE_RATIO).round
     end
 
-    def spawn_rubots(actors)
-      actors.each { |actor| place_actor(actor) }
+    # Spawn actors into the arena
+    # @param actors [Array<BasicActor>] Actors to spawn
+    # @param positions [Hash] Optional map of actor => {position: {x:, y:}, turret_angle:}
+    def spawn_rubots(actors, positions: {})
+      actors.each { |actor| place_actor(actor, positions[actor]) }
     end
 
-    def place_actor(actor)
-      position = find_spawn_position(actor.radius)
-      actor.set_position(x: position[:x], y: position[:y])
-      actor.turret_angle = rand(360)
+    # Place a single actor in the arena
+    # @param actor [BasicActor] The actor to place
+    # @param spawn_config [Hash, nil] Optional {position: {x:, y:}, turret_angle:}
+    def place_actor(actor, spawn_config = nil)
+      if spawn_config&.dig(:position)
+        # Use specified position
+        pos = spawn_config[:position]
+        actor.set_position(x: pos[:x], y: pos[:y])
+      else
+        # Find random spawn position
+        position = find_spawn_position(actor.radius)
+        actor.set_position(x: position[:x], y: position[:y])
+      end
+
+      # Set turret angle (specified or random)
+      actor.turret_angle = spawn_config&.dig(:turret_angle) || rand(360)
       @actors << actor
     end
 
@@ -472,7 +487,7 @@ module Rubowar
         if collector
           amount = energon.value_int(chronons)
           collector.add_energy(amount)
-          collector.call_safely { |bot| bot.on_energon(amount) }
+          collector.call_safely { |bot| bot.on_energon(amount:) }
           collections << { actor: collector, energon:, amount: }
           true # Remove this energon
         else

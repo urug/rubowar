@@ -40,11 +40,13 @@ Use helper methods to build common fixtures:
 def build_bot(energy: 50, health: 100)
   bot = TestBot.new
   bot.rubot_state = Rubowar::RubotState.new(
+    id: "test-rubot",
+    name: "TestBot",
     x: 100.0, y: 200.0,
     velocity_x: 0.0, velocity_y: 0.0,
     speed: 0.0,
     turret_angle: 0.0,
-    health: health, energy: energy, shield_level: 0,
+    health: health, max_health: 100, energy: energy, shield_level: 0,
     damage_dealt: 0, damage_taken: 0,
     size: :medium
   )
