@@ -22,7 +22,7 @@ describe Rubowar::NumericValidation do
       end
 
       _(error.message).must_include "test_param"
-      _(error.message).must_include "must be a number"
+      _(error.message).must_include "must be a real number"
     end
 
     it "rejects nil" do
@@ -30,7 +30,7 @@ describe Rubowar::NumericValidation do
         Rubowar::NumericValidation.validate!(nil, name: "test_param")
       end
 
-      _(error.message).must_include "must be a number"
+      _(error.message).must_include "must be a real number"
     end
 
     it "rejects NaN" do
