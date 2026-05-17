@@ -25,7 +25,9 @@ module Rubowar
     # @return [Numeric] The validated value
     # @raise [InvalidActionError] If validation fails
     def validate!(value, name:, positive: false, non_negative: false, max: nil)
-      raise InvalidActionError, "#{name} must be a number, got #{value.class}" unless value.is_a?(Numeric)
+      # is_a?(Numeric) admits Complex, which has no <=, so positive/non_negative/max
+      # checks would raise NoMethodError instead of InvalidActionError. real? excludes it.
+      raise InvalidActionError, "#{name} must be a real number, got #{value.class}" unless value.is_a?(Numeric) && value.real?
 
       raise InvalidActionError, "#{name} cannot be NaN" if value.respond_to?(:nan?) && value.nan?
 
